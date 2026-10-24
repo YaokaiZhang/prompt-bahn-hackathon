@@ -1,8 +1,8 @@
-# Spec: Control Room with Document Reviewer and Call Agent
+# Spec: Control Room with Reviewer and Call Agent
 
 Status: ready-for-agent
 
-Source: `docs/PRD.md` (agreed in the grilling session of 24 Oct 2026). Domain reference: `dataset/SCHEMA.md`.
+Source: `docs/PRD.md` (agreed in the grilling session of 24 Oct 2026). Vocabulary follows `CONTEXT.md`. Data reference: `dataset/SCHEMA.md`.
 
 ## Problem Statement
 
@@ -22,12 +22,12 @@ A control room that sorts every order into one of four groups: **Needs action**,
 
 **Checking happens in three layers:**
 1. Deterministic rule checks.
-2. A real LLM Document Reviewer agent on every order whose records the rules can't read (conversations, notes, claims, inbox threads, open alerts and work).
+2. A real LLM agent, the Reviewer, on every order whose records the rules can't read (conversations, notes, claims, inbox threads, open alerts and work).
 3. A one-time sweep of the quiet orders, so that "Normal" means checked.
 
 **The reviewer's output:** for each conflict it finds, it cites the records that disagree and the record that names the contact. It then drafts who to ask and what to ask.
 
-**Approval:** an approval policy decides what needs an operator's yes. Routine questions to third-party pickup sites, sellers' sites, drivers and operators go out on their own. The agent never contacts the customer side: the paying customer, a contact the customer gave us, or a site the customer owns. For those it proposes the action to the operator, with a drafted script, and the operator makes the contact and records the answer. Any change to the order needs a yes.
+**Approval:** an approval policy decides what needs an operator's yes. Routine questions to third-party sites (including sellers), drivers and operators go out on their own. The agent never contacts the customer side: the paying customer, a contact the customer gave us, or a site the customer owns. For those it proposes the action to the operator, with a drafted script, and the operator makes the contact and records the answer. Any change to the order needs a yes.
 
 **Calls run in three tiers, cheapest first:**
 1. Fixed questions read by a real TTS voice, answered on a keypad.
@@ -42,7 +42,7 @@ The calls go to a mock phone page that a teammate opens as the Site or Driver pe
 
 ### Login and personas
 1. As an operator, I want to log in by picking the Operator persona, so that I reach the control room without a password during the demo.
-2. As a teammate, I want to log in as the Site persona, so that I can receive the agent's calls as a pickup site, seller's site or dealer branch.
+2. As a teammate, I want to log in as the Site persona, so that I can receive the agent's calls for whatever endpoint is being called.
 3. As a teammate, I want to log in as the Driver persona, so that I can receive the agent's calls as the assigned driver.
 4. As any user, I want the persona to decide my landing page, so that I go straight to the screen I need.
 5. As any user, I want to switch persona without restarting, so that one person can run the whole demo.
@@ -73,7 +73,7 @@ The calls go to a mock phone page that a teammate opens as the Site or Driver pe
 22b. As an operator, I want stale tracking or an ETA after the promise to start a routine driver call, not to wait for me, so that the agent does the cheap work first.
 23. As an operator, I want rules recomputed only at load, on a clock move or after an effect event, so that pages are fast.
 
-### Document Reviewer agent
+### Reviewer
 24. As an operator, I want the reviewer to run on every order with conversations, messages, notes, endpoint claims, inbox threads naming it, or open alerts, work items or incidents, so that conflicts in free text are found.
 25. As an operator, I want the reviewer to sweep every remaining order once at seed time, so that "Normal" means checked.
 26. As an operator, I want each finding to cite the exact records that disagree, with the values quoted, so that I can see the conflict at a glance.
@@ -94,11 +94,11 @@ The calls go to a mock phone page that a teammate opens as the Site or Driver pe
 
 ### Operator approval
 41. As an operator, I want a read-only Rules page listing who is contacted, the kind of action, and whether the agent acts alone or needs a yes, so that I understand the agent's authority.
-42. As an operator, I want routine questions to pickup sites, sellers' sites, drivers and operators to go out without my approval, and to see their results, so that cheap work happens on its own.
+42. As an operator, I want routine questions to third-party sites (including sellers), drivers and operators to go out without my approval, and to see their results, so that cheap work happens on its own.
 43. As an operator, I want the agent never to contact the customer side itself (the paying customer, a contact the customer gave us, or a site the customer owns), and instead to propose the contact to me with a drafted script, so that customer contact stays with people.
 43a. As an operator, I want to record the customer's answer on the proposal after I make the contact, so that the agent can continue from it.
 44. As an operator, I want any change coming out of a call (new date, cost, booking, order update) to wait for my yes, so that nothing changes without a person.
-45. As an operator, I want to approve several proposals in one click, with each script visible, so that approval is fast.
+45. As an operator, I want to approve several proposals in one click, with each script visible and each row saying what approving will do (write a change, or hand me a customer contact), so that approval is fast and unsurprising.
 46. As an operator, I want to edit a proposal's script before approving, so that the message says what I want.
 47. As an operator, I want to dismiss a proposal, so that a wrong suggestion goes away without losing history.
 48. As an operator, I want to tell the agent to act differently and have that instruction saved on the proposal, so that the history shows why the plan changed.
@@ -122,21 +122,21 @@ The calls go to a mock phone page that a teammate opens as the Site or Driver pe
 64. As a teammate, I want no real phone numbers involved, so that nothing real is contacted.
 
 ### Demo journeys
-65. As an operator, I want CD-420437 to show the receiver-authority conflict and a proposal to ask the buyer (Calverona Auto) who may sign, with a drafted script, so that I can take on a customer contact with the evidence ready (journey 1).
-66. As an operator, I want to accept the CD-420437 proposal, make the contact myself, and record the buyer's answer, after which the agent proposes the order update for my yes, so that the journey ends with a governed change.
+65. As an operator, I want CD-420437 to show the receiver-authority conflict and a proposal to ask the customer (Calverona Auto) who may sign, with a drafted script, so that I can take on a customer contact with the evidence ready (journey 1).
+66. As an operator, I want to approve the CD-420437 proposal, make the contact myself, and record the customer's answer, after which the agent proposes the order update for my yes, so that the journey ends with a governed change.
 67. As an operator, I want an answer naming a different receiver to create a new conflict and send the order back to review, so that the loop is shown.
 68. As a site teammate, I want CD-420516 to call me without approval about who holds the keys, so that the routine site call journey is shown.
 69. As an operator, I want checks due at 10:00 (CD-420516, CD-420458, CD-420015) to fire when the clock reaches 10:00, so that scheduled checks work. For CD-420458 the next step is a proposal to me, because the open question is with the customer.
 69a. As a demo runner, I want background calls that nobody is watching to be answered by a scripted simulated person, and only demo cases or calls I mark "ring live" to ring on the phone page, so that the phone page isn't flooded at startup.
 69b. As a teammate, I want my persona's phone to take one live call at a time and queue the rest, so that two calls on one order (CD-420437) don't collide.
 70. As a driver teammate, I want CD-420806 to give me a tier-1 "still on track? press 1" check-in, so that the cheap path that ends without a person is shown.
-71. As a driver teammate, I want CD-420437 to ask whether I can still deliver on time and hand me to the voice agent if I report a problem, so that the escalation path is shown.
+71. As a driver teammate, I want CD-420437 to ask whether I can still deliver on time and move me to tier 2 if I report a problem, so that the path from keypad to voice agent is shown.
 72. As an operator, I want CD-420089 to ask me, in the app, whether the Lahti train in my colleague's note is still right, so that operator clarification is shown.
 73. As an operator, I want CD-420399 to ask the driver which trip the €137.10 train claim was for, so that the expense conflict is shown.
 
 ### Clock and reset
 74. As a demo runner, I want "now" to start at 2026-10-21T09:00Z, so that deadlines don't all look late.
-75. As a demo runner, I want to advance the clock by 15 minutes or to the next due item, so that callbacks and scheduled checks fire on demand.
+75. As a demo runner, I want to advance the clock by 15 minutes or to the next due item, so that callbacks and next checks fire on demand.
 76. As a demo runner, I want a reset button that clears all agent and approval state, so that I can repeat a take.
 
 ### Briefing
@@ -263,7 +263,8 @@ Every model call goes through it, and every call reports its `usage.cost`. Every
   | Driver | assignment `driver_id` | Call on its own |
   | Operator | note or event author role | Ask in the app on its own |
 
-- A customer-side proposal holds the drafted script, the evidence and the question. On accept, it becomes an operator task. The operator records the answer, and the agent continues from it.
+- A customer-side proposal holds the drafted script, the evidence and the question. Approving it hands the contact to the operator. The operator records the answer on the same proposal, and the agent continues from it.
+- **Proposal lifecycle:** proposed → approved → answered (customer-side only), or dismissed. A proposal stays one record throughout; there is no separate task.
 
 ### Approval policy
 - A config table: contact type × action type → acts alone, needs a yes, or propose only (the customer side).
@@ -276,11 +277,11 @@ Every model call goes through it, and every call reports its `usage.cost`. Every
 | Ringing ends as | answered, declined or no answer |
 | After answering | availability check (if not available, schedule a callback) |
 | Tier 1 | keypad questions |
-| Tier 1 ends as | resolved, or escalated to tier 2 |
+| Tier 1 ends as | resolved, or moved to tier 2 |
 | Tier 2 ends as | resolved, or handed over to tier 3 |
 | End | ended, with an outcome |
 
-- Callbacks fire when the demo clock reaches them.
+- Callbacks (scheduled by the agent) and next checks (recorded in the snapshot as `next_check_at`) both fire when the demo clock reaches them. A next check runs the routine call or proposal for that order's open question.
 - **Background calls:** a call rings live on a persona's phone page only for demo cases or when the operator marks it "ring live". Every other call is answered by a scripted simulated person, so the 18 routine site calls due at load complete on their own and show as results or scheduled callbacks.
 - **One live call per phone:** each persona's phone page takes one live call at a time, and the rest queue.
 - **Voice agent authority:** the voice agent only gathers information. It never agrees to a date, cost, booking or handover, and says it will pass the point to the team. If Haiku's check on a turn finds a commitment outside policy, it flags it and the voice agent corrects itself on the next turn.
@@ -311,15 +312,16 @@ Every model call goes through it, and every call reports its `usage.cost`. Every
   - **Setup:** built from the real dataset files, with the clock fixed at 2026-10-21T09:00Z, an in-memory store, and a scripted `ModelGateway`. That gateway replays reviewer findings and call turns recorded by the reviewer eval script and committed as fixtures.
   - **Cases to cover:**
     - each demo case lands in the expected group with the expected reason;
-    - CD-420437's buyer question is a propose-only proposal that cites its policy row, and no call to the customer side is ever started, including to Celia Hollowmere;
+    - CD-420437's question to the customer is a propose-only proposal that cites its policy row, and no call to the customer side is ever started, including to Celia Hollowmere;
     - every rule's first action is taken, and no Needs action order lacks a decision;
     - background calls finish through the simulated person, and only demo or "ring live" calls ring;
     - CD-420516's site call goes out without approval;
     - CD-420458 produces no new question;
     - an order with no contact gets no proposal;
     - a routine call leads to an outcome, then a change proposal, then an effect event, then a re-review;
-    - accepting a customer-side proposal, then recording the answer, leads to a change proposal;
-    - a decline schedules a callback that fires on a clock move;
+    - approving a customer-side proposal, then recording the answer, leads to a change proposal;
+    - a decline schedules a callback that fires on a clock move, and CD-420516's next check fires at 10:00;
+    - approve-all on a mixed batch writes effect events for change proposals and hands customer-side proposals to the operator;
     - the reset clears state;
     - Done excludes delivered orders that still have gaps;
     - digest counts equal the group counts;
