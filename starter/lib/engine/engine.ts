@@ -22,6 +22,8 @@ import {
 import { createReviewLayer, reviewTotals, type OrderReview, type ReviewInputs, type ReviewOptions, type ReviewTotals } from "./reviews"
 import { buildFleet, evaluateRules, type Evaluation } from "./rules"
 import type { EngineStore } from "./store"
+import { createCallRunner, type CallOptions } from "./call-runner"
+import { callbackItems, orderCalls, utcTime, type BlockedCall, type Call, type CalleeInput, type CallLine, type CallLineView, type OrderCalls } from "./calls"
 
 /** The snapshot as the engine reads it: one bundle per order. */
 export type Snapshot = { snapshotAt: string; bundles: Bundle[] }
@@ -64,6 +66,17 @@ export type Command =
   | { type: "deliverBriefing" }
   /** Marks Briefing items read (all when `ids` is absent). */
   | { type: "markBriefingRead"; ids?: string[] }
+  /**
+   * The call agent's loop (ticket 10): starts calls for lines that need one (planned
+   * site/driver calls, call proposals, callbacks that came due) and takes the agent's
+   * and the simulated person's turns. `steps` rounds (the app's pump sends 1), or
+   * until nothing changes.
+   */
+  | { type: "runCalls"; steps?: number }
+  /** Starts a call on an order's site or driver line now; `live` rings the persona's phone page (ticket 11). */
+  | { type: "startCall"; orderId: string; line: CallLine; live?: boolean }
+  /** The callee's move on a call: answer, decline, let it ring out, or a keypad digit (live phones send these). */
+  | { type: "callEvent"; callId: string; input: CalleeInput }
 
 /**
  * One order as the engine reads it at `now`. `group`, `reason`, `rules` (every
@@ -82,6 +95,12 @@ export type OrderState = {
   proposals: Proposal[]
   /** Findings the agent cannot act on: no contact on record (couldn't check). */
   unreachable: Unreachable[]
+  /** The agent's calls on this order, oldest first, with transcript, tier and cost (ticket 10). */
+  calls: Call[]
+  /** The order's site and driver lines: what is left to call about and where each stands. */
+  callLines: CallLineView[]
+  /** Planned calls the agent will not make because the callee is on the customer side. */
+  blockedCalls: BlockedCall[]
 } & Verdict
 
 export type GroupCounts = Record<Group, number>
@@ -90,6 +109,10 @@ export type { CitedRecord, OrderReview, ReviewFinding, ReviewTotals, ReviewTrigg
 export type { Proposal, ProposalEvent, ProposalKind, ProposalStatus, Unreachable } from "./proposals"
 export type { FirstAction, Group, Outcome, PlannedAction, RuleId, RuleResult, SourceRef, Urgency } from "./checks"
 export type { DueItem, DueKind } from "./due"
+export type {
+  Answerer, BlockedCall, Call, CallCallee, CallCost, CalleeInput, CallLine, CallLineView, CallOutcome, CallState, CostRates, Expecting, LineStatus, Tier, TranscriptLine,
+} from "./calls"
+export type { CallOptions } from "./call-runner"
 export type { Briefing, BriefingItem, DigestFacts, DigestItem, DigestSlot, PushItem, PushReason, PushInput } from "./briefing"
 export type { DigestProse, ProseSegment } from "./digest-prose"
 export { becameDue, GROUPS }
@@ -132,6 +155,8 @@ export type EngineDeps = {
   reviews?: ReviewOptions
   /** The digest prose's model, cache and timeout. Absent: digests carry template text. */
   briefing?: ProseOptions
+  /** Who answers calls, speech, tier 2, cost rates and pacing. Absent: simulated person, no speech. */
+  calls?: CallOptions
 }
 
 const MINUTE = 60_000
@@ -146,7 +171,7 @@ function isoOf(value: Date | string): string {
   return date.toISOString()
 }
 
-export function createEngine({ snapshot, store, reviews: reviewOptions, briefing: proseOptions }: EngineDeps): Engine {
+export function createEngine({ snapshot, store, reviews: reviewOptions, briefing: proseOptions, calls: callOptions = {} }: EngineDeps): Engine {
   const start = isoOf(snapshot.snapshotAt)
   const bundles = new Map(snapshot.bundles.map((bundle) => [bundle.order.id, bundle]))
   const fleet = buildFleet(snapshot.bundles)
@@ -200,23 +225,86 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     }
   }
 
-  async function ordersAt(at: string): Promise<OrderState[]> {
+  /** Each order's review, proposals and call lines at `at` (everything grouping reads besides the rules). */
+  async function workAt(at: string): Promise<{ bundle: Bundle; evaluation: Evaluation; review: OrderReview; work: OrderProposals; calls: OrderCalls }[]> {
     const evaluations = evaluationsAt(at)
     const events = eventsByOrder(await store.readProposalEvents())
     const read = await reviews.read(reviewInputs(events))
+    const calls = await callRunner.read()
     return snapshot.bundles.map((bundle) => {
+      const evaluation = evaluations.get(bundle.order.id)!
       const review = read.get(bundle.order.id)!
-      const work: OrderProposals = proposalsFor(bundle, review, events.get(bundle.order.id) ?? [])
-      return {
-        id: bundle.order.id,
-        reference: bundle.order.reference,
-        status: bundle.order.status,
-        review,
-        proposals: work.proposals,
-        unreachable: work.unreachable,
-        ...verdictFor(evaluations.get(bundle.order.id)!, review, work),
-      }
+      const work = proposalsFor(bundle, review, events.get(bundle.order.id) ?? [])
+      // A done review fulfils the reviewer pass (verdictFor); the call lines carry the planned calls.
+      return { bundle, evaluation, review, work, calls: orderCalls(bundle, evaluation.planned, work.proposals, calls.get(bundle.order.id) ?? [], at) }
     })
+  }
+
+  async function ordersAt(at: string): Promise<OrderState[]> {
+    return (await workAt(at)).map(({ bundle, evaluation, review, work, calls }) => ({
+      id: bundle.order.id,
+      reference: bundle.order.reference,
+      status: bundle.order.status,
+      review,
+      proposals: work.proposals,
+      unreachable: work.unreachable,
+      calls: calls.calls,
+      callLines: calls.lines,
+      blockedCalls: calls.blocked,
+      ...verdictFor({ ...evaluation, planned: calls.planned }, review, { ...work, calls: { lines: calls.lines, carried: calls.carried } }),
+    }))
+  }
+
+  // -- Calls (ticket 10) -------------------------------------------------------
+  const callRunner = createCallRunner({
+    store, bundles, options: callOptions, clock,
+    linesAt: async (at) => (await workAt(at)).map((row) => row.calls),
+    ended: callEnded,
+  })
+
+  /**
+   * A call ended: the call proposals it carried are answered with its result, and
+   * every change the person confirmed becomes a change proposal (needs a yes).
+   * A callback answers nothing yet; the next attempt carries the same topics.
+   */
+  async function callEnded(call: Call): Promise<void> {
+    if (call.outcome === "callback") return
+    await recordCallResult(call)
+    for (const change of call.changes) {
+      await proposeChange({
+        orderId: call.orderId, title: change.title, change: change.change, source: call.id,
+        why: `${call.callee.name ?? call.callee.handle} said on the ${call.line} call at ${utcTime(call.endedAt ?? call.startedAt)}: ${change.claim}.`,
+        contact: { name: call.callee.name ?? call.callee.handle, type: call.callee.contactType, role: call.line === "driver" ? "driver" : "site", recordId: call.callee.recordId },
+      })
+    }
+  }
+
+  /**
+   * THE one place a finished call's result is written. Today: an "answered" event (with
+   * the answer, question and who said it) on each call proposal the call carried.
+   * Ticket 09: write the "call result recorded" effect event here (an attributed claim,
+   * source = call.id; `call.claims` lists what the person said) and re-review the order.
+   */
+  async function recordCallResult(call: Call): Promise<void> {
+    const answer = call.summary ?? call.outcome ?? "ended"
+    const from = `${call.callee.name ?? call.callee.handle} (${call.line}), on call ${call.id}`
+    for (const topic of call.topics) {
+      if (topic.kind !== "proposal") continue
+      const proposal = await findProposal(topic.id.slice("proposal:".length)).catch(() => null)
+      if (!proposal || proposal.status === "answered" || proposal.status === "dismissed") continue
+      const event = await eventFor(proposal, "answered", `Call result (${call.id}): ${answer}`, { answer, question: proposal.script, from })
+      await store.appendProposalEvents([{ ...event, by: "agent" }])
+    }
+  }
+
+  async function proposeChange(command: Extract<Command, { type: "proposeChange" }> | Omit<Extract<Command, { type: "proposeChange" }>, "type">): Promise<void> {
+    const bundle = bundles.get(command.orderId)
+    if (!bundle) throw new Error(`Unknown order ${command.orderId}`)
+    const draft = changeDraft(bundle, command, await clock())
+    if ((await store.readProposalEvents()).some((event) => event.proposalId === draft.id)) return
+    await store.appendProposalEvents([{
+      proposalId: draft.id, orderId: draft.orderId, at: draft.proposedAt, by: "agent", kind: "proposed", text: draft.action, data: { draft },
+    }])
   }
 
   async function findProposal(proposalId: string): Promise<Proposal> {
@@ -345,9 +433,10 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     return run
   }
 
-  /** Every due-item source: next checks, the Briefing digests; callbacks (ticket 10) go here too. */
+  /** Every due-item source: next checks, the Briefing digests and the callbacks calls scheduled. */
   async function allDueItems(): Promise<Omit<DueItem, "due">[]> {
-    return [...nextChecks, ...digestItems]
+    const calls = [...(await callRunner.read()).values()].flat()
+    return [...nextChecks, ...digestItems, ...callbackItems(calls)]
   }
 
   async function apply(command: Command): Promise<EngineState> {
@@ -445,16 +534,18 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
         await rereview(proposal.orderId)
         break
       }
-      case "proposeChange": {
-        const bundle = bundles.get(command.orderId)
-        if (!bundle) throw new Error(`Unknown order ${command.orderId}`)
-        const draft = changeDraft(bundle, command, await clock())
-        if ((await store.readProposalEvents()).some((event) => event.proposalId === draft.id)) break
-        await store.appendProposalEvents([{
-          proposalId: draft.id, orderId: draft.orderId, at: draft.proposedAt, by: "agent", kind: "proposed", text: draft.action, data: { draft },
-        }])
+      case "proposeChange":
+        await proposeChange(command)
         break
-      }
+      case "runCalls":
+        await callRunner.run(command.steps)
+        break
+      case "startCall":
+        await callRunner.start(command.orderId, command.line, command.live ? "live" : undefined)
+        break
+      case "callEvent":
+        await callRunner.input(command.callId, command.input)
+        break
       case "deliverBriefing":
         await deliverBriefing()
         break

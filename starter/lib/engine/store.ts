@@ -6,6 +6,7 @@
 // `postgres.ts` (with a `cr_` table in `schema.ts`). Times cross the port as ISO strings.
 
 import type { BriefingItem } from "./briefing"
+import type { StoredCallEvent } from "./calls"
 import type { StoredProposalEvent } from "./proposals"
 
 export interface EngineStore {
@@ -22,6 +23,13 @@ export interface EngineStore {
   readProposalEvents(): Promise<StoredProposalEvent[]>
   /** Appends events in one go (a batch approval is all or nothing). */
   appendProposalEvents(events: StoredProposalEvent[]): Promise<void>
+  /** Every stored call event (ticket 10), oldest first within each call. */
+  readCallEvents(): Promise<StoredCallEvent[]>
+  /**
+   * Appends events of one call in one go. False (and nothing written) when any
+   * (callId, seq) exists already: another writer took that step first.
+   */
+  appendCallEvents(events: StoredCallEvent[]): Promise<boolean>
   /** Empties every engine table. The snapshot is never touched. */
   reset(): Promise<void>
 }

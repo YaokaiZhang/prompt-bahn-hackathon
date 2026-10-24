@@ -14,6 +14,7 @@ import { loadFixtures, SCENARIO_FIXTURE_DIR } from "@/lib/reviewer/fixtures"
 import { GatewayError, NO_USAGE, type ChatRequest, type ModelGateway } from "@/lib/reviewer/gateway"
 import { createScriptedGateway } from "@/lib/reviewer/scripted"
 import { testReviewSource } from "@/lib/reviewer/testing"
+import type { CallOptions } from "./call-runner"
 import type { ProseOptions } from "./digest-prose"
 import { createEngine, type Engine, type Snapshot } from "./engine"
 import { createMemoryStore } from "./memory"
@@ -32,6 +33,8 @@ export type TestEngineOptions = {
   reviewCache?: ReviewCache
   /** The digest prose's gateway, cache and timeout. Absent: template text. Use `proseGateway()`. */
   briefing?: ProseOptions
+  /** Who answers calls and speech (ticket 10). Absent: the default simulated person, no speech. */
+  calls?: CallOptions
 }
 
 export async function testEngine(options: TestEngineOptions = {}): Promise<Engine> {
@@ -41,6 +44,7 @@ export async function testEngine(options: TestEngineOptions = {}): Promise<Engin
     store: options.store ?? createMemoryStore(),
     reviews: { gateway: options.gateway ?? null, cache: options.reviewCache, inboxMessages: source.inboxMessages },
     briefing: options.briefing,
+    calls: options.calls,
   })
 }
 
@@ -140,14 +144,14 @@ const STORES: StoreCase[] = [
 export function eachStore<G extends ModelGateway | null = null>(
   name: string,
   body: (engine: Engine, gateway: G) => Promise<void>,
-  options: { gateway?: () => Promise<G> } = {},
+  options: { gateway?: () => Promise<G>; calls?: () => CallOptions } = {},
 ): void {
   for (const store of STORES) {
     test(`${name} [${store.name}]`, { skip: store.name === "postgres" && !process.env.TEST_DATABASE_URL ? "set TEST_DATABASE_URL" : false }, async () => {
       const made = store.make()
       if (!made) return
       const gateway = (options.gateway ? await options.gateway() : null) as G
-      await body(await testEngine({ store: await made, gateway }), gateway)
+      await body(await testEngine({ store: await made, gateway, calls: options.calls?.() }), gateway)
     })
   }
 }
