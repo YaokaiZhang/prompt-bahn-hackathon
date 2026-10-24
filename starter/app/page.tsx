@@ -112,7 +112,7 @@ export default function Home() {
       <header className="queue-head">
         <h1 className="display">{title}</h1>
         <p className="queue-sub">{overview && counts
-          ? <><b>{counts.needs_action}</b> of <b>{overview.total}</b> orders need action · <b>{counts.in_progress}</b> with agent work · <b>{counts.normal}</b> checked normal</>
+          ? <><b>{counts.needs_action}</b> of <b>{overview.total}</b> orders need action · <b>{counts.in_progress}</b> with agent work · <b>{counts.normal}</b> checked normal · <Link className="queue-link" href="/board">Lane board</Link></>
           : "Loading the snapshot"}</p>
         {approvals && approvals.waiting.length > 0 && <div className="queue-batch">
           <button type="button" className={`btn btn-s ${batch ? "btn-tertiary" : "btn-primary"}`} aria-pressed={batch} onClick={() => setBatch((value) => !value)}>
