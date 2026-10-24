@@ -169,9 +169,14 @@ async function main(): Promise<void> {
   const overviewResponse = await appFetch(`${base}/api/overview`)
   if (!overviewResponse.ok) throw new Error("Overview did not load")
   const overview = await overviewResponse.json() as {
-    total: number; groupCounts: Record<string, number>
+    total: number; groupCounts: Record<string, number>; now: string
     visible: { id: string; reference: string; attention: unknown[]; verdict?: { group: string } }[]
   }
+  // The shell's demo clock and the queue read the same engine clock (read only: smoke never moves it).
+  const clockResponse = await appFetch(`${base}/api/clock`)
+  if (!clockResponse.ok) throw new Error(`Clock API returned ${clockResponse.status}`)
+  const clock = await clockResponse.json() as { now: string; nextDueAt: string | null }
+  if (clock.now !== overview.now) throw new Error(`The demo clock says ${clock.now} but the queue was computed at ${overview.now}`)
   const groupTotal = Object.values(overview.groupCounts ?? {}).reduce((sum, count) => sum + count, 0)
   if (groupTotal !== overview.total || overview.visible.length !== overview.total) {
     throw new Error(`Group counts add up to ${groupTotal}, not ${overview.total} orders`)

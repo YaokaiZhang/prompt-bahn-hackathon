@@ -12,6 +12,7 @@
 
 import type { Bundle } from "@/lib/present/bundle"
 import { compareUrgency, GROUPS, verdictFor, type Group, type Verdict } from "./checks"
+import { becameDue, dueAsOf, nextCheckItems, nextDueAfter, type DueItem } from "./due"
 import { buildFleet } from "./rules"
 import type { EngineStore } from "./store"
 
@@ -19,7 +20,10 @@ import type { EngineStore } from "./store"
 export type Snapshot = { snapshotAt: string; bundles: Bundle[] }
 
 export type Command =
+  /** "+15 min" in the demo controls; any positive number of minutes. */
   | { type: "advanceClock"; minutes: number }
+  /** "Next due item": jump to the earliest due item after the clock; refused when none is left. */
+  | { type: "advanceToNextDue" }
   | { type: "reset" }
 
 /**
@@ -38,7 +42,8 @@ export type OrderState = {
 export type GroupCounts = Record<Group, number>
 
 export type { FirstAction, Group, Outcome, PlannedAction, RuleId, RuleResult, SourceRef, Urgency } from "./checks"
-export { GROUPS }
+export type { DueItem, DueKind } from "./due"
+export { becameDue, GROUPS }
 
 /** The Needs action group, most urgent first (urgent, then soonest deadline, then reference). */
 export function rankNeedsAction<T extends Pick<OrderState, "group" | "urgency" | "reference">>(orders: T[]): T[] {
@@ -52,6 +57,10 @@ export type EngineState = {
   orders: OrderState[]
   /** Orders per group; always adds up to the number of orders. */
   groupCounts: GroupCounts
+  /** Every due item (next checks; later callbacks and digests), by time, each marked `due` once `now` reached it. */
+  dueItems: DueItem[]
+  /** The earliest time something comes due after `now`; null when nothing is left. */
+  nextDueAt: string | null
 }
 
 export type Engine = {
@@ -84,6 +93,7 @@ export function createEngine({ snapshot, store }: EngineDeps): Engine {
   const start = isoOf(snapshot.snapshotAt)
   const bundles = new Map(snapshot.bundles.map((bundle) => [bundle.order.id, bundle]))
   const fleet = buildFleet(snapshot.bundles)
+  const nextChecks = nextCheckItems(snapshot.bundles)
   // Rules re-run only when the time read changes (load, clock move); effect
   // events (ticket 09) must clear this too.
   let last: { at: string; orders: OrderState[] } | null = null
@@ -108,7 +118,13 @@ export function createEngine({ snapshot, store }: EngineDeps): Engine {
     const at = now === undefined ? await clock() : isoOf(now)
     const orders = ordersAt(at)
     const groupCounts = Object.fromEntries(GROUPS.map((group) => [group, orders.filter((row) => row.group === group).length])) as GroupCounts
-    return { now: at, snapshotAt: start, orders, groupCounts }
+    const items = await allDueItems()
+    return { now: at, snapshotAt: start, orders, groupCounts, dueItems: dueAsOf(items, at), nextDueAt: nextDueAfter(items, at) }
+  }
+
+  /** Every due-item source. Callbacks (ticket 10) and digests (ticket 13) go here. */
+  async function allDueItems(): Promise<Omit<DueItem, "due">[]> {
+    return nextChecks
   }
 
   async function apply(command: Command): Promise<EngineState> {
@@ -119,6 +135,12 @@ export function createEngine({ snapshot, store }: EngineDeps): Engine {
         }
         const from = new Date(await clock()).getTime()
         await store.writeClock(new Date(from + command.minutes * MINUTE).toISOString())
+        break
+      }
+      case "advanceToNextDue": {
+        const next = nextDueAfter(await allDueItems(), await clock())
+        if (!next) throw new Error("Nothing is due later on the demo clock")
+        await store.writeClock(next)
         break
       }
       case "reset":
