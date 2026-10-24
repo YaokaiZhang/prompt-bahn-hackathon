@@ -37,7 +37,7 @@ export default function RulesPage() {
 
     <section className="rules-section" aria-labelledby="policy-head">
       <h2 id="policy-head">Approval policy</h2>
-      <p>Who is contacted, the kind of action, and whether the agent acts alone or needs a yes. The agent never contacts the customer side itself.</p>
+      <p>Who is contacted, the kind of action, and whether the agent acts alone or needs a yes. The agent never contacts the customer side itself, with one exception: a pickup-readiness call to the order&apos;s pickup place or pickup contact. It never calls the paying customer.</p>
       <ol className="rules-list">{POLICY.map((row) => <li className="rule-row" id={row.id} key={row.id}>
         <dl>
           <dt>Who is contacted</dt>

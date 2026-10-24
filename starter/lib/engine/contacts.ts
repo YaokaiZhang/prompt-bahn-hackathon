@@ -15,7 +15,19 @@
 // Pure: bundle in, contact type out.
 
 import { rows, str, type Bundle, type RelatedRow } from "@/lib/present/bundle"
-import type { ContactType } from "@/lib/reviewer/policy"
+import { POLICY, type ContactType } from "@/lib/reviewer/policy"
+
+/**
+ * May the agent make a pickup-readiness call (the rules' tier-1 site call: car ready,
+ * papers and keys there, who hands over) to a pickup contact of this type? A third-party
+ * site: yes (site-routine). A customer-owned site or a pickup contact the customer gave:
+ * yes, under the pickup-readiness row (ADR 0001, amended 2026-10-24). Never the paying
+ * customer, and nothing but this call: other contact with them stays propose only.
+ */
+export function pickupCallAllowed(type: ContactType): boolean {
+  if (type === "third_party_site") return true
+  return POLICY.some((row) => row.actionType === "pickup_readiness" && row.decision === "acts alone" && row.contactTypes.includes(type))
+}
 
 /** Is the site the order's customer's own? */
 export function customerOwnsSite(bundle: Bundle, siteId: string | null | undefined): boolean {

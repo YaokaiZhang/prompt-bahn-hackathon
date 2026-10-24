@@ -24,7 +24,7 @@ We want agents to do the cheap work first (read, compare, ask) and bring a perso
 - Editing the seed snapshot. All changes are overlays.
 - Real authentication (a reverse-proxy basic-auth is added at publish time).
 - Travel in v1: no travel rule, planner or travel site (see §11).
-- Any agent contact with the customer side. The agent proposes it and the operator makes it.
+- Any agent contact with the customer side, other than a pickup-readiness call to the order's pickup place or pickup contact. The agent proposes it and the operator makes it.
 
 ## 3. Users and personas
 
@@ -191,7 +191,8 @@ A config file, shown read-only on a **Rules** page. Every proposal cites its row
 | Pickup site or seller's site (not paying) | Routine question or call | Agent does it |
 | Driver | Routine question or call | Agent does it |
 | Operator | Clarifying question | Agent does it |
-| Customer side: the paying customer, a contact the customer gave us (`stated_by: CUSTOMER_ORDER_INPUT`), or a site the customer owns | Any contact | **Propose only.** The operator makes the contact and records the answer. |
+| Customer side: the paying customer, a contact the customer gave us (`stated_by: CUSTOMER_ORDER_INPUT`), or a site the customer owns | Any contact (except the row below) | **Propose only.** The operator makes the contact and records the answer. |
+| The order's pickup place or pickup contact when it is customer side (a site the customer owns, or a pickup contact the customer gave us; never the paying customer) | Pickup-readiness call: car ready, papers and keys there, callback if nobody answers | Agent does it (ADR 0001 amendment) |
 | Anyone | Order change from a call (new date, cost, booking, order update) | **Needs a yes** |
 
 Example routine questions: "Is the car ready?", "Are the papers there?", "What documents do you need for the pickup?", "Can you still deliver on time?". The operator sees the results.
@@ -283,7 +284,7 @@ The LLM writes the prose. It never owns a number or an order reference.
 
 **Acceptance criteria:**
 
-- The agent never contacts the customer side. It only proposes.
+- The agent never contacts the customer side here (the pickup-readiness exception covers only the pickup place or pickup contact). It only proposes.
 - Every question cites the records that disagree and the record that names the contact.
 - The order history shows the reviewer finding, the approval, the call, the answer, the update approval and the effect event.
 

@@ -161,13 +161,14 @@ test("every order reports every strong rule as passed, failed or not evaluable, 
   }
 })
 
-test("14 orders have a weak-signal site call planned at load, and only to a known third-party contact", async () => {
+test("18 orders have a weak-signal site call planned at load, and only to a known contact", async () => {
   const state = await snapshotState()
   const weak = new Set(["R4", "R5", "R6"])
   const calls = state.orders.filter((row) => row.planned.some((action) => action.kind === "site_call" && action.ruleIds.some((id) => weak.has(id))))
-  // 18 pickups within 48 h have a contact handle; 4 of them are on the customer side (ADR 0001:
-  // CD-420719's site is the customer's own, CD-420449/1011/1051's contact is a person the customer gave).
-  assert.equal(calls.length, 14)
+  // 18 pickups within 48 h have a contact handle. 4 of them are on the customer side and are
+  // still called, as pickup-readiness calls (ADR 0001 amendment): CD-420719's site is the
+  // customer's own, CD-420449/1011/1051's pickup contact is a person the customer gave.
+  assert.equal(calls.length, 18)
   for (const row of calls) {
     const call = row.planned.find((action) => action.kind === "site_call")
     assert.ok(call?.callee?.handle, `${row.reference} calls a known contact`)

@@ -27,7 +27,7 @@
 
 import { createHash } from "node:crypto"
 import { rows, str, type Bundle } from "@/lib/present/bundle"
-import { endpointContactType } from "./contacts"
+import { endpointContactType, pickupCallAllowed } from "./contacts"
 import { isCustomerSide, type ContactType } from "@/lib/reviewer/policy"
 import {
   AVAILABLE_OPTIONS, CALLBACK_MINUTES, CALLBACK_OPTIONS, CALLBACK_QUESTION, callbackLine, CLOSING, greeting, HANDOVER_LINE,
@@ -469,14 +469,22 @@ const RULE_TOPIC_TITLE: Record<string, string> = {
   NEXT: "Next check due", R10: "Tracking is stale", R12: "ETA after the promise",
 }
 
+/** The rules whose site call is a pickup-readiness call (release, contact, car ready). */
+const PICKUP_READINESS_RULES = new Set(["R1", "R4", "R5", "R6", "NEXT"])
+
 /**
- * The contact type of a planned call's endpoint (ADR 0001, contacts.ts). The rules already
- * plan site calls only to third parties; this is the call layer's own guard, so no call
- * ever reaches the customer side whatever plans it.
+ * The contact type of a planned call's endpoint (ADR 0001, contacts.ts), and whether the
+ * agent may call it. This is the call layer's own guard, whatever plans the call: a
+ * third-party site, yes; the customer side only for a pickup-readiness call (policy row
+ * pickup-readiness: a pickup endpoint, every topic a pickup-readiness rule); otherwise no.
  */
-function plannedContactType(bundle: Bundle, endpointId: string): ContactType {
+function plannedContact(bundle: Bundle, endpointId: string, ruleIds: string[]): { type: ContactType; allowed: boolean } {
   const endpoint = rows(bundle, "order_endpoint_details").find((row) => row.id === endpointId)
-  return endpoint ? endpointContactType(bundle, endpoint) : "third_party_site"
+  if (!endpoint) return { type: "third_party_site", allowed: true }
+  const type = endpointContactType(bundle, endpoint)
+  if (!isCustomerSide(type)) return { type, allowed: true }
+  const readiness = endpoint.details.boundary === "PICKUP" && ruleIds.length > 0 && ruleIds.every((id) => PICKUP_READINESS_RULES.has(id))
+  return { type, allowed: readiness && pickupCallAllowed(type) }
 }
 
 function driverOf(bundle: Bundle): CallCallee | null {
@@ -512,9 +520,9 @@ export function orderCalls(bundle: Bundle, planned: PlannedAction[], proposals: 
     const line: CallLine = action.kind === "site_call" ? "site" : "driver"
     let callee: CallCallee | null = null
     if (action.kind === "site_call" && action.callee) {
-      const type = plannedContactType(bundle, action.callee.endpointId)
-      if (isCustomerSide(type)) {
-        blocked.push({ line, ruleIds: action.ruleIds, text: `No call to ${action.callee.name ?? action.callee.handle}: a ${type === "customer_owned_site" ? "customer-owned site" : "contact the customer gave"} is customer side, so the agent only proposes.` })
+      const { type, allowed } = plannedContact(bundle, action.callee.endpointId, action.ruleIds)
+      if (!allowed) {
+        blocked.push({ line, ruleIds: action.ruleIds, text: `No call to ${action.callee.name ?? action.callee.handle}: a ${type === "customer_owned_site" ? "customer-owned site" : "contact the customer gave"} is customer side and this is not a pickup-readiness call, so the agent only proposes.` })
         continue
       }
       callee = { name: action.callee.name, handle: action.callee.handle, role: action.callee.role, contactType: type, recordId: action.callee.endpointId }
@@ -525,7 +533,8 @@ export function orderCalls(bundle: Bundle, planned: PlannedAction[], proposals: 
     for (const id of action.ruleIds) add(line, callee, { id: `rule:${id}`, kind: "rule", title: RULE_TOPIC_TITLE[id] ?? id })
   }
   for (const proposal of proposals) {
-    if (proposal.kind !== "call" || proposal.waitingOn !== "agent" || !proposal.contact.handle) continue
+    // A reviewer finding for a customer-side contact is a customer_contact proposal, never a call.
+    if (proposal.kind !== "call" || proposal.waitingOn !== "agent" || !proposal.contact.handle || isCustomerSide(proposal.contact.type)) continue
     const line: CallLine = proposal.contact.type === "driver" || proposal.contact.role === "driver" ? "driver" : "site"
     add(line, { name: proposal.contact.name, handle: proposal.contact.handle, role: proposal.contact.role, contactType: proposal.contact.type, recordId: proposal.contact.recordId },
       { id: `proposal:${proposal.id}`, kind: "proposal", title: proposal.title, script: proposal.script })
