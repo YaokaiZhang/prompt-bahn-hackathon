@@ -10,6 +10,7 @@
 import type { Bundle, RelatedRow } from "@/lib/present/bundle"
 import { bool, finalDeliveryPoint, obj, originPickupPoint, rows, str } from "@/lib/present/bundle"
 import { fmtDateTime } from "@/lib/present/time"
+import { endpointContactType } from "./contacts"
 import { nextChecksOf, type NextCheck } from "./due"
 import type { Callee, FirstAction, PlannedAction, RuleId, RuleResult, SourceRef, Urgency } from "./checks"
 
@@ -74,7 +75,8 @@ function gather(bundle: Bundle, context: RuleContext): Facts {
   const start = ms(str(pickupSlot?.details.start_at))
   const pickupSoon = !finished && !pickedUp && start !== null && start - now <= CALL_AHEAD_HOURS * HOUR
   const handle = str(pickupEndpoint?.details.contact_handle)
-  const callee = pickupEndpoint && handle
+  // ADR 0001: the agent never calls the customer side (a customer-given contact, a site the customer owns).
+  const callee = pickupEndpoint && handle && endpointContactType(bundle, pickupEndpoint) === "third_party_site"
     ? { name: str(pickupEndpoint.details.contact_name), handle, role: str(pickupEndpoint.details.contact_role), endpointId: pickupEndpoint.id }
     : null
   return { bundle, now, nowIso: context.now, finished, pickupPoint, deliveryPoint, pickupEndpoint, pickupSlot, promise, moving, pickedUp, pickupSoon, callee }

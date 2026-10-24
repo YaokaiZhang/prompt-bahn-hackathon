@@ -375,6 +375,7 @@ ul, ol { padding: 0; list-style: none; }
 .proposal-dismissed .proposal-title, .proposal-answered .proposal-title { color: var(--muted); }
 .proposal .finding-facts > div { grid-template-columns: 112px minmax(0, 1fr); }
 .proposal-script { margin: 8px 0 0 32px; padding: 12px 16px; border-radius: var(--r-sm); background: var(--sand-50); font-size: 15px; font-weight: 600; line-height: 1.45; color: var(--ink); max-width: 72ch; white-space: pre-wrap; }
+.proposal-answer { background: var(--green-bg); font-weight: 500; }
 .proposal-decide, .proposal-form { margin: 14px 0 0 32px; }
 .proposal-will { font-size: 14.5px; color: var(--body); max-width: 72ch; }
 .proposal-will b { font-weight: 600; color: var(--ink); }

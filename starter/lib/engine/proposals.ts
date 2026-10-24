@@ -24,6 +24,7 @@ import { rows, str, type Bundle } from "@/lib/present/bundle"
 import {
   CONTACT_TYPE_LABEL, isCustomerSide, policyFor, policyRow, type AskRole, type ContactType, type Decision, type PolicyRowId,
 } from "@/lib/reviewer/policy"
+import { customerOwnsSite, customerSideOf, endpointContactType, endpointSite } from "./contacts"
 import type { CitedRecord, OrderReview, ReviewFinding } from "./reviews"
 
 export type ProposalKind = "call" | "operator_question" | "customer_contact" | "change"
@@ -82,6 +83,8 @@ export type Proposal = Omit<ProposalDraft, "proposedAt"> & {
   onApprove: string | null
   /** The operator's instructions on this proposal, oldest first; fed to the order's next review run. */
   instructions: { at: string; text: string }[]
+  /** The answer the operator recorded (a customer's answer, or the operator's own to a question); null until answered. */
+  answer: string | null
   history: ProposalEvent[]
 }
 
@@ -93,8 +96,8 @@ export type StoredProposalEvent = {
   by: Actor
   kind: ProposalEventKind
   text: string
-  /** `draft` on a proposal's first stored event; `script` on an edit; `title` on an instruction. */
-  data: { draft?: ProposalDraft; script?: string; title?: string } | null
+  /** `draft` on a proposal's first stored event; `script` on an edit; `title` on an instruction; `answer`, `question` and `from` on an answer. */
+  data: { draft?: ProposalDraft; script?: string; title?: string; answer?: string; question?: string; from?: string } | null
 }
 
 /** A finding the agent cannot act on: no contact on record (listed as couldn't check). */
@@ -121,18 +124,19 @@ function kindFor(type: ContactType): ProposalKind {
 }
 
 /**
- * The handle the agent would call for a site contact: the cited endpoint's contact,
- * else the order's pickup endpoint contact, then the site profile's pickup email.
+ * The contact the agent would reach for a site: the cited endpoint's contact, else the
+ * order's pickup endpoint contact, then the site profile's pickup email; with that
+ * contact's type from the records (a fallback can land on the customer side).
  */
-function siteHandle(bundle: Bundle, recordId: string): string | null {
+function siteContact(bundle: Bundle, recordId: string): { handle: string | null; type: ContactType } {
   const endpoints = rows(bundle, "order_endpoint_details")
   const cited = endpoints.find((row) => row.id === recordId)
   const endpoint = cited ?? endpoints.find((row) => row.details.boundary === "PICKUP") ?? null
   const handle = str(endpoint?.details.contact_handle)
-  if (handle) return handle
-  const siteId = str(endpoint?.details.site_id) ?? (bundle.sites.has(recordId) ? recordId : bundle.order.pickupSiteId)
+  if (endpoint && handle) return { handle, type: endpointContactType(bundle, endpoint) }
+  const siteId = (endpoint ? endpointSite(bundle, endpoint) : null) ?? (bundle.sites.has(recordId) ? recordId : bundle.order.pickupSiteId)
   const site = siteId ? bundle.sites.get(siteId) : undefined
-  return str(site?.details.pickup_contact_email)
+  return { handle: str(site?.details.pickup_contact_email), type: customerOwnsSite(bundle, siteId) ? "customer_owned_site" : "third_party_site" }
 }
 
 function driverHandle(bundle: Bundle, recordId: string, quote: string): string | null {
@@ -157,11 +161,19 @@ function actionText(kind: ProposalKind, contact: ProposalContact): string {
 
 /** A finding as the proposal the agent drafts, or why it cannot become one. */
 export function draftFromFinding(bundle: Bundle, finding: ReviewFinding, proposedAt: string): ProposalDraft | Unreachable {
-  const type = finding.ask.contactType
+  // The records decide the type: a contact they show on the customer side is never called,
+  // whatever the finding says, and neither is a fallback contact that lands there.
+  let type = customerSideOf(bundle, finding.ask.contactRecordId) ?? finding.ask.contactType
+  let handle: string | null = null
+  if (kindFor(type) === "call") {
+    if (finding.ask.role === "driver" || type === "driver") handle = driverHandle(bundle, finding.ask.contactRecordId, finding.ask.contactQuote)
+    else {
+      const reached = siteContact(bundle, finding.ask.contactRecordId)
+      if (isCustomerSide(reached.type)) type = reached.type
+      else handle = reached.handle
+    }
+  }
   const kind = kindFor(type)
-  const handle = kind !== "call" ? null
-    : finding.ask.role === "driver" || type === "driver" ? driverHandle(bundle, finding.ask.contactRecordId, finding.ask.contactQuote)
-    : siteHandle(bundle, finding.ask.contactRecordId)
   if (kind === "call" && !handle) {
     return { findingId: finding.id, title: finding.title, reason: `No contact on record for ${finding.ask.name}: no call, couldn't check.` }
   }
@@ -221,12 +233,13 @@ export function foldProposal(draft: ProposalDraft, events: StoredProposalEvent[]
   }
   let script = draft.script
   const instructions: Proposal["instructions"] = []
+  let answer: string | null = null
   for (const event of events) {
     if (event.kind === "proposed") continue
     history.push({ at: event.at, by: event.by, kind: event.kind, text: event.text })
     if (event.kind === "approved") status = "approved"
     if (event.kind === "dismissed") status = "dismissed"
-    if (event.kind === "answered") status = "answered"
+    if (event.kind === "answered") { status = "answered"; answer = event.data?.answer ?? event.text }
     if (event.kind === "edited" && event.data?.script) script = event.data.script
     if (event.kind === "instructed") instructions.push({ at: event.at, text: event.text })
   }
@@ -238,7 +251,7 @@ export function foldProposal(draft: ProposalDraft, events: StoredProposalEvent[]
   return {
     ...rest, script, status, waitingOn: waitingOn(draft.kind, status),
     onApprove: status === "proposed" ? onApproveText({ ...draft, script }) : null,
-    instructions, history,
+    instructions, answer, history,
   }
 }
 
@@ -284,4 +297,12 @@ export function instructionsFor(stored: StoredProposalEvent[]): { id: string; at
     out.push({ id: `${event.proposalId}-i${n}`, at: event.at, by: "operator", text: title ? `On "${title}": ${event.text}` : event.text })
   }
   return out
+}
+
+/** The answers the operator recorded on an order, as the reviewer's prior state reads them. */
+export function answersFor(stored: StoredProposalEvent[]): { id: string; at: string; from: string; question: string; answer: string }[] {
+  return stored.filter((event) => event.kind === "answered").map((event) => ({
+    id: `${event.proposalId}-a`, at: event.at, from: event.data?.from ?? "operator",
+    question: event.data?.question ?? event.data?.draft?.script ?? "", answer: event.data?.answer ?? event.text,
+  }))
 }

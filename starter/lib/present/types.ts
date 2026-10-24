@@ -37,6 +37,8 @@ export type ProposalAction =
   | { action: "editScript"; proposalId: string; script: string }
   | { action: "dismiss"; proposalId: string; note?: string }
   | { action: "instruct"; proposalId: string; text: string }
+  | { action: "recordAnswer"; proposalId: string; answer: string }
+  | { action: "answerQuestion"; proposalId: string; answer: string }
 
 export type ClockAction = "advance" | "next" | "reset"
 
