@@ -121,11 +121,11 @@ test("the background site calls go out on their own, never to a customer-side co
   const engine = await testEngine({ calls: { person: scriptedPerson({}), speech } })
   const before = await engine.state()
   const planned = before.orders.filter((row) => row.planned.some((action) => action.kind === "site_call")).map((row) => row.reference)
-  const blocked = before.orders.filter((row) => row.blockedCalls.length).map((row) => row.reference).sort()
   // Pickup contacts the customer gave (stated_by CUSTOMER_ORDER_INPUT) or a site the customer owns: propose only (ADR 0001).
-  assert.deepEqual(blocked, ["CD-420015", "CD-420449", "CD-420719", "CD-421011", "CD-421051"])
+  const blocked = ["CD-420449", "CD-420719", "CD-421011", "CD-421051"]
   for (const reference of blocked) assert.ok(!planned.includes(reference), `${reference} plans no site call`)
-  assert.equal(planned.length, 13)
+  assert.equal(planned.length, 14)
+  assert.ok(planned.includes("CD-420015"), "CD-420015's customer typed in the site's own desk (site-005): the site is called")
 
   await engine.apply({ type: "runCalls" })
   const after = await engine.state()
@@ -246,7 +246,7 @@ test("the operator can start a call on a line, ringing live", async () => {
   const row = await order(engine, "CD-420806")
   assert.equal(row.calls[0].answerer, "live")
   await assert.rejects(engine.apply({ type: "startCall", orderId: row.id, line: "driver" }), /already running/)
-  await assert.rejects(engine.apply({ type: "startCall", orderId: (await order(engine, "CD-420015")).id, line: "site" }), /nothing to call/)
+  await assert.rejects(engine.apply({ type: "startCall", orderId: (await order(engine, "CD-420449")).id, line: "site" }), /nothing to call/, "a customer-given contact is never called")
 })
 
 test("paced like a real phone: the simulated person rings and waits for each prompt to finish before pressing", async () => {

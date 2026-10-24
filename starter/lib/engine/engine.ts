@@ -17,7 +17,7 @@ import { briefingAsOf, digestFacts, digestTimes, digestTitle, pushId, sendPush, 
 import { writeProse, type ProseOptions } from "./digest-prose"
 import { becameDue, digestDueItems, dueAsOf, nextCheckItems, nextDueAfter, type DueItem } from "./due"
 import {
-  changeDraft, instructionsFor, proposalsFor, type OrderProposals, type Proposal, type StoredProposalEvent, type Unreachable,
+  answersFor, changeDraft, instructionsFor, proposalsFor, type OrderProposals, type Proposal, type StoredProposalEvent, type Unreachable,
 } from "./proposals"
 import { createReviewLayer, reviewTotals, type OrderReview, type ReviewInputs, type ReviewOptions, type ReviewTotals } from "./reviews"
 import { buildFleet, evaluateRules, type Evaluation } from "./rules"
@@ -53,6 +53,15 @@ export type Command =
    */
   | { type: "proposeChange"; orderId: string; title: string; change: string; why: string; source: string
       contact?: { name: string; type: ContactType; role: AskRole; recordId?: string | null } }
+  /**
+   * The operator records the customer's answer on an approved customer-side proposal
+   * (after making the contact): the proposal becomes answered, the answer goes to the
+   * order's next review run (which runs now when a model is configured), and the agent
+   * proposes the order update for a yes.
+   */
+  | { type: "recordAnswer"; proposalId: string; answer: string }
+  /** The operator answers the agent's question in the app: answered, and the answer goes to the order's next review run. */
+  | { type: "answerQuestion"; proposalId: string; answer: string }
   /** Delivers what is due in the Briefing: digests whose time has come, pushes for orders that turned urgent. Clock moves and reset do this too. */
   | { type: "deliverBriefing" }
   /** Marks Briefing items read (all when `ids` is absent). */
@@ -207,8 +216,11 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     return {
       rules: rulesAtReview,
       prior: (bundle) => {
-        const instructions = instructionsFor(events.get(bundle.order.id) ?? [])
-        return instructions.length ? { instructions } : undefined
+        const stored = events.get(bundle.order.id) ?? []
+        const instructions = instructionsFor(stored)
+        const answers = answersFor(stored)
+        if (!instructions.length && !answers.length) return undefined
+        return { ...(instructions.length ? { instructions } : {}), ...(answers.length ? { answers } : {}) }
       },
     }
   }
@@ -257,19 +269,31 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
    */
   async function callEnded(call: Call): Promise<void> {
     if (call.outcome === "callback") return
-    const text = `Call result (${call.id}): ${call.summary ?? call.outcome}`
-    for (const topic of call.topics) {
-      if (topic.kind !== "proposal") continue
-      const proposal = await findProposal(topic.id.slice("proposal:".length)).catch(() => null)
-      if (!proposal || proposal.status === "answered" || proposal.status === "dismissed") continue
-      await store.appendProposalEvents([{ ...(await eventFor(proposal, "answered", text)), by: "agent" }])
-    }
+    await recordCallResult(call)
     for (const change of call.changes) {
       await proposeChange({
         orderId: call.orderId, title: change.title, change: change.change, source: call.id,
         why: `${call.callee.name ?? call.callee.handle} said on the ${call.line} call at ${utcTime(call.endedAt ?? call.startedAt)}: ${change.claim}.`,
         contact: { name: call.callee.name ?? call.callee.handle, type: call.callee.contactType, role: call.line === "driver" ? "driver" : "site", recordId: call.callee.recordId },
       })
+    }
+  }
+
+  /**
+   * THE one place a finished call's result is written. Today: an "answered" event (with
+   * the answer, question and who said it) on each call proposal the call carried.
+   * Ticket 09: write the "call result recorded" effect event here (an attributed claim,
+   * source = call.id; `call.claims` lists what the person said) and re-review the order.
+   */
+  async function recordCallResult(call: Call): Promise<void> {
+    const answer = call.summary ?? call.outcome ?? "ended"
+    const from = `${call.callee.name ?? call.callee.handle} (${call.line}), on call ${call.id}`
+    for (const topic of call.topics) {
+      if (topic.kind !== "proposal") continue
+      const proposal = await findProposal(topic.id.slice("proposal:".length)).catch(() => null)
+      if (!proposal || proposal.status === "answered" || proposal.status === "dismissed") continue
+      const event = await eventFor(proposal, "answered", `Call result (${call.id}): ${answer}`, { answer, question: proposal.script, from })
+      await store.appendProposalEvents([{ ...event, by: "agent" }])
     }
   }
 
@@ -302,7 +326,7 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
   }
 
   function toDraft(proposal: Proposal) {
-    const { status: _s, waitingOn: _w, onApprove: _o, instructions: _i, history, ...rest } = proposal
+    const { status: _s, waitingOn: _w, onApprove: _o, instructions: _i, answer: _a, history, ...rest } = proposal
     return { ...rest, proposedAt: history[0]?.at ?? start }
   }
 
@@ -320,6 +344,18 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     return proposal.kind === "customer_contact" ? `Approved: the contact with ${proposal.contact.name} is handed to the operator.`
       : proposal.kind === "change" ? `Approved: ${proposal.change}`
       : "Approved."
+  }
+
+  /** Instructions and answers are part of the order's case file: re-review the order with them. */
+  async function rereview(orderId: string): Promise<void> {
+    reviews.forget(orderId)
+    if (reviews.canReview) await reviews.run(reviewInputs(eventsByOrder(await store.readProposalEvents())), [orderId])
+  }
+
+  function answerText(answer: string): string {
+    const text = answer.trim()
+    if (!text) throw new Error("The answer cannot be empty")
+    return text
   }
 
   async function clock(): Promise<string> {
@@ -421,10 +457,14 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
         await deliverBriefing()
         break
       }
-      case "reset":
+      case "reset": {
+        // Instructions and answers were part of those orders' case files: read their reviews afresh.
+        const touched = new Set((await store.readProposalEvents()).map((event) => event.orderId))
         await store.reset()
+        for (const orderId of touched) reviews.forget(orderId)
         await deliverBriefing()
         break
+      }
       case "review":
         await reviews.run(reviewInputs(eventsByOrder(await store.readProposalEvents())), command.orderIds)
         break
@@ -461,9 +501,37 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
         if (!text) throw new Error("The instruction cannot be empty")
         const proposal = await findProposal(command.proposalId)
         await store.appendProposalEvents([await eventFor(proposal, "instructed", text, { title: proposal.title })])
-        // The instruction is part of the order's case file: re-review the order with it.
-        reviews.forget(proposal.orderId)
-        if (reviews.canReview) await reviews.run(reviewInputs(eventsByOrder(await store.readProposalEvents())), [proposal.orderId])
+        await rereview(proposal.orderId)
+        break
+      }
+      case "recordAnswer": {
+        const answer = answerText(command.answer)
+        const proposal = await findProposal(command.proposalId)
+        if (proposal.kind !== "customer_contact") throw new Error(`${proposal.reference}: "${proposal.title}" is not a customer-side contact; only those take a customer's answer`)
+        if (proposal.status !== "approved") throw new Error(`${proposal.reference}: "${proposal.title}" is ${proposal.status}; approve it and make the contact before recording the answer`)
+        const name = proposal.contact.name
+        const update = changeDraft(bundles.get(proposal.orderId)!, {
+          title: `Update the order from the ${proposal.contact.typeLabel.toLowerCase()}'s answer`,
+          change: `Record the answer on the order: "${answer}"`,
+          why: `The operator asked "${proposal.script}" and recorded this answer.`,
+          source: proposal.id, evidence: proposal.evidence, whoPays: proposal.whoPays,
+          contact: { name, type: proposal.contact.type, role: proposal.contact.role, recordId: proposal.contact.recordId },
+        }, await clock())
+        const from = `${name} (${proposal.contact.typeLabel.toLowerCase()}), recorded by the operator`
+        await store.appendProposalEvents([
+          await eventFor(proposal, "answered", `Answer recorded: ${answer}`, { answer, question: proposal.script, from }),
+          { proposalId: update.id, orderId: update.orderId, at: update.proposedAt, by: "agent", kind: "proposed", text: update.action, data: { draft: update } },
+        ])
+        await rereview(proposal.orderId)
+        break
+      }
+      case "answerQuestion": {
+        const answer = answerText(command.answer)
+        const proposal = await findProposal(command.proposalId)
+        if (proposal.kind !== "operator_question") throw new Error(`${proposal.reference}: "${proposal.title}" is not a question to the operator`)
+        stillOpen(proposal, "answered")
+        await store.appendProposalEvents([await eventFor(proposal, "answered", `Answered: ${answer}`, { answer, question: proposal.script, from: "operator" })])
+        await rereview(proposal.orderId)
         break
       }
       case "proposeChange":

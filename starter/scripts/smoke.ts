@@ -272,9 +272,14 @@ async function main(): Promise<void> {
   // policy row and what approving will do; the Rules page renders. Read-only: nothing is approved.
   const approvalsResponse = await appFetch(`${base}/api/proposals`)
   if (!approvalsResponse.ok) throw new Error(`Proposals API returned ${approvalsResponse.status}`)
-  const approvals = await approvalsResponse.json() as { waiting: { reference: string; kind?: string; policyRow?: string; whoPays?: string; onApprove?: string | null; contact?: { type?: string }; evidence?: unknown[] }[] }
+  const approvals = await approvalsResponse.json() as { waiting: { reference: string; kind?: string; policyRow?: string; whoPays?: string; onApprove?: string | null; contact?: { type?: string; handle?: string | null }; evidence?: unknown[] }[] }
   const incomplete = approvals.waiting.filter((row) => !row.policyRow || !row.whoPays || !row.onApprove || !row.contact?.type || (row.kind !== "change" && !row.evidence?.length))
   if (incomplete.length) throw new Error(`Proposals missing evidence, contact type, who pays, policy row or approval text: ${incomplete.map((row) => row.reference).join(", ")}`)
+  // Ticket 08 (ADR 0001): a customer-side proposal is propose-only and gives the agent no channel.
+  const customerSide = new Set(["paying_customer", "customer_given_contact", "customer_owned_site"])
+  const leaking = approvals.waiting.filter((row) => row.kind !== "change" && customerSide.has(row.contact?.type ?? "")
+    && (row.kind !== "customer_contact" || row.contact?.handle || row.policyRow !== "customer-side"))
+  if (leaking.length) throw new Error(`Customer-side proposals the agent could act on: ${leaking.map((row) => row.reference).join(", ")}`)
   const rulesPage = await appFetch(`${base}/rules`)
   if (!rulesPage.ok || !(await rulesPage.text()).includes("customer-side")) throw new Error(`Rules page did not render the policy (${rulesPage.status})`)
   console.log(`Proposals: ${approvals.waiting.length} waiting for a yes, each with its policy row; the Rules page lists the policy.`)

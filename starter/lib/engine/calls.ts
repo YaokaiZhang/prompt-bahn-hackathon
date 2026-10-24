@@ -27,6 +27,7 @@
 
 import { createHash } from "node:crypto"
 import { rows, str, type Bundle } from "@/lib/present/bundle"
+import { endpointContactType } from "./contacts"
 import { isCustomerSide, type ContactType } from "@/lib/reviewer/policy"
 import {
   AVAILABLE_OPTIONS, CALLBACK_MINUTES, CALLBACK_OPTIONS, CALLBACK_QUESTION, callbackLine, CLOSING, greeting, HANDOVER_LINE,
@@ -468,14 +469,14 @@ const RULE_TOPIC_TITLE: Record<string, string> = {
   NEXT: "Next check due", R10: "Tracking is stale", R12: "ETA after the promise",
 }
 
-/** The contact type of the order's pickup endpoint (ADR 0001): customer-given or customer-owned contacts are never called. */
-function endpointContactType(bundle: Bundle, endpointId: string): ContactType {
+/**
+ * The contact type of a planned call's endpoint (ADR 0001, contacts.ts). The rules already
+ * plan site calls only to third parties; this is the call layer's own guard, so no call
+ * ever reaches the customer side whatever plans it.
+ */
+function plannedContactType(bundle: Bundle, endpointId: string): ContactType {
   const endpoint = rows(bundle, "order_endpoint_details").find((row) => row.id === endpointId)
-  if (str(endpoint?.details.stated_by) === "CUSTOMER_ORDER_INPUT") return "customer_given_contact"
-  const siteId = str(endpoint?.details.site_id)
-  const site = siteId ? bundle.sites.get(siteId) : undefined
-  if (site && str(site.details.customer_id) === bundle.customer.id) return "customer_owned_site"
-  return "third_party_site"
+  return endpoint ? endpointContactType(bundle, endpoint) : "third_party_site"
 }
 
 function driverOf(bundle: Bundle): CallCallee | null {
@@ -511,7 +512,7 @@ export function orderCalls(bundle: Bundle, planned: PlannedAction[], proposals: 
     const line: CallLine = action.kind === "site_call" ? "site" : "driver"
     let callee: CallCallee | null = null
     if (action.kind === "site_call" && action.callee) {
-      const type = endpointContactType(bundle, action.callee.endpointId)
+      const type = plannedContactType(bundle, action.callee.endpointId)
       if (isCustomerSide(type)) {
         blocked.push({ line, ruleIds: action.ruleIds, text: `No call to ${action.callee.name ?? action.callee.handle}: a ${type === "customer_owned_site" ? "customer-owned site" : "contact the customer gave"} is customer side, so the agent only proposes.` })
         continue

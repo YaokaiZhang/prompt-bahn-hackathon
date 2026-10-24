@@ -41,7 +41,7 @@ export type RuleResult = {
   sources: SourceRef[]
 }
 
-/** Who a planned call goes to: the order's endpoint contact (never the customer). */
+/** Who a planned call goes to: the order's pickup endpoint contact, only when it is a third party (never the customer side, ADR 0001). */
 export type Callee = { name: string | null; handle: string; role: string | null; endpointId: string }
 
 /** Agent work the rules planned. Calls are tier 1 and need no approval. */

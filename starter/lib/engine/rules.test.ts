@@ -161,20 +161,19 @@ test("every order reports every strong rule as passed, failed or not evaluable, 
   }
 })
 
-test("18 orders have a weak-signal site call at load to a known contact; the 5 to a customer-side contact are not made", async () => {
+test("14 orders have a weak-signal site call planned at load, and only to a known third-party contact", async () => {
   const state = await snapshotState()
   const weak = new Set(["R4", "R5", "R6"])
   const calls = state.orders.filter((row) => row.planned.some((action) => action.kind === "site_call" && action.ruleIds.some((id) => weak.has(id))))
-  // Ticket 10 (ADR 0001): a contact the customer gave, or a site the customer owns, is propose only.
-  const blocked = state.orders.filter((row) => row.blockedCalls.some((call) => call.line === "site" && call.ruleIds.some((id) => weak.has(id))))
-  assert.equal(calls.length + blocked.length, 18)
-  assert.equal(calls.length, 13)
+  // 18 pickups within 48 h have a contact handle; 4 of them are on the customer side (ADR 0001:
+  // CD-420719's site is the customer's own, CD-420449/1011/1051's contact is a person the customer gave).
+  assert.equal(calls.length, 14)
   for (const row of calls) {
     const call = row.planned.find((action) => action.kind === "site_call")
     assert.ok(call?.callee?.handle, `${row.reference} calls a known contact`)
   }
-  // CD-420015: pickup 22 Oct 08:00Z, both contacts unconfirmed (customer order input): no call, the customer side is propose only.
-  assert.ok(blocked.some((row) => row.reference === "CD-420015"))
+  // CD-420015: pickup 22 Oct 08:00Z, both contacts unconfirmed (customer order input).
+  assert.ok(calls.some((row) => row.reference === "CD-420015"))
   // CD-420123 and CD-421024 pick up within 48 h but have no pickup contact handle: no call, only "couldn't check".
   for (const reference of ["CD-420123", "CD-421024"]) {
     const silent = await order(reference)
