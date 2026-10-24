@@ -12,7 +12,8 @@ import { bool, finalDeliveryPoint, obj, originPickupPoint, rows, str } from "@/l
 import { fmtDateTime } from "@/lib/present/time"
 import { endpointContactType, pickupCallAllowed } from "./contacts"
 import { nextChecksOf, type NextCheck } from "./due"
-import { latestEta } from "./eta"
+import { currentRecord, latestEta, latestPosition, type PositionStatement } from "./eta"
+import { ON_TIME_CLAIM } from "./call-script"
 import type { Callee, FirstAction, PlannedAction, RuleId, RuleResult, SourceRef, Urgency } from "./checks"
 
 /** One driver duty, indexed across all orders, for the positioning rule. */
@@ -169,26 +170,39 @@ function promiseVersusRequest(facts: Facts): RuleResult {
 export const STALE_TRACKING_HOURS = 4
 const OPEN_ALERT = new Set(["OPEN", "ACKNOWLEDGED"])
 
-const byObserved = (a: RelatedRow, b: RelatedRow) => String(a.details.observed_at ?? "").localeCompare(String(b.details.observed_at ?? ""))
-
-// R10 — In transit with tracking missing or older than 4 h, and no open alert.
+// R10 — In transit with tracking missing or older than 4 h, and no open alert. It reads
+// current records only: once a call result or a reported ETA supersedes the latest
+// tracking row, the driver's word on the call is the latest position statement.
 function staleTracking(facts: Facts): RuleResult {
   const title = RULE_CATALOGUE.R10.title
   const { bundle } = facts
   if (!facts.moving.length) return result("R10", "strong", title, "pass", "No driver is on the road with this car.", null, [])
-  const observations = rows(bundle, "tracking_observations")
   const alerts = bundle.alerts.filter((alert) => OPEN_ALERT.has(alert.status))
-  const stale: { assignment: RelatedRow; last: RelatedRow | null }[] = []
+  const stale: PositionStatement[] = []
+  const missing: RelatedRow[] = []
   const sources: SourceRef[] = []
   for (const assignment of facts.moving) {
-    const last = observations.filter((row) => row.details.assignment_id === assignment.id).sort(byObserved).pop() ?? null
-    if (last) sources.push(ref("tracking_observations", last, "Latest position"))
-    else sources.push(ref("work_assignments", assignment, "Assignment in progress"))
-    const observed = ms(str(last?.details.observed_at))
-    if (observed === null || facts.now - observed > STALE_TRACKING_HOURS * HOUR) stale.push({ assignment, last })
+    const last = latestPosition(bundle, assignment.id)
+    if (!last) {
+      sources.push(ref("work_assignments", assignment, "Assignment in progress"))
+      missing.push(assignment)
+      continue
+    }
+    sources.push(ref(last.collection, last.row, last.collection === "tracking_observations" ? "Latest position" : "Driver's word on a call"))
+    const observed = ms(last.at)
+    if (observed === null || facts.now - observed > STALE_TRACKING_HOURS * HOUR) stale.push(last)
   }
-  if (!stale.length) return result("R10", "strong", title, "pass", `The latest position is less than ${STALE_TRACKING_HOURS} h old.`, null, sources)
-  const what = stale.map(({ last }) => last ? `the last position is from ${fmtDateTime(str(last.details.observed_at), null)}` : "no position has been received").join("; ")
+  if (!stale.length && !missing.length) {
+    const spoke = sources.some((source) => source.collection === "effect_events")
+    return result("R10", "strong", title, "pass", spoke
+      ? `The driver spoke on a call less than ${STALE_TRACKING_HOURS} h ago, after the last tracked position.`
+      : `The latest position is less than ${STALE_TRACKING_HOURS} h old.`, null, sources)
+  }
+  const what = [
+    ...stale.map((last) => last.collection === "tracking_observations"
+      ? `the last position is from ${fmtDateTime(last.at, null)}` : `the driver last spoke on a call at ${fmtDateTime(last.at, null)}`),
+    ...missing.map(() => "no position has been received"),
+  ].join("; ")
   if (alerts.length) {
     return result("R10", "strong", title, "pass", `Tracking is stale (${what}), but an open alert already covers the order.`, null,
       [...sources, ...alerts.map((alert) => ({ collection: "alerts", id: alert.id, label: `Alert ${alert.signal.toLowerCase().replace(/_/g, " ")}` }))])
@@ -214,6 +228,20 @@ function etaAfterPromise(facts: Facts): RuleResult {
   const end = str(promise.details.end_at)
   const zone = str(promise.details.timezone)
   if ((ms(eta) ?? 0) > (ms(end) ?? Infinity)) {
+    // A tracking ETA a call result superseded: the driver already answered on a call.
+    const tracked = latest.superseded ? rows(facts.bundle, latest.collection).find((row) => row.id === latest.recordId) : undefined
+    const answer = tracked ? currentRecord(facts.bundle, tracked) : undefined
+    if (answer && answer.id !== tracked?.id && answer.details.effect === "CALL_RESULT_RECORDED") {
+      const said = String(answer.details.claim ?? "")
+      const answerSources = [ref("effect_events", answer, "Driver's answer on a call"), ref("time_windows", promise, "Delivery promise")]
+      if (said.split("; ").includes(ON_TIME_CLAIM)) {
+        return result("R12", "strong", title, "pass",
+          `The tracking ETA ${fmtDateTime(eta, zone)} was after the promise end, but on a call the driver said: ${said}.`, null, answerSources)
+      }
+      return result("R12", "strong", title, "fail",
+        `The tracking ETA ${fmtDateTime(eta, zone)} is after the promise ends at ${fmtDateTime(end, zone)}, and on a call the driver said: ${said}. Decide what to tell the customer.`,
+        "show_person", answerSources)
+    }
     if (latest.reported) {
       return result("R12", "strong", title, "fail",
         `${latest.statedBy ?? "The driver"} reported an ETA of ${fmtDateTime(eta, zone)}, after the promise ends at ${fmtDateTime(end, zone)}. Decide what to tell the customer.`,

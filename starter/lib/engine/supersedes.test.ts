@@ -185,4 +185,31 @@ eachStore("a rule topic names its source records: CD-420806's driver says on tra
   assert.equal((await overlaid(engine, after.id, "tracking_observations", TRACKING_806)).superseded_by, result.id)
   assert.equal((await overlaid(engine, after.id, "work_assignments", ASSIGNMENT_806)).superseded_by, undefined, "the assignment is the order's structure, not a statement")
   assert.equal(after.callLines.find((line) => line.line === "driver")!.status, "done")
+
+  // R10 reads the current record only: the driver's word on the call is the latest position statement.
+  const r10 = after.rules.find((rule) => rule.id === "R10")!
+  assert.equal(r10.outcome, "pass", r10.detail)
+  assert.ok(r10.sources.some((source) => source.id === result.id), "R10 cites the call result")
+  assert.ok(!r10.sources.some((source) => source.id === TRACKING_806), "not the superseded tracking row")
+  assert.ok(!after.planned.some((action) => action.kind === "driver_call"), "no driver call planned again")
+  assert.notEqual(after.group, "in_progress")
 }, { calls: () => ({ person: scriptedPerson({}), speech: scriptedSpeech(), answererFor: demoAnswerer({ "CD-420806": ["driver"] }) }) })
+
+// CD-420439: the latest tracking ETA is after the promise end (R12, driver call at the snapshot).
+eachStore("CD-420439: the driver says on a call they can still deliver on time; R12 reads that answer, not the superseded tracking ETA", async (engine) => {
+  const before = await order(engine, "CD-420439")
+  assert.equal(before.rules.find((rule) => rule.id === "R12")!.outcome, "fail")
+  await engine.apply({ type: "startCall", orderId: before.id, line: "driver", live: true })
+  const call = (await engine.phone("driver")).current!
+  for (const input of [{ type: "answer" }, { type: "key", digit: "1" }, { type: "key", digit: "1" }] as const) {
+    await engine.apply({ type: "callEvent", callId: call.id, input })
+  }
+  const after = await order(engine, "CD-420439")
+  const result = after.effects.find((event) => event.type === "call_result_recorded")
+  assert.ok(result, "the call result is committed")
+  const r12 = after.rules.find((rule) => rule.id === "R12")!
+  assert.equal(r12.outcome, "pass", r12.detail)
+  assert.match(r12.detail, /can still deliver within the promised window/)
+  assert.ok(r12.sources.some((source) => source.id === result.id), "R12 cites the call result")
+  assert.ok(!after.planned.some((action) => action.kind === "driver_call"), "no driver call planned again")
+}, { calls: () => ({ person: scriptedPerson({}), speech: scriptedSpeech(), answererFor: demoAnswerer({ "CD-420439": ["driver"] }) }) })

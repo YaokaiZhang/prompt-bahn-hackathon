@@ -116,10 +116,13 @@ function fixed(id: Exclude<QuestionId, "available" | "callback_time" | "question
     case "on_time":
       return {
         id, text: "Can you still deliver within the promised window? Press 1 for yes, or 2 for no.",
-        options: yesNo({ type: "claim", text: "Driver can still deliver within the promised window" }, { type: "escalate", text: "Driver cannot deliver within the promised window" }),
+        options: yesNo({ type: "claim", text: ON_TIME_CLAIM }, { type: "escalate", text: "Driver cannot deliver within the promised window" }),
       }
   }
 }
+
+/** The driver's "1 Yes" to the on-time question, as recorded in the call result (R12 reads it). */
+export const ON_TIME_CLAIM = "Driver can still deliver within the promised window"
 
 const RULE_QUESTION: Record<string, Exclude<QuestionId, "available" | "callback_time" | "question">> = {
   R1: "release", R4: "contact", R5: "contact", R6: "ready", NEXT: "ready", R10: "on_track", R12: "on_time",
