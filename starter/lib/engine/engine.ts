@@ -13,7 +13,9 @@
 import type { Bundle } from "@/lib/present/bundle"
 import type { AskRole, ContactType } from "@/lib/reviewer/policy"
 import { compareUrgency, GROUPS, verdictFor, type Group, type RuleResult, type Verdict } from "./checks"
-import { becameDue, dueAsOf, nextCheckItems, nextDueAfter, type DueItem } from "./due"
+import { briefingAsOf, digestFacts, digestTimes, digestTitle, pushId, sendPush, type Briefing, type DigestItem, type PushInput } from "./briefing"
+import { writeProse, type ProseOptions } from "./digest-prose"
+import { becameDue, digestDueItems, dueAsOf, nextCheckItems, nextDueAfter, type DueItem } from "./due"
 import {
   changeDraft, instructionsFor, proposalsFor, type OrderProposals, type Proposal, type StoredProposalEvent, type Unreachable,
 } from "./proposals"
@@ -49,6 +51,10 @@ export type Command =
    */
   | { type: "proposeChange"; orderId: string; title: string; change: string; why: string; source: string
       contact?: { name: string; type: ContactType; role: AskRole; recordId?: string | null } }
+  /** Delivers what is due in the Briefing: digests whose time has come, pushes for orders that turned urgent. Clock moves and reset do this too. */
+  | { type: "deliverBriefing" }
+  /** Marks Briefing items read (all when `ids` is absent). */
+  | { type: "markBriefingRead"; ids?: string[] }
 
 /**
  * One order as the engine reads it at `now`. `group`, `reason`, `rules` (every
@@ -75,6 +81,8 @@ export type { CitedRecord, OrderReview, ReviewFinding, ReviewTotals, ReviewTrigg
 export type { Proposal, ProposalEvent, ProposalKind, ProposalStatus, Unreachable } from "./proposals"
 export type { FirstAction, Group, Outcome, PlannedAction, RuleId, RuleResult, SourceRef, Urgency } from "./checks"
 export type { DueItem, DueKind } from "./due"
+export type { Briefing, BriefingItem, DigestFacts, DigestItem, DigestSlot, PushItem, PushReason, PushInput } from "./briefing"
+export type { DigestProse, ProseSegment } from "./digest-prose"
 export { becameDue, GROUPS }
 
 /** The Needs action group, most urgent first (urgent, then soonest deadline, then reference). */
@@ -95,6 +103,8 @@ export type EngineState = {
   dueItems: DueItem[]
   /** The earliest time something comes due after `now`; null when nothing is left. */
   nextDueAt: string | null
+  /** The Briefing inbox (ticket 13): digests and pushes delivered so far, as of `now`. */
+  briefing: Briefing
 }
 
 export type Engine = {
@@ -111,6 +121,8 @@ export type EngineDeps = {
   store: EngineStore
   /** The reviewer's gateway, cache and inbox messages. Absent: every order "not reviewed yet". */
   reviews?: ReviewOptions
+  /** The digest prose's model, cache and timeout. Absent: digests carry template text. */
+  briefing?: ProseOptions
 }
 
 const MINUTE = 60_000
@@ -125,12 +137,14 @@ function isoOf(value: Date | string): string {
   return date.toISOString()
 }
 
-export function createEngine({ snapshot, store, reviews: reviewOptions }: EngineDeps): Engine {
+export function createEngine({ snapshot, store, reviews: reviewOptions, briefing: proseOptions }: EngineDeps): Engine {
   const start = isoOf(snapshot.snapshotAt)
   const bundles = new Map(snapshot.bundles.map((bundle) => [bundle.order.id, bundle]))
   const fleet = buildFleet(snapshot.bundles)
   const reviews = createReviewLayer(snapshot.bundles, start, reviewOptions)
   const nextChecks = nextCheckItems(snapshot.bundles)
+  const digestSlots = digestTimes(start).map((slot) => ({ ...slot, title: digestTitle(slot.slot) }))
+  const digestItems = digestDueItems(digestSlots)
   // Rules re-run only when the time read changes (load, clock move); effect
   // events (ticket 09) must clear this too, and call `reviews.forget(orderId)`.
   let last: { at: string; evaluations: Map<string, Evaluation> } | null = null
@@ -244,12 +258,72 @@ export function createEngine({ snapshot, store, reviews: reviewOptions }: Engine
     return {
       now: at, snapshotAt: start, orders, groupCounts, dueItems: dueAsOf(items, at), nextDueAt: nextDueAfter(items, at),
       reviews: reviewTotals(reviews.canReview, orders.map((row) => row.review)),
+      briefing: briefingAsOf(await store.readBriefing(), at),
     }
   }
 
-  /** Every due-item source. Callbacks (ticket 10) and digests (ticket 13) go here. */
+  // -- Briefing (ticket 13) --------------------------------------------------
+  // Pushes: an order is "newly urgent" for a reason it was not urgent for at the start
+  // (the 09:00 digest covers those). At most one push per order per reason (store id).
+  let urgentAtStart: Set<string> | null = null
+  const urgencyKeys = (evaluations: Map<string, Evaluation>) => new Set([...evaluations]
+    .flatMap(([orderId, evaluation]) => evaluation.urgency.reasons.map((reason) => pushId({ orderId, reason: reason.kind }))))
+
+  async function deliverPushes(now: string, delivered: Set<string>): Promise<void> {
+    urgentAtStart ??= urgencyKeys(evaluationsAt(start))
+    const evaluations = evaluationsAt(now)
+    for (const bundle of snapshot.bundles) {
+      const urgency = evaluations.get(bundle.order.id)!.urgency
+      const seen = new Set<string>()
+      for (const reason of urgency.reasons) {
+        const push: PushInput = { orderId: bundle.order.id, reference: bundle.order.reference, reason: reason.kind, text: reason.text, at: now, dueAt: reason.at }
+        const id = pushId(push)
+        if (seen.has(id) || urgentAtStart.has(id) || delivered.has(id)) continue
+        seen.add(id)
+        await sendPush(store, push)
+      }
+    }
+  }
+
+  async function deliverDigests(now: string, delivered: Set<string>): Promise<void> {
+    const items = await allDueItems()
+    for (const [index, slot] of digestSlots.entries()) {
+      const id = `digest:${slot.slot}`
+      if (slot.at > now || delivered.has(id)) continue
+      const previous = index > 0 ? digestSlots[index - 1] : null
+      const facts = digestFacts({
+        slot: slot.slot,
+        at: slot.at,
+        orders: await ordersAt(slot.at),
+        previous: previous ? { at: previous.at, orders: await ordersAt(previous.at) } : null,
+        cameDue: previous ? items.filter((item) => item.kind !== "digest" && item.at > previous.at && item.at <= slot.at)
+          .sort((a, b) => a.at.localeCompare(b.at) || (a.reference ?? "").localeCompare(b.reference ?? ""))
+          .map((item) => ({ title: item.title, orderId: item.orderId, reference: item.reference, at: item.at })) : [],
+      })
+      const digest: DigestItem = {
+        id, kind: "digest", at: slot.at, read: false, deliveredAt: new Date().toISOString(), title: slot.title, slot: slot.slot,
+        facts, prose: await writeProse(facts, proseOptions),
+      }
+      await store.addBriefing(digest)
+    }
+  }
+
+  // One delivery at a time per process; the store's ids keep it at-most-once across processes.
+  let delivering: Promise<void> = Promise.resolve()
+  function deliverBriefing(): Promise<void> {
+    const run = delivering.then(async () => {
+      const now = await clock()
+      const delivered = new Set((await store.readBriefing()).map((item) => item.id))
+      await deliverPushes(now, delivered)
+      await deliverDigests(now, delivered)
+    })
+    delivering = run.catch(() => {})
+    return run
+  }
+
+  /** Every due-item source: next checks, the Briefing digests; callbacks (ticket 10) go here too. */
   async function allDueItems(): Promise<Omit<DueItem, "due">[]> {
-    return nextChecks
+    return [...nextChecks, ...digestItems]
   }
 
   async function apply(command: Command): Promise<EngineState> {
@@ -260,16 +334,19 @@ export function createEngine({ snapshot, store, reviews: reviewOptions }: Engine
         }
         const from = new Date(await clock()).getTime()
         await store.writeClock(new Date(from + command.minutes * MINUTE).toISOString())
+        await deliverBriefing()
         break
       }
       case "advanceToNextDue": {
         const next = nextDueAfter(await allDueItems(), await clock())
         if (!next) throw new Error("Nothing is due later on the demo clock")
         await store.writeClock(next)
+        await deliverBriefing()
         break
       }
       case "reset":
         await store.reset()
+        await deliverBriefing()
         break
       case "review":
         await reviews.run(reviewInputs(eventsByOrder(await store.readProposalEvents())), command.orderIds)
@@ -322,6 +399,12 @@ export function createEngine({ snapshot, store, reviews: reviewOptions }: Engine
         }])
         break
       }
+      case "deliverBriefing":
+        await deliverBriefing()
+        break
+      case "markBriefingRead":
+        await store.markBriefingRead(command.ids)
+        break
       default:
         assertNever(command)
     }

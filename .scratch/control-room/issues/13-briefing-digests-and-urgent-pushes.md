@@ -4,12 +4,18 @@
 
 **Blocked by:** 04 (Demo clock, next checks and reset), 06 (Reviewer in the control room).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] A digest arrives at each scheduled demo time, with counts that match the queue
-- [ ] Order references in a digest link to the order
-- [ ] Prose containing a typed digit is rejected and replaced with template text
-- [ ] With no API key or a slow model, the digest still arrives with template text
-- [ ] An order turning urgent sends one push for that reason and no repeats
-- [ ] A toast and a badge show new items; the Briefing inbox follows DESIGN.md
-- [ ] Engine tests cover digest facts and push limits
+- [x] A digest arrives at each scheduled demo time, with counts that match the queue
+- [x] Order references in a digest link to the order
+- [x] Prose containing a typed digit is rejected and replaced with template text
+- [x] With no API key or a slow model, the digest still arrives with template text
+- [x] An order turning urgent sends one push for that reason and no repeats
+- [x] A toast and a badge show new items; the Briefing inbox follows DESIGN.md
+- [x] Engine tests cover digest facts and push limits
+
+## Comments
+
+- Urgency is kept as ticket 03 defines it (about 20 orders at 09:00, wider than the PRD's "437, 516, 458"). Pushes go only to (order, reason) pairs that were not urgent at the snapshot start; the 09:00 digest covers the rest. Between 09:00 and 16:00 that is three pushes (CD-420020, CD-420010, CD-420023).
+- Besides typed digits, prose that spells a count in words ("twenty", "both", ...) is rejected: the first real digest did exactly that.
+- A real model reply sometimes takes longer than 5 s; the digest then arrives with template text, and the late reply is cached for the next delivery of the same facts (e.g. after a reset).

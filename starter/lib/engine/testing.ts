@@ -14,6 +14,7 @@ import { loadFixtures, SCENARIO_FIXTURE_DIR } from "@/lib/reviewer/fixtures"
 import { GatewayError, NO_USAGE, type ChatRequest, type ModelGateway } from "@/lib/reviewer/gateway"
 import { createScriptedGateway } from "@/lib/reviewer/scripted"
 import { testReviewSource } from "@/lib/reviewer/testing"
+import type { ProseOptions } from "./digest-prose"
 import { createEngine, type Engine, type Snapshot } from "./engine"
 import { createMemoryStore } from "./memory"
 import { createPostgresStore, type Database } from "./postgres"
@@ -29,6 +30,8 @@ export type TestEngineOptions = {
   /** The reviewer's model: absent means no key ("not reviewed yet"). Use `testGateway()`. */
   gateway?: ModelGateway | null
   reviewCache?: ReviewCache
+  /** The digest prose's gateway, cache and timeout. Absent: template text. Use `proseGateway()`. */
+  briefing?: ProseOptions
 }
 
 export async function testEngine(options: TestEngineOptions = {}): Promise<Engine> {
@@ -37,6 +40,7 @@ export async function testEngine(options: TestEngineOptions = {}): Promise<Engin
     snapshot: source.snapshot,
     store: options.store ?? createMemoryStore(),
     reviews: { gateway: options.gateway ?? null, cache: options.reviewCache, inboxMessages: source.inboxMessages },
+    briefing: options.briefing,
   })
 }
 
@@ -62,6 +66,23 @@ export async function testGateway(): Promise<CountingGateway> {
         usage: { ...NO_USAGE, promptTokens: 9000, completionTokens: 40, cost: 0.002 },
         message: { role: "assistant", content: null, tool_calls: [{ id: `call_${request.subject}`, type: "function", function: { name: "submit_findings", arguments: args } }] },
       }
+    },
+  }
+}
+
+/**
+ * A scripted digest writer: answers every call with `reply` (an opener and a first
+ * move, or raw content) after `delayMs`. `.calls` lists the requests.
+ */
+export function proseGateway(reply: { opener: string; firstMove: string } | string, delayMs = 0): CountingGateway {
+  const calls: ChatRequest[] = []
+  return {
+    calls,
+    async chat(request) {
+      calls.push(request)
+      if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs))
+      const content = typeof reply === "string" ? reply : JSON.stringify(reply)
+      return { model: "scripted", finishReason: "stop", usage: { ...NO_USAGE, promptTokens: 2000, completionTokens: 120, cost: 0.001 }, message: { role: "assistant", content } }
     },
   }
 }

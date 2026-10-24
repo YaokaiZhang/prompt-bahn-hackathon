@@ -181,6 +181,25 @@ async function main(): Promise<void> {
   if (groupTotal !== overview.total || overview.visible.length !== overview.total) {
     throw new Error(`Group counts add up to ${groupTotal}, not ${overview.total} orders`)
   }
+  // Ticket 13: the Briefing has a digest for every slot the clock reached, and the latest
+  // digest's counts match the queue when the clock sits at its time. (Reading it delivers
+  // what is due, which never moves the clock.)
+  const briefingResponse = await appFetch(`${base}/api/briefing`)
+  if (!briefingResponse.ok) throw new Error(`Briefing API returned ${briefingResponse.status}`)
+  const briefing = await briefingResponse.json() as { now: string; items: { kind: string; slot?: string; at: string; facts?: { counts: Record<string, number> } }[] }
+  const reached = ["09:00", "12:00", "16:00"].filter((slot) => `${overview.now.slice(0, 10)}T${slot}:00.000Z` <= overview.now)
+  const slots = briefing.items.filter((item) => item.kind === "digest").map((item) => item.slot)
+  if (overview.now.slice(0, 10) === "2026-10-21" && reached.some((slot) => !slots.includes(slot))) {
+    throw new Error(`The Briefing has digests for ${slots.join(", ") || "nothing"}, but the clock reached ${reached.join(", ")}`)
+  }
+  const latest = briefing.items.find((item) => item.kind === "digest")
+  if (latest?.facts && latest.at === overview.now) {
+    const off = Object.entries(overview.groupCounts).filter(([group, count]) => latest.facts!.counts[group] !== count)
+    if (off.length) throw new Error(`The ${latest.slot} digest's counts differ from the queue for ${off.map(([group]) => group).join(", ")}`)
+    console.log(`Briefing: the ${latest.slot} digest's counts match the queue.`)
+  } else {
+    console.log(`Briefing: ${slots.length} digests; the clock is not at a digest time, so counts are not compared.`)
+  }
   const disagreements: string[] = []
   const groupDisagreements: string[] = []
   const reviewProblems: string[] = []

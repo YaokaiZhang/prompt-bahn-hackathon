@@ -14,7 +14,7 @@
 import type { Bundle } from "@/lib/present/bundle"
 import { str } from "@/lib/present/bundle"
 
-export type DueKind = "next_check"
+export type DueKind = "next_check" | "digest"
 
 export type DueItem = {
   /** Stable id: `<kind>:<source record id>`. */
@@ -68,6 +68,13 @@ export function nextCheckItems(bundles: Bundle[]): Omit<DueItem, "due">[] {
     detail: check.waitingOn ? `waiting on ${humanise(check.waitingOn)}` : null,
     label: `Next check on ${bundle.order.reference}${check.waitingOn ? `: waiting on ${humanise(check.waitingOn)}` : ""}`,
   })))
+}
+
+/** The Briefing digests of the demo day (ticket 13); the 09:00 one is due at the start. */
+export function digestDueItems(slots: { slot: string; at: string; title: string }[]): Omit<DueItem, "due">[] {
+  return slots.map(({ slot, at, title }) => ({
+    id: `digest:${slot}`, kind: "digest" as const, at, orderId: null, reference: null, title, detail: null, label: `${title} in the Briefing`,
+  }))
 }
 
 /** Marks items due as of `now` and sorts them by time, then order reference. */
