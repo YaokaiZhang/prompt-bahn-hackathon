@@ -161,22 +161,20 @@ eachStore("a site contact the records show is on the customer side is never call
   assert.equal(find(orders, "CD-420719").group, "needs_action")
 }, { gateway: () => testGateway(customerSideFindings) })
 
-test("the rules never plan a routine call to a customer-side pickup contact", async () => {
+test("the rules plan a pickup-readiness call to a customer-side pickup contact (ADR 0001 amendment)", async () => {
   const engine = await testEngine()
   const { orders } = await engine.state()
   // CD-420719 picks up at site-092 Velantora Oulu, owned by its customer cus-001, within 48 h.
   // CD-420449, CD-421011 and CD-421051 pick up within 48 h from a person the customer gave
   // (stated_by CUSTOMER_ORDER_INPUT, a handoff-… handle).
   for (const reference of ["CD-420719", "CD-420449", "CD-421011", "CD-421051"]) {
-    assert.equal(find(orders, reference).planned.find((action) => action.kind === "site_call"), undefined, reference)
+    const call = find(orders, reference).planned.find((action) => action.kind === "site_call")
+    assert.ok(call?.callee?.handle, `${reference} plans a pickup-readiness call`)
+    assert.ok(call.ruleIds.every((id) => ["R1", "R4", "R5", "R6", "NEXT"].includes(id)), `${reference}: only pickup-readiness topics`)
+    assert.equal(find(orders, reference).blockedCalls.length, 0, reference)
   }
   // CD-420015's customer typed in site-005's own desk email: a third-party site, still called (J2).
   assert.equal(find(orders, "CD-420015").planned.find((action) => action.kind === "site_call")?.callee?.handle, "site-005@example.test")
-  for (const order of orders) {
-    for (const action of order.planned.filter((row) => row.kind === "site_call")) {
-      assert.doesNotMatch(action.callee?.handle ?? "", /^handoff-/, `${order.reference}: never a person the customer gave`)
-    }
-  }
 })
 
 eachStore("reset clears answers", async (engine) => {

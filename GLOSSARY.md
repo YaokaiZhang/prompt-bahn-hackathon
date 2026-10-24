@@ -13,7 +13,7 @@ The party that pays Bahn for an order (`orders.customer_id`), usually a dealer.
 _Avoid_: Buyer, client, account, persona
 
 **Customer side**:
-The customer, any contact the customer gave us on the order, and any site the customer owns. The agent never contacts the customer side; it only proposes contact to an operator.
+The customer, any contact the customer gave us on the order, and any site the customer owns. The agent never contacts the customer side; it only proposes contact to an operator. One exception (ADR 0001 amendment): a pickup-readiness call to the order's pickup place or pickup contact, even when that is a customer-owned site or a contact the customer gave us. The paying customer is never called.
 
 **Driver**:
 The freelance driver assigned to move the car.

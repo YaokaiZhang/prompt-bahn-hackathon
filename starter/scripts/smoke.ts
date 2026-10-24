@@ -7,7 +7,7 @@ type Source = { id: string; order_id?: string; plan_id?: string; active_plan_id?
   link_state?: string; candidate_order_ids?: string[]; linked_order_ids?: string[];
   contact_name?: string | null; contact_handle?: string | null }
 type Related = { id: string; details: Source }
-type SmokeCall = { id: string; state: string; tier: number; transcript: { wallAt: string }[]; cost: { totalEur: number; operatorEur: number } }
+type SmokeCall = { id: string; state: string; line?: string; callee?: { contactType: string }; tier: number; transcript: { wallAt: string }[]; cost: { totalEur: number; operatorEur: number } }
 type OrderResponse = { order: { id: string }; items: { vehicle: { syntheticVin: string | null } }[];
   related: Record<string, Related[]> }
 
@@ -236,7 +236,10 @@ async function main(): Promise<void> {
         callCount += 1
         lastCallMove = Math.max(lastCallMove, Date.parse(call.transcript.at(-1)?.wallAt ?? "") || 0)
         if (call.state !== "ended") running += 1
-        if (![1, 2, 3].includes(call.tier) || !call.transcript?.length || !(call.cost?.operatorEur > 0) || !(call.cost.totalEur <= call.cost.operatorEur)) {
+        // ADR 0001 (amended): never the paying customer; the customer side only on the pickup (site) line.
+        const customerSideCall = call.callee?.contactType === "paying_customer"
+          || (["customer_given_contact", "customer_owned_site"].includes(call.callee?.contactType ?? "") && call.line !== "site")
+        if (customerSideCall || ![1, 2, 3].includes(call.tier) || !call.transcript?.length || !(call.cost?.operatorEur > 0) || !(call.cost.totalEur <= call.cost.operatorEur)) {
           callProblems.push(`${card.reference} ${call.id}`)
         }
       }
@@ -273,7 +276,7 @@ async function main(): Promise<void> {
   console.log(`Reviewer: ${reviewed} of ${overview.visible.length} orders reviewed; the rest read "not reviewed yet".`)
   if (effectProblems.length) throw new Error(`Effect events without a version, text, committer or history entry: ${effectProblems.join(", ")}`)
   console.log(`Effect events: ${effectCount} committed change(s) across the orders, each with a version and a history entry.`)
-  if (callProblems.length) throw new Error(`Calls without a calls list, tier, transcript or a cost below the operator's: ${callProblems.join(", ")}`)
+  if (callProblems.length) throw new Error(`Calls without a calls list, tier, transcript or a cost below the operator's, or to a customer-side contact outside a pickup-readiness call: ${callProblems.join(", ")}`)
   if (digestOff.length) {
     const delivered = Date.parse((latest as { deliveredAt?: string } | undefined)?.deliveredAt ?? "")
     if (!(lastCallMove > delivered)) throw new Error(`The ${latest?.slot} digest's counts differ from the queue for ${digestOff.join(", ")}`)
@@ -293,7 +296,8 @@ async function main(): Promise<void> {
     && (row.kind !== "customer_contact" || row.contact?.handle || row.policyRow !== "customer-side"))
   if (leaking.length) throw new Error(`Customer-side proposals the agent could act on: ${leaking.map((row) => row.reference).join(", ")}`)
   const rulesPage = await appFetch(`${base}/rules`)
-  if (!rulesPage.ok || !(await rulesPage.text()).includes("customer-side")) throw new Error(`Rules page did not render the policy (${rulesPage.status})`)
+  const rulesText = rulesPage.ok ? await rulesPage.text() : ""
+  if (!rulesText.includes("customer-side") || !rulesText.includes("pickup-readiness")) throw new Error(`Rules page did not render the policy (${rulesPage.status})`)
   console.log(`Proposals: ${approvals.waiting.length} waiting for a yes, each with its policy row; the Rules page lists the policy.`)
   console.log(`Verified ${order.id}: ${orderPlans.length} plans, ${(body.related.transport_points ?? []).length} points, ${(body.related.transport_segments ?? []).length} segments. Board and record agree on "needs a person" and on the group for ${overview.visible.length} orders (${Object.entries(overview.groupCounts).map(([group, count]) => `${group} ${count}`).join(", ")}).`)
 }

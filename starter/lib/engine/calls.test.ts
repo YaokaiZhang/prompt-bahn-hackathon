@@ -7,6 +7,8 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import type { Engine, OrderState } from "./engine"
 import { scriptedPerson, scriptedSpeech } from "./call-testing"
+import { orderCalls } from "./calls"
+import type { PlannedAction, RuleId } from "./checks"
 import { eachStore, testEngine, testGateway, type TestEngineOptions } from "./testing"
 
 function find(orders: OrderState[], reference: string): OrderState {
@@ -116,15 +118,16 @@ test("a wrong key is asked again once; a second wrong key escalates", async () =
   assert.equal((await order(engine, "CD-420735")).calls[0].outcome, "handover")
 })
 
-test("the background site calls go out on their own, never to a customer-side contact", async () => {
+test("the background site calls go out on their own, including pickup-readiness calls to customer-side pickup contacts", async () => {
   const speech = scriptedSpeech()
   const engine = await testEngine({ calls: { person: scriptedPerson({}), speech } })
   const before = await engine.state()
   const planned = before.orders.filter((row) => row.planned.some((action) => action.kind === "site_call")).map((row) => row.reference)
-  // Pickup contacts the customer gave (stated_by CUSTOMER_ORDER_INPUT) or a site the customer owns: propose only (ADR 0001).
-  const blocked = ["CD-420449", "CD-420719", "CD-421011", "CD-421051"]
-  for (const reference of blocked) assert.ok(!planned.includes(reference), `${reference} plans no site call`)
-  assert.equal(planned.length, 14)
+  // Pickup contacts the customer gave (stated_by CUSTOMER_ORDER_INPUT) or a site the customer owns:
+  // a pickup-readiness call acts alone (ADR 0001 amendment, policy row pickup-readiness).
+  const customerSide = ["CD-420449", "CD-420719", "CD-421011", "CD-421051"]
+  for (const reference of customerSide) assert.ok(planned.includes(reference), `${reference} plans its pickup-readiness call`)
+  assert.equal(planned.length, 18)
   assert.ok(planned.includes("CD-420015"), "CD-420015's customer typed in the site's own desk (site-005): the site is called")
 
   await engine.apply({ type: "runCalls" })
@@ -137,8 +140,31 @@ test("the background site calls go out on their own, never to a customer-side co
     assert.equal(site[0].outcome, "resolved", `${reference}: the simulated person answered`)
     assert.notEqual(row.group, "in_progress", `${reference} is no longer In progress`)
   }
-  for (const reference of blocked) assert.equal(find(after.orders, reference).calls.length, 0, `${reference} was never called`)
+  assert.equal(find(after.orders, "CD-420719").calls[0].callee.contactType, "customer_owned_site")
+  for (const reference of ["CD-420449", "CD-421011", "CD-421051"]) {
+    assert.equal(find(after.orders, reference).calls[0].callee.contactType, "customer_given_contact", reference)
+  }
+  assert.ok(after.orders.every((row) => row.calls.every((call) => call.callee.contactType !== "paying_customer")), "the paying customer is never called")
   assert.ok(after.orders.every((row) => row.calls.every((call) => call.answerer === "simulated")), "nothing rings live unless asked")
+})
+
+test("the call layer's own guard: a customer-side pickup contact takes only a pickup-readiness call", async () => {
+  const engine = await testEngine()
+  const row = await order(engine, "CD-420449")
+  const bundle = engine.bundle(row.id)
+  assert.ok(bundle)
+  const callee = row.callLines.find((line) => line.line === "site")?.callee
+  assert.ok(callee?.recordId, "CD-420449 has its pickup-readiness site call")
+  assert.equal(callee.contactType, "customer_given_contact")
+  const plannedCall = (ruleIds: RuleId[]): PlannedAction[] =>
+    [{ kind: "site_call", ruleIds, reason: "test", callee: { name: callee.name, handle: callee.handle, role: callee.role, endpointId: callee.recordId as string } }]
+  const now = "2026-10-21T09:00:00Z"
+  // A pickup-readiness topic (contact not confirmed) is called.
+  assert.equal(orderCalls(bundle, plannedCall(["R5"]), [], [], now).blocked.length, 0)
+  // Any other topic for the same customer-given person is blocked: propose only.
+  const other = orderCalls(bundle, plannedCall(["R12"]), [], [], now)
+  assert.equal(other.blocked.length, 1)
+  assert.equal(other.lines.length, 0)
 })
 
 test("a confirmed contact becomes a change proposal that waits for a yes; the order is not changed", async () => {
@@ -246,7 +272,9 @@ test("the operator can start a call on a line, ringing live", async () => {
   const row = await order(engine, "CD-420806")
   assert.equal(row.calls[0].answerer, "live")
   await assert.rejects(engine.apply({ type: "startCall", orderId: row.id, line: "driver" }), /already running/)
-  await assert.rejects(engine.apply({ type: "startCall", orderId: (await order(engine, "CD-420449")).id, line: "site" }), /nothing to call/, "a customer-given contact is never called")
+  // A customer-given pickup contact takes a pickup-readiness call; the delivery side has nothing to call.
+  await engine.apply({ type: "startCall", orderId: (await order(engine, "CD-420449")).id, line: "site" })
+  assert.equal((await order(engine, "CD-420449")).calls[0].callee.contactType, "customer_given_contact")
 })
 
 test("paced like a real phone: the simulated person rings and waits for each prompt to finish before pressing", async () => {
