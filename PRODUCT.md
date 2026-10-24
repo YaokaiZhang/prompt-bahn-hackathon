@@ -24,7 +24,7 @@ Cheap-first work by agents under an explicit approval policy. Rule checks and a 
 
 - Orders move cars between dealers, sites, yards and private addresses across Europe (Finland, Sweden, Germany, Italy, France and others), by driver, train and ferry.
 - One order's records often disagree: customer messages, site notes, endpoint claims, tracking, documents, expenses, alerts and work items.
-- Vocabulary is fixed in `CONTEXT.md` (Needs action, In progress, Normal, Done; proposal, approve, policy row, effect event, couldn't-check item, finding, call, tier, handover, digest). The UI uses these words.
+- Vocabulary is fixed in `GLOSSARY.md` (Needs action, In progress, Normal, Done; proposal, approve, policy row, effect event, couldn't-check item, finding, call, tier, handover, digest). The UI uses these words.
 - The snapshot time is 2026-10-21T09:00Z. Every time shown is relative to that, not the wall clock.
 
 ## Capabilities and Constraints
@@ -50,7 +50,7 @@ Cheap-first work by agents under an explicit approval policy. Rule checks and a 
 
 1. Show only what needs a person; quiet orders stay quiet but provably checked.
 2. Every fact shows its source, and proposal text is never shown as fact.
-3. Use the domain's own words (CONTEXT.md), not generic dashboard words.
+3. Use the domain's own words (GLOSSARY.md), not generic dashboard words.
 4. Cheap work happens on its own; anything that changes an order or reaches the customer waits for a yes.
 5. Calm and high-signal: built for operators, not engineers.
 

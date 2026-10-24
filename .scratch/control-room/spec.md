@@ -2,7 +2,7 @@
 
 Status: ready-for-agent
 
-Source: `docs/PRD.md` (agreed in the grilling session of 24 Oct 2026). Vocabulary follows `CONTEXT.md`. Data reference: `dataset/SCHEMA.md`.
+Source: `docs/PRD.md` (agreed in the grilling session of 24 Oct 2026). Vocabulary follows `GLOSSARY.md`. Data reference: `dataset/SCHEMA.md`.
 
 ## Problem Statement
 
