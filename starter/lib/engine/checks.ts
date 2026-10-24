@@ -26,7 +26,7 @@ export type FirstAction = "site_call" | "driver_call" | "reviewer_pass" | "show_
  */
 export type Outcome = "pass" | "fail" | "unknown"
 
-export type RuleId = "R1" | "R3" | "R7" | "R10" | "R11" | "R12" | "R13" | "R4" | "R5" | "R6" | "CLOSE"
+export type RuleId = "R1" | "R3" | "R7" | "R10" | "R11" | "R12" | "R13" | "R4" | "R5" | "R6" | "CLOSE" | "NEXT"
 
 export type RuleResult = {
   id: RuleId

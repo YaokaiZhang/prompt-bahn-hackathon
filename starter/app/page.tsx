@@ -8,6 +8,7 @@ import { OrderCard } from "./components/card"
 import { ChecksPanel, GROUP_LABEL } from "./components/checks"
 import { Icon } from "./components/icons"
 import { Route, RouteSummary } from "./components/route-line"
+import { useClockVersion } from "./components/demo-clock"
 import { Shell } from "./components/shell"
 import { CarPhoto, Pill, StagePill } from "./components/ui"
 
@@ -29,6 +30,7 @@ export default function Home() {
   const [selected, setSelected] = useState<string | null>(null)
   const [preview, setPreview] = useState<Preview | null>(null)
   const listRef = useRef<HTMLOListElement>(null)
+  const clockVersion = useClockVersion()
 
   useEffect(() => {
     const controller = new AbortController()
@@ -39,7 +41,7 @@ export default function Home() {
         .catch((cause: unknown) => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Could not load orders") })
     }, search ? 180 : 0)
     return () => { clearTimeout(timer); controller.abort() }
-  }, [search])
+  }, [search, clockVersion])
 
   // The API already ranks Needs action by urgency; other groups keep lane order.
   const queue = useMemo(() => (overview?.visible ?? []).filter((card) => card.verdict?.group === filter), [overview, filter])
@@ -61,7 +63,7 @@ export default function Home() {
       .then((data) => setPreview({ id: currentId, view: data.view, checks: data.checks }))
       .catch((cause: unknown) => { if (!controller.signal.aborted) setPreview({ id: currentId, error: cause instanceof Error ? cause.message : "Could not load this order" }) })
     return () => controller.abort()
-  }, [currentId])
+  }, [currentId, clockVersion])
 
   const choose = useCallback((id: string) => {
     setSelected(id)
