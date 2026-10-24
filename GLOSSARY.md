@@ -85,7 +85,7 @@ _Avoid_: Delivered (a delivered order can still have gaps)
 **Proposal**:
 Something an agent wants to do or change, with its evidence, who pays, and the policy row that applies, waiting for an operator's decision.
 _Avoid_: Suggestion, recommendation, action item, task, to-do
-A proposal moves through proposed, approved, answered (for customer-side contact) and dismissed. It stays one proposal throughout.
+A proposal moves through proposed, approved, answered and dismissed. It stays one proposal throughout. **Answered** means the question it asked got its answer: the operator recorded the customer side's answer (customer-side contact), the operator answered their own question (operator question), or the agent's call carrying it ended with a result (call). A change proposal is never answered: its yes commits it.
 
 **Approve**:
 An operator's yes on a proposal. On a change proposal it writes an effect event; on a customer-side proposal it hands the contact to the operator.
@@ -99,7 +99,7 @@ An operator's direction to the agent, saved on a proposal, explaining how to act
 _Avoid_: Comment, note, feedback
 
 **Effect event**:
-The record of a committed change to an order, written only after an operator's yes. Proposal text is never a fact; an effect event is.
+The append-only record of something committed on an order, layered over the snapshot. A change to the order (a contact confirmed or changed, a window moved, a cost approved) is written only after an operator's yes; the operator's own answers are committed when given. A call result and a reported ETA are written by the agent at once, without a yes, because they are attributed statements (what the person said on the call), not changes to the order. Proposal text is never a fact; an effect event is.
 _Avoid_: Update, change, mutation, operational event (that is the dataset's history)
 
 **Snapshot**:
