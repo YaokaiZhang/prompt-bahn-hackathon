@@ -6,6 +6,7 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import { NO_USAGE, type ChatRequest } from "@/lib/reviewer/gateway"
 import type { Engine, OrderState } from "./engine"
+import { scriptedPerson, scriptedSpeech } from "./call-testing"
 import { eachStore, testEngine, testGateway, type CountingGateway } from "./testing"
 
 const ORDER_437 = "ord-00437"
@@ -193,7 +194,17 @@ eachStore("journey 1: finding -> handed over -> answer recorded -> update approv
   assert.match(caseFile, /Now: 2026-10-21T09:20:00.000Z/)
   assert.match(caseFile, new RegExp(`\\[${done.effects[0].id}\\] effect_events`))
   assert.match(caseFile, /CUSTOMER_ANSWER_RECORDED/)
-  assert.match(caseFile, /supersedes their earlier statements/)
+  // Versioning: the answer is version 2 of the point the question settles. The customer's own
+  // earlier statements on it (the 09:44 and 08:42 messages) are superseded history, still
+  // there to cite; records by others (the ETA, the promise, the work item) stay live.
+  assert.equal(done.effects[0].version, 2)
+  assert.deepEqual([...done.effects[0].supersedes].sort(), ["msg-x0049fe6fc2fd0b0e", "msg-x47456eacbe1e0e07"])
+  assert.match(caseFile, /version 2 of \\"For CD-420437, the Bentley Flying Spur/, "the point it settles is the question asked")
+  assert.match(caseFile, /\[msg-x0049fe6fc2fd0b0e\] message[^\n]*SUPERSEDED by eff-/)
+  assert.match(caseFile, /\[msg-x47456eacbe1e0e07\] message[^\n]*SUPERSEDED by eff-/)
+  assert.match(caseFile, /I still cannot confirm who is authorized/, "the superseded statement is kept")
+  assert.doesNotMatch(caseFile, /\[track-x0e9acf00fc4d6673\][^\n]*SUPERSEDED/)
+  assert.doesNotMatch(caseFile, /\[work-x6c27e55269d19e01\][^\n]*SUPERSEDED/)
   assert.doesNotMatch(caseFile, /recorded_answer/, "the committed answer is read once, as the effect event")
   assert.equal(done.review.reviewAt, "2026-10-21T09:20:00.000Z")
 
@@ -237,4 +248,75 @@ eachStore("reset clears effect events and the order reads the snapshot again", a
   assert.equal(order.effects.length, 0)
   assert.equal(order.rules.find((rule) => rule.id === "R5")!.outcome, "unknown")
   assert.equal((await overlaidRow(engine, ORDER_437, "order_endpoint_details", DELIVERY_437)).contact_status, "UNCONFIRMED")
+})
+
+test("each effect on the same fact writes the next version; the row shows the current one and keeps the earlier ones as history", async () => {
+  const engine = await testEngine()
+  const change = (name: string) => engine.apply({ type: "recordEffect", effect: {
+    type: "contact_changed", endpointId: DELIVERY_437, name, statedBy: "Calverona Auto", orderId: ORDER_437, by: "operator", source: `test-${name}`,
+  } })
+  await change("Marten Calver")
+  const order = find((await change("Ilse Varnholt")).orders, "CD-420437")
+  assert.deepEqual(order.effects.map((event) => event.version), [2, 3])
+  const row = await overlaidRow(engine, ORDER_437, "order_endpoint_details", DELIVERY_437)
+  assert.equal(row.contact_name, "Ilse Varnholt")
+  assert.equal(row.version, 3)
+  const previous = row.previous_versions as { version: number; contact_name: string; status: string; superseded_by: string }[]
+  assert.deepEqual(previous.map((item) => [item.version, item.contact_name, item.status]), [[1, "Celia Hollowmere", "SUPERSEDED"], [2, "Marten Calver", "SUPERSEDED"]])
+  assert.equal(previous[1].superseded_by, order.effects[1].id)
+  // The older effect event's own record is marked superseded by the newer one.
+  const bundle = await engine.overlaid(engine.bundle(ORDER_437)!)
+  const older = bundle.related.effect_events!.find((item) => item.id === order.effects[0].id)!
+  assert.equal(older.details.superseded_by, order.effects[1].id)
+})
+
+test("a finished call's result is committed as a call result effect event, attributed to the callee, and the order is re-reviewed", async () => {
+  const gateway = await testGateway()
+  const engine = await testEngine({ gateway, calls: { person: scriptedPerson({ "CD-420516": [["answer", "1", "3"]] }), speech: scriptedSpeech() } })
+  await engine.apply({ type: "review" })
+  const keyCall = find((await engine.state()).orders, "CD-420516").proposals.find((proposal) => proposal.kind === "call")!
+  const calls = gateway.calls.length
+  await engine.apply({ type: "runCalls" })
+  const order = find((await engine.state()).orders, "CD-420516")
+  const [call] = order.calls
+  const effect = order.effects.find((event) => event.type === "call_result_recorded")
+  assert.ok(effect, "the call result is an effect event")
+  assert.equal(effect.source, call.id)
+  assert.equal(effect.by, "agent")
+  assert.deepEqual(effect.answers, [keyCall.id])
+  assert.match(effect.text, /Keys are collected at stock control/)
+  assert.ok(gateway.calls.slice(calls).some((request) => request.subject === "CD-420516" && /CALL_RESULT_RECORDED/.test(caseFileOf(request))), "re-reviewed with the call result")
+  // The confirmed change still waits for a yes; it is not committed by the call.
+  assert.equal(order.proposals.find((proposal) => proposal.kind === "change")?.status, "proposed")
+})
+
+// -- Done ------------------------------------------------------------------------
+
+eachStore("a delivered order moves into Done only when nothing is open: an open change holds it, its yes releases it", async (engine) => {
+  // CD-420111 is delivered with nothing open (Done at the snapshot).
+  assert.equal(find((await engine.state()).orders, "CD-420111").group, "done")
+  await engine.apply({ type: "proposeChange", orderId: "ord-00111", title: "Note the handover", change: "The receiver signed on paper.", why: "Test.", source: "test" })
+  const held = find((await engine.state()).orders, "CD-420111")
+  assert.equal(held.group, "needs_action")
+  const change = held.proposals.find((proposal) => proposal.kind === "change")!
+  const released = find((await engine.apply({ type: "approve", proposalId: change.id })).orders, "CD-420111")
+  assert.equal(released.group, "done")
+  assert.equal(released.effects.length, 1)
+})
+
+test("a delivered order with a gap is not Done; an effect that closes the gap moves it into Done", async () => {
+  const engine = await testEngine()
+  // CD-420747 is delivered, but its delivery contact has no name: a weak gap keeps it Normal.
+  const before = find((await engine.state()).orders, "CD-420747")
+  assert.equal(before.group, "normal")
+  assert.equal(before.rules.find((rule) => rule.id === "R5")!.outcome, "unknown")
+  await engine.apply({ type: "recordEffect", effect: {
+    type: "contact_changed", endpointId: "ep-x0886594ff127ef57", name: "Petra Lindqvist", statedBy: "the customer", orderId: "ord-00747", by: "operator", source: "test",
+  } })
+  assert.equal(find((await engine.state()).orders, "CD-420747").group, "done")
+  // CD-420004 is delivered with a proof still SUBMITTED: an unrelated effect does not make it Done.
+  await engine.apply({ type: "recordEffect", effect: { type: "operator_answer_recorded", question: "Anything else?", answer: "No.", orderId: "ord-00004", by: "operator", source: "test" } })
+  const open = find((await engine.state()).orders, "CD-420004")
+  assert.equal(open.group, "needs_action")
+  assert.equal(open.rules.find((rule) => rule.id === "CLOSE")!.outcome, "fail")
 })

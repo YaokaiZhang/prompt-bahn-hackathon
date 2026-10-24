@@ -25,7 +25,7 @@ import {
   CONTACT_TYPE_LABEL, isCustomerSide, policyFor, policyRow, type AskRole, type ContactType, type Decision, type PolicyRowId,
 } from "@/lib/reviewer/policy"
 import { customerOwnsSite, customerSideOf, endpointContactType, endpointSite } from "./contacts"
-import type { Effect } from "./effects"
+import type { EffectSpec } from "./effects"
 import type { CitedRecord, OrderReview, ReviewFinding } from "./reviews"
 
 export type ProposalKind = "call" | "operator_question" | "customer_contact" | "change"
@@ -72,7 +72,7 @@ export type ProposalDraft = {
    * For a change proposal: the effect event approving writes (ticket 09). Absent:
    * the change is committed as an attributed claim by whoever said it (see `changeEffect`).
    */
-  effect?: Effect | null
+  effect?: EffectSpec | null
   /** Where the proposal came from, e.g. "reviewer" or a call id. */
   source: string
   proposedAt: string
@@ -197,7 +197,7 @@ export function draftFromFinding(bundle: Bundle, finding: ReviewFinding, propose
 /** A change the agent wants to make: needs an operator's yes (policy row order-change). */
 export function changeDraft(bundle: Bundle, input: {
   title: string; change: string; why: string; source: string; contact?: { name: string; type: ContactType; role: AskRole; recordId?: string | null }
-  evidence?: CitedRecord[]; whoPays?: string; effect?: Effect | null
+  evidence?: CitedRecord[]; whoPays?: string; effect?: EffectSpec | null
 }, proposedAt: string): ProposalDraft {
   const type = input.contact?.type ?? "operator"
   const row = policyFor(type, "change")
@@ -219,7 +219,7 @@ export function changeDraft(bundle: Bundle, input: {
  * an attributed claim by whoever said it (the customer side, a site or driver on a
  * call, the operator).
  */
-export function changeEffect(proposal: Pick<ProposalDraft, "change" | "title" | "effect" | "contact">): Effect {
+export function changeEffect(proposal: Pick<ProposalDraft, "change" | "title" | "effect" | "contact">): EffectSpec {
   if (proposal.effect) return proposal.effect
   const claim = proposal.change ?? proposal.title
   if (isCustomerSide(proposal.contact.type)) return { type: "customer_answer_recorded", from: `${proposal.contact.name} (${proposal.contact.typeLabel.toLowerCase()})`, question: proposal.title, answer: claim }

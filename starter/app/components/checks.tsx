@@ -3,6 +3,8 @@
 import type { FirstAction, Group, PlannedAction, RuleResult, SourceRef } from "@/lib/engine/checks"
 import type { OrderChecks, Tone } from "@/lib/present/types"
 import { Icon } from "./icons"
+import { CallsBlock } from "./calls"
+import { EffectsBlock } from "./effects"
 import { CompactProposals, ProposalsBlock } from "./proposals"
 import { ReviewBlock } from "./review"
 import { More, Pill } from "./ui"
@@ -93,7 +95,9 @@ export function ChecksPanel({ orderId, checks, compact = false }: { orderId: str
         </div>
       </li>)}</ul>
     </div>}
+    <CallsBlock calls={checks.calls} lines={checks.callLines} blocked={checks.blockedCalls} compact={compact} />
     {compact ? <CompactProposals orderId={orderId} proposals={checks.proposals ?? []} /> : <ProposalsBlock orderId={orderId} proposals={checks.proposals ?? []} />}
+    {!compact && <EffectsBlock effects={checks.effects ?? []} history={checks.history ?? []} />}
     {checks.review && <ReviewBlock orderId={orderId} review={checks.review} compact={compact}
       shown={new Set((checks.proposals ?? []).map((proposal) => proposal.findingId).filter((id): id is string => !!id))} />}
     {failed.length > 0 && <div className="checks-block"><h3>Didn&apos;t pass</h3>{list(failed)}</div>}

@@ -14,13 +14,16 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   // The raw records keep their shape for anyone reading the API. `view` is the
   // same information read out with labels, names and grouping for the interface.
   // `checks` is the engine's verdict: group, rule results, planned agent work.
-  const view = buildRecordView(bundle)
+  // The view reads the order with its effect events applied (ADR 0002); the raw records stay as seeded.
+  const view = buildRecordView(await engine.overlaid(bundle))
   const state = await engine.state()
   const verdict = state.orders.find((row) => row.id === order.id)
   const checks: OrderChecks | null = verdict
     ? {
       now: state.now, group: verdict.group, reason: verdict.reason, rules: verdict.rules, planned: verdict.planned, urgency: verdict.urgency,
       review: verdict.review, proposals: verdict.proposals, unreachable: verdict.unreachable,
+      calls: verdict.calls, callLines: verdict.callLines, blockedCalls: verdict.blockedCalls,
+      effects: verdict.effects, history: verdict.history,
     }
     : null
   return NextResponse.json({

@@ -7,6 +7,7 @@
 
 import type { BriefingItem } from "./briefing"
 import type { EffectEvent } from "./effects"
+import type { StoredCallEvent } from "./calls"
 import type { StoredProposalEvent } from "./proposals"
 
 export interface EngineStore {
@@ -27,6 +28,13 @@ export interface EngineStore {
   readEffects(): Promise<EffectEvent[]>
   /** Appends effect events in one go. */
   appendEffects(events: EffectEvent[]): Promise<void>
+  /** Every stored call event (ticket 10), oldest first within each call. */
+  readCallEvents(): Promise<StoredCallEvent[]>
+  /**
+   * Appends events of one call in one go. False (and nothing written) when any
+   * (callId, seq) exists already: another writer took that step first.
+   */
+  appendCallEvents(events: StoredCallEvent[]): Promise<boolean>
   /** Empties every engine table. The snapshot is never touched. */
   reset(): Promise<void>
 }

@@ -16,13 +16,15 @@ import { compareUrgency, GROUPS, verdictFor, type Group, type RuleResult, type V
 import { briefingAsOf, digestFacts, digestTimes, digestTitle, pushId, sendPush, type Briefing, type DigestItem, type PushInput } from "./briefing"
 import { writeProse, type ProseOptions } from "./digest-prose"
 import { becameDue, digestDueItems, dueAsOf, nextCheckItems, nextDueAfter, type DueItem } from "./due"
-import { applyEffects, checkEffect, effectId, effectText, type Effect, type EffectEvent, type EffectInput, type EffectWrite } from "./effects"
+import { applyEffects, checkEffect, defaultFact, effectId, effectTarget, effectText, isCustomerStatement, statementsBy, type EffectEvent, type EffectInput, type EffectSpec, type EffectWrite } from "./effects"
 import {
   answersFor, changeDraft, changeEffect, instructionsFor, proposalsFor, type OrderProposals, type Proposal, type StoredProposalEvent, type Unreachable,
 } from "./proposals"
 import { createReviewLayer, reviewTotals, type OrderReview, type ReviewInputs, type ReviewOptions, type ReviewTotals } from "./reviews"
 import { buildFleet, evaluateRules, type Evaluation } from "./rules"
 import type { EngineStore } from "./store"
+import { createCallRunner, type CallOptions } from "./call-runner"
+import { callbackItems, orderCalls, utcTime, type BlockedCall, type Call, type CalleeInput, type CallLine, type CallLineView, type OrderCalls } from "./calls"
 
 /** The snapshot as the engine reads it: one bundle per order. */
 export type Snapshot = { snapshotAt: string; bundles: Bundle[] }
@@ -53,7 +55,7 @@ export type Command =
   | { type: "proposeChange"; orderId: string; title: string; change: string; why: string; source: string
       contact?: { name: string; type: ContactType; role: AskRole; recordId?: string | null }
       /** The effect event approving it writes (contact confirmed, window changed...); absent: an attributed claim by `contact`. */
-      effect?: Effect }
+      effect?: EffectSpec }
   /**
    * Writes one effect event now, without a proposal: a call result (ticket 10), or any
    * other committed change whose approval already happened. The order is re-reviewed.
@@ -72,6 +74,17 @@ export type Command =
   | { type: "deliverBriefing" }
   /** Marks Briefing items read (all when `ids` is absent). */
   | { type: "markBriefingRead"; ids?: string[] }
+  /**
+   * The call agent's loop (ticket 10): starts calls for lines that need one (planned
+   * site/driver calls, call proposals, callbacks that came due) and takes the agent's
+   * and the simulated person's turns. `steps` rounds (the app's pump sends 1), or
+   * until nothing changes.
+   */
+  | { type: "runCalls"; steps?: number }
+  /** Starts a call on an order's site or driver line now; `live` rings the persona's phone page (ticket 11). */
+  | { type: "startCall"; orderId: string; line: CallLine; live?: boolean }
+  /** The callee's move on a call: answer, decline, let it ring out, or a keypad digit (live phones send these). */
+  | { type: "callEvent"; callId: string; input: CalleeInput }
 
 /**
  * One order as the engine reads it at `now`. `group`, `reason`, `rules` (every
@@ -94,6 +107,12 @@ export type OrderState = {
   effects: EffectEvent[]
   /** What happened on the order, oldest first: findings proposed, approvals, answers, effect events. */
   history: HistoryEntry[]
+  /** The agent's calls on this order, oldest first, with transcript, tier and cost (ticket 10). */
+  calls: Call[]
+  /** The order's site and driver lines: what is left to call about and where each stands. */
+  callLines: CallLineView[]
+  /** Planned calls the agent will not make because the callee is on the customer side. */
+  blockedCalls: BlockedCall[]
 } & Verdict
 
 /** One line of an order's history. `kind` is a proposal event kind, or "effect" for an effect event. */
@@ -112,9 +131,13 @@ export type { CitedRecord, OrderReview, ReviewFinding, ReviewTotals, ReviewTrigg
 export type { Proposal, ProposalEvent, ProposalKind, ProposalStatus, Unreachable } from "./proposals"
 export type { FirstAction, Group, Outcome, PlannedAction, RuleId, RuleResult, SourceRef, Urgency } from "./checks"
 export type { DueItem, DueKind } from "./due"
+export type {
+  Answerer, BlockedCall, Call, CallCallee, CallCost, CalleeInput, CallLine, CallLineView, CallOutcome, CallState, CostRates, Expecting, LineStatus, Tier, TranscriptLine,
+} from "./calls"
+export type { CallOptions } from "./call-runner"
 export type { Briefing, BriefingItem, DigestFacts, DigestItem, DigestSlot, PushItem, PushReason, PushInput } from "./briefing"
 export type { DigestProse, ProseSegment } from "./digest-prose"
-export type { Effect, EffectEvent, EffectInput, EffectType, EffectWrite } from "./effects"
+export type { Effect, EffectEvent, EffectInput, EffectSpec, EffectType, EffectWrite, Versioning } from "./effects"
 export { becameDue, GROUPS }
 
 /** The Needs action group, most urgent first (urgent, then soonest deadline, then reference). */
@@ -148,6 +171,8 @@ export type Engine = {
   bundle(orderId: string): Bundle | null
   /** `bundle` (the snapshot, or the same order loaded elsewhere) with the order's effect events applied: what the order view shows. */
   overlaid(bundle: Bundle): Promise<Bundle>
+  /** `overlaid` for many bundles at once (one store read): what the board shows. */
+  overlaidAll(bundles: Bundle[]): Promise<Bundle[]>
 }
 
 export type EngineDeps = {
@@ -157,6 +182,8 @@ export type EngineDeps = {
   reviews?: ReviewOptions
   /** The digest prose's model, cache and timeout. Absent: digests carry template text. */
   briefing?: ProseOptions
+  /** Who answers calls, speech, tier 2, cost rates and pacing. Absent: simulated person, no speech. */
+  calls?: CallOptions
 }
 
 const MINUTE = 60_000
@@ -171,7 +198,7 @@ function isoOf(value: Date | string): string {
   return date.toISOString()
 }
 
-export function createEngine({ snapshot, store, reviews: reviewOptions, briefing: proseOptions }: EngineDeps): Engine {
+export function createEngine({ snapshot, store, reviews: reviewOptions, briefing: proseOptions, calls: callOptions = {} }: EngineDeps): Engine {
   const start = isoOf(snapshot.snapshotAt)
   const bundles = new Map(snapshot.bundles.map((bundle) => [bundle.order.id, bundle]))
   const fleet = buildFleet(snapshot.bundles)
@@ -246,7 +273,7 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
    * record instead.
    */
   function uncommittedAnswers(stored: StoredProposalEvent[], effects: EffectEvent[]) {
-    const committed = new Set(effects.map((event) => event.source))
+    const committed = new Set(effects.flatMap((event) => [event.source, ...(event.answers ?? [])]))
     const changeSource = new Map(stored.filter((event) => event.data?.draft?.kind === "change").map((event) => [event.proposalId, event.data!.draft!.source]))
     for (const [changeId, source] of changeSource) if (committed.has(changeId)) committed.add(source)
     return answersFor(stored).filter((answer) => !committed.has(answer.id.replace(/-a$/, "")))
@@ -283,28 +310,109 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     return entries.map((entry, index) => ({ entry, index })).sort((a, b) => a.entry.at.localeCompare(b.entry.at) || a.index - b.index).map(({ entry }) => entry)
   }
 
-  async function ordersAt(at: string): Promise<OrderState[]> {
+  /** Each order's (overlaid) bundle, review, proposals, effect events and call lines at `at` (everything grouping reads besides the rules). */
+  async function workAt(at: string): Promise<{ bundle: Bundle; evaluation: Evaluation; review: OrderReview; work: OrderProposals; calls: OrderCalls; effects: EffectEvent[] }[]> {
     const effects = await sync()
     const evaluations = evaluationsAt(at)
     const events = eventsByOrder(await store.readProposalEvents())
     const read = await reviews.read(reviewInputs(events, effects))
+    const calls = await callRunner.read()
     return snapshot.bundles.map(({ order }) => {
       const bundle = bundleOf(order.id)
+      const evaluation = evaluations.get(order.id)!
       const review = read.get(order.id)!
-      const work: OrderProposals = proposalsFor(bundle, review, events.get(order.id) ?? [])
-      const committed = effects.get(order.id) ?? []
+      const work = proposalsFor(bundle, review, events.get(order.id) ?? [])
+      // A done review fulfils the reviewer pass (verdictFor); the call lines carry the planned calls.
       return {
-        id: order.id,
-        reference: order.reference,
-        status: order.status,
-        review,
-        proposals: work.proposals,
-        unreachable: work.unreachable,
-        effects: committed,
-        history: historyOf(work.proposals, committed),
-        ...verdictFor(evaluations.get(order.id)!, review, work),
+        bundle, evaluation, review, work, effects: effects.get(order.id) ?? [],
+        calls: orderCalls(bundle, evaluation.planned, work.proposals, calls.get(order.id) ?? [], at),
       }
     })
+  }
+
+  async function ordersAt(at: string): Promise<OrderState[]> {
+    return (await workAt(at)).map(({ bundle, evaluation, review, work, calls, effects }) => ({
+      id: bundle.order.id,
+      reference: bundle.order.reference,
+      status: bundle.order.status,
+      review,
+      proposals: work.proposals,
+      unreachable: work.unreachable,
+      calls: calls.calls,
+      callLines: calls.lines,
+      blockedCalls: calls.blocked,
+      effects,
+      history: historyOf(work.proposals, effects),
+      ...verdictFor({ ...evaluation, planned: calls.planned }, review, { ...work, calls: { lines: calls.lines, carried: calls.carried } }),
+    }))
+  }
+
+  // -- Calls (ticket 10) -------------------------------------------------------
+  const callRunner = createCallRunner({
+    store, bundles, options: callOptions, clock,
+    linesAt: async (at) => (await workAt(at)).map((row) => row.calls),
+    ended: callEnded,
+  })
+
+  /**
+   * A call ended: the call proposals it carried are answered with its result, and
+   * every change the person confirmed becomes a change proposal (needs a yes).
+   * A callback answers nothing yet; the next attempt carries the same topics.
+   */
+  async function callEnded(call: Call): Promise<void> {
+    if (call.outcome === "callback") return
+    await recordCallResult(call)
+    for (const change of call.changes) {
+      await proposeChange({
+        orderId: call.orderId, title: change.title, change: change.change, source: call.id,
+        why: `${call.callee.name ?? call.callee.handle} said on the ${call.line} call at ${utcTime(call.endedAt ?? call.startedAt)}: ${change.claim}.`,
+        contact: { name: call.callee.name ?? call.callee.handle, type: call.callee.contactType, role: call.line === "driver" ? "driver" : "site", recordId: call.callee.recordId },
+      })
+    }
+  }
+
+  /**
+   * THE one place a finished call's result is written: an "answered" event (with the
+   * answer, question and who said it) on each call proposal the call carried, then,
+   * when the person said something, the "call result recorded" effect event (an
+   * attributed claim, source = the call id; ticket 09) and a re-review of the order.
+   */
+  async function recordCallResult(call: Call): Promise<void> {
+    const answer = call.summary ?? call.outcome ?? "ended"
+    const who = call.callee.name ?? call.callee.handle
+    const from = `${who} (${call.line}), on call ${call.id}`
+    const carried: Proposal[] = []
+    for (const topic of call.topics) {
+      if (topic.kind !== "proposal") continue
+      const proposal = await findProposal(topic.id.slice("proposal:".length)).catch(() => null)
+      if (!proposal || proposal.status === "answered" || proposal.status === "dismissed") continue
+      carried.push(proposal)
+      const event = await eventFor(proposal, "answered", `Call result (${call.id}): ${answer}`, { answer, question: proposal.script, from })
+      await store.appendProposalEvents([{ ...event, by: "agent" }])
+    }
+    if (!call.claims.length) return
+    // The callee's own earlier statements on the questions the call answered are superseded.
+    const marks = [call.callee.handle, call.callee.name].filter((mark): mark is string => !!mark).map((mark) => mark.toLowerCase())
+    const byCallee = (statedBy: string) => marks.some((mark) => statedBy.toLowerCase().includes(mark))
+    await commitEffects([{
+      type: "call_result_recorded", with: `${who} (${call.line})`, claim: call.claims.join("; "), callId: call.id,
+      orderId: call.orderId, by: "agent", source: call.id,
+      fact: carried.length === 1 ? { key: `answer:${carried[0].id}`, label: carried[0].script } : { key: `call:${call.line}`, label: `what the ${call.line} said on the call` },
+      supersedes: statementsBy(carried.flatMap((proposal) => proposal.evidence), byCallee),
+      answers: carried.map((proposal) => proposal.id),
+    }])
+    await rereview(call.orderId)
+  }
+
+  async function proposeChange(command: Extract<Command, { type: "proposeChange" }> | Omit<Extract<Command, { type: "proposeChange" }>, "type">): Promise<void> {
+    const bundle = bundles.get(command.orderId)
+    if (!bundle) throw new Error(`Unknown order ${command.orderId}`)
+    if (command.effect) checkEffect(bundleOf(command.orderId), command.effect)
+    const draft = changeDraft(bundle, command, await clock())
+    if ((await store.readProposalEvents()).some((event) => event.proposalId === draft.id)) return
+    await store.appendProposalEvents([{
+      proposalId: draft.id, orderId: draft.orderId, at: draft.proposedAt, by: "agent", kind: "proposed", text: draft.action, data: { draft },
+    }])
   }
 
   async function findProposal(proposalId: string): Promise<Proposal> {
@@ -361,13 +469,22 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     if (!inputs.length) return []
     await sync()
     const at = await clock()
-    const existing = (await store.readEffects()).length
-    const events = inputs.map((input, index) => {
-      const bundle = bundles.get(input.orderId)
-      if (!bundle) throw new Error(`Unknown order ${input.orderId}`)
-      checkEffect(bundleOf(input.orderId), input)
-      return { ...input, id: effectId(input, at, existing + index), at, text: effectText(bundleOf(input.orderId), input) } as EffectEvent
-    })
+    const stored = await store.readEffects()
+    const events: EffectEvent[] = []
+    for (const [index, input] of inputs.entries()) {
+      if (!bundles.get(input.orderId)) throw new Error(`Unknown order ${input.orderId}`)
+      const bundle = bundleOf(input.orderId)
+      checkEffect(bundle, input)
+      // A new version of the fact it settles: version 1 is the snapshot, each earlier effect on the fact one more.
+      const fact = input.fact ?? defaultFact(bundle, input)
+      const earlier = [...stored, ...events].filter((event) => event.orderId === input.orderId && event.fact?.key === fact.key).length
+      const target = effectTarget(input)
+      const supersedes = [...new Set([...(input.supersedes ?? []), ...(target ? [target.id] : [])])]
+      events.push({
+        ...input, fact, version: earlier + 2, supersedes,
+        id: effectId(input, at, stored.length + index), at, text: effectText(bundle, input),
+      } as EffectEvent)
+    }
     await store.appendEffects(events)
     return events
   }
@@ -459,9 +576,10 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     return run
   }
 
-  /** Every due-item source: next checks, the Briefing digests; callbacks (ticket 10) go here too. */
+  /** Every due-item source: next checks, the Briefing digests and the callbacks calls scheduled. */
   async function allDueItems(): Promise<Omit<DueItem, "due">[]> {
-    return [...nextChecks, ...digestItems]
+    const calls = [...(await callRunner.read()).values()].flat()
+    return [...nextChecks, ...digestItems, ...callbackItems(calls)]
   }
 
   async function apply(command: Command): Promise<EngineState> {
@@ -548,7 +666,11 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
           source: proposal.id, evidence: proposal.evidence, whoPays: proposal.whoPays,
           contact: { name, type: proposal.contact.type, role: proposal.contact.role, recordId: proposal.contact.recordId },
           // The yes commits the answer to the order as the customer side's attributed claim.
-          effect: { type: "customer_answer_recorded", from: `${name} (${proposal.contact.typeLabel.toLowerCase()})`, question: proposal.script, answer },
+          // A new version of the point the question settles; it replaces the customer side's own earlier statements on it.
+          effect: {
+            type: "customer_answer_recorded", from: `${name} (${proposal.contact.typeLabel.toLowerCase()})`, question: proposal.script, answer,
+            fact: { key: `answer:${proposal.id}`, label: proposal.script }, supersedes: statementsBy(proposal.evidence, isCustomerStatement), answers: [proposal.id],
+          },
         }, await clock())
         const from = `${name} (${proposal.contact.typeLabel.toLowerCase()}), recorded by the operator`
         await store.appendProposalEvents([
@@ -565,21 +687,25 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
         stillOpen(proposal, "answered")
         await store.appendProposalEvents([await eventFor(proposal, "answered", `Answered: ${answer}`, { answer, question: proposal.script, from: "operator" })])
         // The operator's own answer needs no further yes: it is committed as an attributed note at once.
-        await commitEffects([{ type: "operator_answer_recorded", question: proposal.script, answer, orderId: proposal.orderId, by: "operator", source: proposal.id }])
+        await commitEffects([{
+          type: "operator_answer_recorded", question: proposal.script, answer, orderId: proposal.orderId, by: "operator", source: proposal.id,
+          fact: { key: `answer:${proposal.id}`, label: proposal.script }, supersedes: statementsBy(proposal.evidence, (by) => /^operator(:|$)/i.test(by)), answers: [proposal.id],
+        }])
         await rereview(proposal.orderId)
         break
       }
-      case "proposeChange": {
-        const bundle = bundles.get(command.orderId)
-        if (!bundle) throw new Error(`Unknown order ${command.orderId}`)
-        if (command.effect) checkEffect(bundleOf(command.orderId), command.effect)
-        const draft = changeDraft(bundle, command, await clock())
-        if ((await store.readProposalEvents()).some((event) => event.proposalId === draft.id)) break
-        await store.appendProposalEvents([{
-          proposalId: draft.id, orderId: draft.orderId, at: draft.proposedAt, by: "agent", kind: "proposed", text: draft.action, data: { draft },
-        }])
+      case "proposeChange":
+        await proposeChange(command)
         break
-      }
+      case "runCalls":
+        await callRunner.run(command.steps)
+        break
+      case "startCall":
+        await callRunner.start(command.orderId, command.line, command.live ? "live" : undefined)
+        break
+      case "callEvent":
+        await callRunner.input(command.callId, command.input)
+        break
       case "deliverBriefing":
         await deliverBriefing()
         break
@@ -592,10 +718,13 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     return state()
   }
 
-  async function overlaid(bundle: Bundle): Promise<Bundle> {
-    const effects = (await sync()).get(bundle.order.id) ?? []
-    return applyEffects(bundle, effects)
+  async function overlaidAll(list: Bundle[]): Promise<Bundle[]> {
+    const effects = await sync()
+    return list.map((bundle) => applyEffects(bundle, effects.get(bundle.order.id) ?? []))
   }
 
-  return { state, apply, clock, bundle: (orderId) => bundles.get(orderId) ?? null, overlaid }
+  return {
+    state, apply, clock, bundle: (orderId) => bundles.get(orderId) ?? null,
+    overlaid: async (bundle) => (await overlaidAll([bundle]))[0], overlaidAll,
+  }
 }
