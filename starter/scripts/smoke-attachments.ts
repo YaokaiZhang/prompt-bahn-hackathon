@@ -1,3 +1,4 @@
+import { appFetch } from "./app-fetch"
 import { readAttachmentManifest, sha256, type Attachment } from "../lib/attachments"
 
 type ResponseBody = { attachments: (Attachment & { url: string })[] }
@@ -8,7 +9,7 @@ async function main(): Promise<void> {
   const samples = [...new Map(manifest.map((entry) => [entry.content_type, entry])).values()]
   const base = process.env.APP_URL ?? "http://localhost:3000"
   for (const sample of samples) {
-    const response = await fetch(`${base}/api/orders/${sample.order_id}/attachments`)
+    const response = await appFetch(`${base}/api/orders/${sample.order_id}/attachments`)
     if (!response.ok) throw new Error(`Attachment API returned ${response.status} for ${sample.order_id}`)
     const data = await response.json() as ResponseBody
     const entry = data.attachments.find((item) => item.id === sample.id)
