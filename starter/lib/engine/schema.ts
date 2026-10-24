@@ -60,6 +60,24 @@ export const proposalEvents = pgTable("cr_proposal_events", {
 }, (table) => [index("cr_proposal_events_order_idx").on(table.orderId)])
 
 /**
+ * Effect events (ticket 09, ADR 0002): append-only committed changes to an order.
+ * The order view, rules and reviewer read the snapshot with these applied
+ * (lib/engine/effects.ts). `effect` is the type-specific part (endpoint, window,
+ * claim, answer, cost).
+ */
+export const effectEvents = pgTable("cr_effect_events", {
+  seq: bigserial("seq", { mode: "number" }).primaryKey(),
+  id: text("id").notNull().unique(),
+  orderId: text("order_id").notNull(),
+  type: text("type").notNull(),
+  at: timestamp("at", { withTimezone: true }).notNull(),
+  by: text("by").notNull(),
+  source: text("source").notNull(),
+  text: text("text").notNull(),
+  effect: jsonb("effect").$type<Record<string, unknown>>().notNull(),
+}, (table) => [index("cr_effect_events_order_idx").on(table.orderId)])
+
+/**
  * Calls (ticket 10): append-only events per call; the first ("started") carries the
  * call's header. (call_id, seq) is the key, so two writers cannot take the same step.
  * Calls, call turns, call costs and callbacks are all folded from these rows (lib/engine/calls.ts).
@@ -77,7 +95,7 @@ export const callEvents = pgTable("cr_call_events", {
 }, (table) => [primaryKey({ columns: [table.callId, table.seq] }), index("cr_call_events_order_idx").on(table.orderId)])
 
 /** Every engine state table. Add new tables here so reset clears them. */
-export const ENGINE_TABLES = [demoClock, briefingItems, proposalEvents, callEvents]
+export const ENGINE_TABLES = [demoClock, briefingItems, proposalEvents, effectEvents, callEvents]
 
 /**
  * Caches that reset keeps on purpose (ticket 04). A cached review is keyed by the

@@ -9,6 +9,7 @@ import type { Proposal, Unreachable } from "@/lib/engine/proposals"
 import type { DueItem } from "@/lib/engine/due"
 import type { BriefingItem } from "@/lib/engine/briefing"
 import type { BlockedCall, Call, CallLineView } from "@/lib/engine/calls"
+import type { EffectEvent, HistoryEntry } from "@/lib/engine/engine"
 
 export type Tone = "danger" | "warn" | "accent" | "ok" | "neutral"
 
@@ -33,6 +34,10 @@ export type OrderChecks = {
   callLines: CallLineView[]
   /** Planned calls the agent will not make: the callee is on the customer side. */
   blockedCalls: BlockedCall[]
+  /** Committed changes laid over the snapshot (ticket 09), oldest first. */
+  effects: EffectEvent[]
+  /** The order's history in sequence: proposals, approvals, answers, effect events. */
+  history: HistoryEntry[]
 }
 
 /** `/api/proposals`: proposals waiting for the operator's yes, across orders, for batch approval. */
@@ -404,6 +409,8 @@ export type MessageView = {
   internal: boolean
   language: string | null
   evidenceCount: number
+  /** The effect event that wrote a newer version of what this message says (ticket 09); the message is kept as history. */
+  supersededBy?: string | null
   otherOrder: OrderRef | null
 }
 
