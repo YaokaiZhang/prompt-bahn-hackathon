@@ -49,6 +49,8 @@ export type PlannedAction = {
   kind: "site_call" | "driver_call" | "reviewer_pass"
   /** The rules that asked for it. */
   ruleIds: RuleId[]
+  /** What each of those rules read (its sources): a call on the rule asks about these records. */
+  sources?: Partial<Record<RuleId, SourceRef[]>>
   reason: string
   callee: Callee | null
 }

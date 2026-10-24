@@ -35,8 +35,9 @@ import {
   AVAILABLE_OPTIONS, CALLBACK_MINUTES, CALLBACK_OPTIONS, CALLBACK_QUESTION, callbackLine, CLOSING, greeting, HANDOVER_LINE,
   questionsFor, RETRY_PREFIX, type KeyOption, type OptionEffect, type Question, type Topic,
 } from "./call-script"
-import type { PlannedAction } from "./checks"
+import type { PlannedAction, SourceRef } from "./checks"
 import type { DueItem } from "./due"
+import { latestEta } from "./eta"
 import type { Proposal } from "./proposals"
 import type { TurnCheck, TurnPath } from "./voice-agent"
 
@@ -395,6 +396,46 @@ export function tier2Said(call: Call): { claims: string[]; changes: CallChange[]
   return { claims, changes }
 }
 
+/** A new ETA the callee stated on the call, as a time: when they said it and what they said. */
+export type ReportedEta = { at: string; statedAt: string; claim: string }
+
+/**
+ * The newest ETA the callee gave at tier 2 (the latest successful check that carries
+ * one), read from their local "HH:MM" in the call's zone, on the day the call took
+ * place (the next day when that time is more than 12 h before the call).
+ */
+export function reportedEta(call: Call): ReportedEta | null {
+  const line = [...call.transcript].reverse().find((row) => row.check && !row.check.failed && row.check.eta)
+  const eta = line?.check?.eta
+  if (!line || !eta) return null
+  const at = eta.at ?? localToUtc(eta.local, call.zone, line.at)
+  return at ? { at, statedAt: line.at, claim: eta.claim } : null
+}
+
+/** "16:30" in `zone`, on the local day of `around` (or the next day if that is over 12 h earlier), as ISO UTC. */
+export function localToUtc(local: string, zone: string, around: string): string | null {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(local.trim())
+  if (!match) return null
+  const hours = Number(match[1])
+  const minutes = Number(match[2])
+  if (hours > 23 || minutes > 59) return null
+  const parts = (instant: number) => Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+    timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(new Date(instant)).map((part) => [part.type, part.value]))
+  const base = new Date(around).getTime()
+  const day = parts(base)
+  // The zone's offset at that moment: wall time read as UTC, minus the instant.
+  const offsetAt = (instant: number) => {
+    const wall = parts(instant)
+    return Date.UTC(Number(wall.year), Number(wall.month) - 1, Number(wall.day), Number(wall.hour), Number(wall.minute)) - Math.floor(instant / MINUTE) * MINUTE
+  }
+  const naive = Date.UTC(Number(day.year), Number(day.month) - 1, Number(day.day), hours, minutes)
+  let utc = naive - offsetAt(naive)
+  utc = naive - offsetAt(utc)
+  if (base - utc > 12 * 60 * MINUTE) utc += 24 * 60 * MINUTE
+  return new Date(utc).toISOString()
+}
+
 function ending(call: Call, outcome: CallOutcome, text: string, extra: { escalation?: string | null } = {}): AgentStep {
   const { claims, changes } = said(call)
   const name = who(call.callee)
@@ -594,21 +635,59 @@ export const TIGHT_ETA_MINUTES = 10
  * TIGHT_ETA_MINUTES of its end: the reason to ask "can you still deliver on time?"
  * (story 71, CD-420437). R12 covers an ETA after the end; this is the near miss.
  */
-export function tightEta(bundle: Bundle): string | null {
+export function tightEta(bundle: Bundle): { text: string; recordId: string } | null {
   const status = String(bundle.order.status)
   if (status === "DELIVERED" || status === "CANCELLED") return null
   const moving = rows(bundle, "work_assignments").some((row) => row.details.order_id === bundle.order.id && row.details.status === "IN_PROGRESS")
   if (!moving) return null
   const windows = rows(bundle, "time_windows").filter((row) => row.details.purpose === "CUSTOMER_DELIVERY_PROMISE")
   const promise = windows.find((row) => row.details.is_selected === true) ?? null
-  const latest = rows(bundle, "tracking_observations").filter((row) => str(row.details.estimated_delivery_at))
-    .sort((a, b) => String(a.details.observed_at ?? "").localeCompare(String(b.details.observed_at ?? ""))).pop()
-  const eta = str(latest?.details.estimated_delivery_at)
+  // The latest ETA as it stands now: a driver's reported time replaces the tracking
+  // estimate, and an estimate a call already answered is no reason to ask again.
+  const latest = latestEta(bundle)
   const end = str(promise?.details.end_at)
-  if (!eta || !end) return null
-  const margin = (new Date(end).getTime() - new Date(eta).getTime()) / MINUTE
+  if (!latest || latest.superseded || !end) return null
+  const margin = (new Date(end).getTime() - new Date(latest.at).getTime()) / MINUTE
   if (margin < 0 || margin > TIGHT_ETA_MINUTES) return null
-  return `Latest ETA ${utcTime(eta)} is ${Math.round(margin)} min before the promise ends at ${utcTime(end)}`
+  return { text: `Latest ETA ${utcTime(latest.at)} is ${Math.round(margin)} min before the promise ends at ${utcTime(end)}`, recordId: latest.recordId }
+}
+
+/**
+ * The records a call on a rule asks about: the rule's sources a person on the phone can
+ * restate (a position or ETA, a thread waiting on them, a document, an earlier call
+ * result). The order's own structure (endpoint contacts, windows, sites, assignments,
+ * expenses) changes only through a typed effect after a yes, never by a call result:
+ * the delivery promise in particular is the customer's (ADR 0001).
+ */
+const RESTATABLE = new Set(["tracking_observations", "conversations", "messages", "documents", "alerts", "effect_events"])
+
+export function askedRecords(sources: SourceRef[] | undefined): string[] {
+  return [...new Set((sources ?? []).filter((source) => RESTATABLE.has(source.collection)).map((source) => source.id))]
+}
+
+/**
+ * The records a call on a proposal asks about: its cited conflict evidence that the
+ * callee stated, or that no person stated (system records such as tracking). Another
+ * party's statement stays live: a driver does not overwrite what the customer said.
+ */
+export function proposalRecords(proposal: Proposal, callee: { name: string | null; handle: string }): string[] {
+  const marks = [callee.handle, callee.name].filter((mark): mark is string => !!mark).map((mark) => mark.toLowerCase())
+  return [...new Set(proposal.evidence.filter((cited) => cited.role === "conflict"
+    && (!cited.statedBy || marks.some((mark) => cited.statedBy!.toLowerCase().includes(mark)))).map((cited) => cited.recordId))]
+}
+
+/**
+ * The records a finished call's result supersedes: those of every topic the person
+ * answered on the call (a keypad answer to a question on that topic, including the
+ * answer that moved the call to tier 2).
+ */
+export function answeredRecords(call: Call): string[] {
+  const answered = new Set<string>()
+  for (const answer of call.answers) {
+    if (!answer.ask.startsWith("q")) continue
+    for (const topic of call.questions[Number(answer.ask.slice(1))]?.topics ?? []) answered.add(topic)
+  }
+  return [...new Set(call.topics.filter((topic) => answered.has(topic.id)).flatMap((topic) => topic.records ?? []))]
 }
 
 export function driverOf(bundle: Bundle): CallCallee | null {
@@ -654,19 +733,19 @@ export function orderCalls(bundle: Bundle, planned: PlannedAction[], proposals: 
       callee = driverOf(bundle)
     }
     if (!callee) continue
-    for (const id of action.ruleIds) add(line, callee, { id: `rule:${id}`, kind: "rule", title: RULE_TOPIC_TITLE[id] ?? id })
+    for (const id of action.ruleIds) add(line, callee, { id: `rule:${id}`, kind: "rule", title: RULE_TOPIC_TITLE[id] ?? id, records: askedRecords(action.sources?.[id]) })
   }
   const tight = tightEta(bundle)
   if (tight && !topics.get("driver")?.topics.some((topic) => topic.id === "rule:R12")) {
     const callee = driverOf(bundle)
-    if (callee) add("driver", callee, { id: "check:on_time", kind: "check", title: tight })
+    if (callee) add("driver", callee, { id: "check:on_time", kind: "check", title: tight.text, records: [tight.recordId] })
   }
   for (const proposal of proposals) {
     // A reviewer finding for a customer-side contact is a customer_contact proposal, never a call.
     if (proposal.kind !== "call" || proposal.waitingOn !== "agent" || !proposal.contact.handle || isCustomerSide(proposal.contact.type)) continue
     const line: CallLine = proposal.contact.type === "driver" || proposal.contact.role === "driver" ? "driver" : "site"
-    add(line, { name: proposal.contact.name, handle: proposal.contact.handle, role: proposal.contact.role, contactType: proposal.contact.type, recordId: proposal.contact.recordId },
-      { id: `proposal:${proposal.id}`, kind: "proposal", title: proposal.title, script: proposal.script })
+    const callee = { name: proposal.contact.name, handle: proposal.contact.handle, role: proposal.contact.role, contactType: proposal.contact.type, recordId: proposal.contact.recordId }
+    add(line, callee, { id: `proposal:${proposal.id}`, kind: "proposal", title: proposal.title, script: proposal.script, records: proposalRecords(proposal, callee) })
   }
 
   const lines: CallLineView[] = []

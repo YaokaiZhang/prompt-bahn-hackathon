@@ -15,7 +15,7 @@ const BY_LABEL: Record<string, string> = { agent: "Agent", policy: "Policy", ope
 // Kept here (not imported from lib/engine/effects.ts, which uses node:crypto) so the client bundle stays small.
 const EFFECT_LABEL: Record<EffectType, string> = {
   contact_confirmed: "Contact confirmed", contact_changed: "Contact changed", window_changed: "Window changed",
-  call_result_recorded: "Call result recorded", customer_answer_recorded: "Customer answer recorded",
+  call_result_recorded: "Call result recorded", eta_reported: "ETA reported", customer_answer_recorded: "Customer answer recorded",
   operator_answer_recorded: "Operator answer recorded", cost_approved: "Cost approved",
 }
 

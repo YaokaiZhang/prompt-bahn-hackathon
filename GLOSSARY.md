@@ -128,6 +128,10 @@ A later call the agent scheduled because nobody answered or the person was busy.
 A follow-up time already recorded in the snapshot from earlier work, such as a site call due at 10:00. It is not a callback; the agent did not schedule it.
 _Avoid_: Callback, reminder
 
+**Reported ETA**:
+A new arrival time the driver states on a call, recorded at once as a time attributed to the driver. It replaces the tracking estimate as the current ETA. It is the driver's statement, not a change to the order: the delivery promise stays the customer's.
+_Avoid_: New window, rescheduled delivery, updated promise
+
 ## Summaries
 
 **Digest**:
