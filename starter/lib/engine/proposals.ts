@@ -25,7 +25,8 @@ import {
   CONTACT_TYPE_LABEL, isCustomerSide, policyFor, policyRow, type AskRole, type ContactType, type Decision, type PolicyRowId,
 } from "@/lib/reviewer/policy"
 import { customerOwnsSite, customerSideOf, endpointContactType, endpointSite } from "./contacts"
-import type { EffectSpec } from "./effects"
+import { nextChecksOf } from "./due"
+import { statementsBy, type EffectSpec } from "./effects"
 import type { CitedRecord, OrderReview, ReviewFinding } from "./reviews"
 
 export type ProposalKind = "call" | "operator_question" | "customer_contact" | "change"
@@ -275,9 +276,65 @@ export function foldProposal(draft: ProposalDraft, events: StoredProposalEvent[]
   }
 }
 
-/** Every proposal on one order: from the current review's findings, plus stored ones (decided earlier, or engine-made). */
-export function proposalsFor(bundle: Bundle, review: OrderReview, stored: StoredProposalEvent[]): OrderProposals {
-  const drafts = new Map<string, ProposalDraft>()
+/** The source of a proposal drafted from the NEXT rule (a next check that came due). */
+export const NEXT_CHECK_SOURCE = "rule:NEXT"
+
+const humanise = (code: string) => code.toLowerCase().replace(/_/g, " ")
+
+/** A next check whose open question is with the customer side (the customer was asked; a seller hold is the customer's to clear). */
+const CUSTOMER_WAIT = /^(CUSTOMER|SELLER)_/
+
+/**
+ * The next step for each next check the NEXT rule handed to the operator (first action
+ * `operator_proposal`, spec story 69): a customer-side contact when the open question is
+ * with the customer (propose only, ADR 0001; CD-420458, CD-420009), else a question to
+ * the operator (Ops' own review, CD-420326). Each cites the thread whose check came due.
+ */
+export function nextCheckDrafts(bundle: Bundle, rules: { id: string; outcome: string; firstAction: string | null; detail: string; sources: { id: string }[] }[]): ProposalDraft[] {
+  const rule = rules.find((row) => row.id === "NEXT" && row.outcome === "fail" && row.firstAction === "operator_proposal")
+  if (!rule) return []
+  const due = new Set(rule.sources.map((source) => source.id))
+  return nextChecksOf(bundle).filter((check) => due.has(check.conversationId)).map((check) => {
+    const waiting = check.waitingOn ?? "OPERATOR_FOLLOWUP"
+    const customer = CUSTOMER_WAIT.test(waiting)
+    const type: ContactType = customer ? "paying_customer" : "operator"
+    const kind = kindFor(type)
+    const thread = `${humanise(check.category)} thread`
+    const what = humanise(waiting.replace(CUSTOMER_WAIT, ""))
+    const contact: ProposalContact = customer
+      ? { name: bundle.customer.name, type, typeLabel: CONTACT_TYPE_LABEL[type], role: "customer", handle: null, recordId: bundle.customer.id }
+      : { name: "Operator", type, typeLabel: CONTACT_TYPE_LABEL[type], role: "operator", handle: null, recordId: null }
+    const row = policyFor(type, "question")
+    return {
+      id: `nx-${shortHash(bundle.order.id, check.conversationId)}`, orderId: bundle.order.id, reference: bundle.order.reference, kind, findingId: null,
+      title: customer ? `Follow up with the customer on the ${what}` : `Next check due on the ${thread}: ${what}`,
+      action: actionText(kind, contact),
+      script: customer
+        ? `We are following up on order ${bundle.order.reference}: is the ${what} settled now?`
+        : `The ${thread} on ${bundle.order.reference} waits on ${what} and its next check is due. What is the next step?`,
+      why: rule.detail,
+      evidence: [{
+        recordId: check.conversationId, role: "conflict", kind: "conversations", field: "next_check_at", quote: check.at,
+        value: `Waiting on ${humanise(waiting)}, next check ${check.at}`, at: check.at, local: null, statedBy: null,
+      }],
+      contact, whoPays: `${bundle.customer.id} ${bundle.customer.name} pays for the order.`,
+      policyRow: row.id, decision: row.decision, change: null, source: NEXT_CHECK_SOURCE, proposedAt: check.at,
+    }
+  })
+}
+
+/**
+ * The records an answer to a proposal replaces: a rule-made proposal's cited records
+ * (the thread whose check it followed up), else the conflict evidence `party` stated.
+ */
+export function answeredBy(proposal: Pick<ProposalDraft, "source" | "evidence">, party: (statedBy: string) => boolean): string[] {
+  if (proposal.source === NEXT_CHECK_SOURCE) return [...new Set(proposal.evidence.filter((cited) => cited.role === "conflict").map((cited) => cited.recordId))]
+  return statementsBy(proposal.evidence, party)
+}
+
+/** Every proposal on one order: from the current review's findings and the rules, plus stored ones (decided earlier, or engine-made). */
+export function proposalsFor(bundle: Bundle, review: OrderReview, stored: StoredProposalEvent[], fromRules: ProposalDraft[] = []): OrderProposals {
+  const drafts = new Map<string, ProposalDraft>(fromRules.map((draft) => [draft.id, draft]))
   const unreachable: Unreachable[] = []
   const current = new Set<string>()
   if (review.status === "reviewed") {

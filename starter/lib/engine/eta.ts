@@ -5,7 +5,55 @@
 // superseded, is history. The tight-ETA check, R12 and the voice agent's brief all
 // read the ETA here, so a driver's "about 16:30" replaces the 13:58 tracking estimate.
 
-import { rows, str, type Bundle } from "@/lib/present/bundle"
+import { rows, str, type Bundle, type RelatedRow } from "@/lib/present/bundle"
+
+/**
+ * The record that stands for `row` now: the row itself while it is current, else the
+ * effect event that superseded it (following newer versions of that event). Rules read
+ * this, so a call result or a reported ETA answers what it superseded.
+ */
+export function currentRecord(bundle: Bundle, row: RelatedRow): RelatedRow {
+  const events = rows(bundle, "effect_events")
+  let current = row
+  for (let hops = 0; hops < 20 && current.details.superseded_by; hops++) {
+    const next = events.find((event) => event.id === current.details.superseded_by)
+    if (!next) break
+    current = next
+  }
+  return current
+}
+
+/** When a record was stated: an observation's time, a reported ETA's statement time, an effect event's commit time. */
+export function statedAt(row: RelatedRow): string | null {
+  return str(row.details.observed_at) ?? str(row.details.statedAt) ?? str(row.details.recorded_at)
+}
+
+export type PositionStatement = {
+  /** A tracking observation, or the effect event (call result, reported ETA) that superseded it. */
+  row: RelatedRow
+  collection: "tracking_observations" | "effect_events"
+  at: string | null
+}
+
+/**
+ * The newest current word on where an assignment's car is: its latest tracking
+ * observation, unless a call result or reported ETA superseded it, and any current
+ * ETA the driver reported for it. Null when nothing was ever received.
+ */
+export function latestPosition(bundle: Bundle, assignmentId: string): PositionStatement | null {
+  const statements: RelatedRow[] = []
+  const tracking = rows(bundle, "tracking_observations").filter((row) => row.details.assignment_id === assignmentId)
+    .sort((a, b) => String(a.details.observed_at ?? "").localeCompare(String(b.details.observed_at ?? ""))).pop()
+  if (tracking) statements.push(currentRecord(bundle, tracking))
+  for (const row of rows(bundle, "effect_events")) {
+    if (row.details.effect !== "ETA_REPORTED" || row.details.superseded_by) continue
+    const forAssignment = str(row.details.assignmentId)
+    if (!forAssignment || forAssignment === assignmentId) statements.push(row)
+  }
+  const newest = statements.sort((a, b) => String(statedAt(a) ?? "").localeCompare(String(statedAt(b) ?? ""))).pop()
+  if (!newest) return null
+  return { row: newest, collection: newest.id === tracking?.id ? "tracking_observations" : "effect_events", at: statedAt(newest) }
+}
 
 export type CurrentEta = {
   /** The ETA itself (ISO, UTC). */

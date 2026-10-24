@@ -100,11 +100,24 @@ for (const { effect, collection, id, check } of SEVEN) {
 
 test("an effect on a record that is not on the order is refused, and nothing is written", async () => {
   const engine = await testEngine()
-  await assert.rejects(engine.apply({ type: "recordEffect", effect: { type: "contact_confirmed", endpointId: "ep-nope", confirmedBy: "x", orderId: ORDER_437, source: "test" } }), /no endpoint ep-nope/)
+  await assert.rejects(engine.apply({ type: "recordEffect", effect: { type: "contact_confirmed", endpointId: "ep-nope", confirmedBy: "x", orderId: ORDER_437, by: "operator", source: "test" } }), /no endpoint ep-nope/)
   await assert.rejects(engine.apply({ type: "recordEffect", effect: {
-    type: "window_changed", windowId: "win-x59c404d387179b4b", startAt: "2026-10-21T09:00:00Z", endAt: "2026-10-21T10:00:00Z", statedBy: "x", orderId: ORDER_437, source: "test",
+    type: "window_changed", windowId: "win-x59c404d387179b4b", startAt: "2026-10-21T09:00:00Z", endAt: "2026-10-21T10:00:00Z", statedBy: "x", orderId: ORDER_437, by: "operator", source: "test",
   } }), /only the selected pickup slot or the delivery promise/)
   assert.equal(find((await engine.state()).orders, "CD-420437").effects.length, 0)
+})
+
+test("the agent commits only attributed statements (call results, reported ETAs); a change to the order needs the operator (ADR 0001)", async () => {
+  const engine = await testEngine()
+  const window = { type: "window_changed", windowId: PROMISE_437, startAt: "2026-10-21T09:00:00Z", endAt: "2026-10-21T13:00:00Z", statedBy: "Calverona Auto", orderId: ORDER_437, source: "test" } as const
+  await assert.rejects(engine.apply({ type: "recordEffect", effect: window }), /needs the operator/)
+  await assert.rejects(engine.apply({ type: "recordEffect", effect: { ...window, by: "agent" } }), /needs the operator/)
+  await assert.rejects(engine.apply({ type: "recordEffect", effect: { type: "contact_confirmed", endpointId: DELIVERY_437, confirmedBy: "x", orderId: ORDER_437, by: "policy", source: "test" } }), /needs the operator/)
+  await assert.rejects(engine.apply({ type: "recordEffect", effect: { type: "operator_answer_recorded", question: "q", answer: "a", orderId: ORDER_437, source: "test" } }), /needs the operator/)
+  assert.equal(find((await engine.state()).orders, "CD-420437").effects.length, 0)
+  await engine.apply({ type: "recordEffect", effect: { type: "call_result_recorded", with: "Thomas Mellervik (driver)", claim: "On track", orderId: ORDER_437, source: "test" } })
+  await engine.apply({ type: "recordEffect", effect: { ...window, by: "operator" } })
+  assert.deepEqual(find((await engine.state()).orders, "CD-420437").effects.map((event) => [event.type, event.by]), [["call_result_recorded", "agent"], ["window_changed", "operator"]])
 })
 
 test("the rules read the order with its effect events applied", async () => {

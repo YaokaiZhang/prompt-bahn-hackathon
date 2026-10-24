@@ -33,6 +33,7 @@ test("site and driver cannot reach the operator's pages or API", () => {
     assert.deepEqual(gate(persona, "/"), { kind: "redirect", to: "/phone" })
     assert.deepEqual(gate(persona, "/orders/ord-00001"), { kind: "redirect", to: "/phone" })
     assert.deepEqual(gate(persona, "/inbox"), { kind: "redirect", to: "/phone" })
+    assert.deepEqual(gate(persona, "/board"), { kind: "redirect", to: "/phone" })
     assert.deepEqual(gate(persona, "/api/overview"), { kind: "deny", status: 403 })
     assert.deepEqual(gate(persona, "/phone"), { kind: "allow" })
     assert.deepEqual(gate(persona, "/api/phone/events"), { kind: "allow" })
@@ -41,7 +42,7 @@ test("site and driver cannot reach the operator's pages or API", () => {
 })
 
 test("the operator reaches everything, including the phone page for rehearsal", () => {
-  for (const path of ["/", "/orders/ord-00001", "/inbox", "/api/overview", "/phone", "/login"]) {
+  for (const path of ["/", "/board", "/orders/ord-00001", "/inbox", "/api/overview", "/phone", "/login"]) {
     assert.deepEqual(gate("operator", path), { kind: "allow" })
   }
 })

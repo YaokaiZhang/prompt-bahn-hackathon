@@ -44,7 +44,8 @@ export function nextChecksOf(bundle: Bundle): NextCheck[] {
   const checks: NextCheck[] = []
   for (const thread of bundle.conversations) {
     const at = str(thread.details.next_check_at)
-    if (thread.orderId !== bundle.order.id || thread.status !== "OPEN" || !at) continue
+    // A thread an effect event superseded (an answer on its open question) is history: its check is settled.
+    if (thread.orderId !== bundle.order.id || thread.status !== "OPEN" || !at || thread.details.superseded_by) continue
     checks.push({
       conversationId: thread.id,
       at: new Date(at).toISOString(),

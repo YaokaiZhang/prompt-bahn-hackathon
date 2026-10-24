@@ -70,14 +70,52 @@ eachStore("CD-420516's next check plans a site call to the stock-control contact
   assert.ok(call?.callee?.handle)
 })
 
-eachStore("CD-420458's next check goes to the operator at 10:00, because the open question is with the customer", async (engine) => {
+eachStore("CD-420458's next check becomes a proposal to the operator at 10:00, because the open question is with the customer", async (engine) => {
+  const before = order(await engine.state(), "CD-420458")
+  assert.ok(!before.proposals.some((proposal) => proposal.source === "rule:NEXT"), "nothing before the check is due")
   const after = order(await engine.apply({ type: "advanceToNextDue" }), "CD-420458")
   const next = after.rules.find((rule) => rule.id === "NEXT")
   assert.equal(next?.outcome, "fail")
-  assert.equal(next?.firstAction, "show_person")
+  assert.equal(next?.firstAction, "operator_proposal")
   assert.match(next?.detail ?? "", /seller hold clearance/i)
-  assert.equal(after.group, "needs_action")
   assert.ok(!after.planned.some((action) => action.ruleIds.includes("NEXT")), "no call is planned for a customer-side question")
+  // The next step: the agent proposes the customer contact; ADR 0001 keeps it propose-only.
+  const proposal = after.proposals.find((row) => row.source === "rule:NEXT")
+  assert.ok(proposal, "a proposal to the operator")
+  assert.equal(proposal.kind, "customer_contact")
+  assert.equal(proposal.status, "proposed")
+  assert.equal(proposal.waitingOn, "operator")
+  assert.equal(proposal.contact.handle, null)
+  assert.equal(proposal.policyRow, "customer-side")
+  assert.ok(proposal.evidence.some((cited) => cited.recordId === "conv-xb088d8b061f794e5"), "it cites the thread whose check came due")
+  assert.equal(after.group, "needs_action")
+  assert.match(after.reason, /Waiting for your yes/)
+
+  // The operator makes the contact and records the answer; its update's yes settles the check.
+  await engine.apply({ type: "approve", proposalId: proposal.id })
+  const answered = order(await engine.apply({ type: "recordAnswer", proposalId: proposal.id, answer: "The seller cleared the hold; the release follows today." }), "CD-420458")
+  const update = answered.proposals.find((row) => row.kind === "change" && row.source === proposal.id)
+  assert.ok(update, "the answer becomes an update for a yes")
+  const settled = order(await engine.apply({ type: "approve", proposalId: update.id }), "CD-420458")
+  assert.ok(!settled.rules.some((rule) => rule.id === "NEXT" && rule.outcome === "fail"), "the answered thread's check no longer fires")
+  assert.ok(settled.effects.some((event) => event.supersedes.includes("conv-xb088d8b061f794e5")))
+})
+
+eachStore("CD-420326's 11:00 check is an operator question; answering it closes the check", async (engine) => {
+  await engine.apply({ type: "advanceToNextDue" })
+  const due = order(await engine.apply({ type: "advanceToNextDue" }), "CD-420326")
+  assert.equal(due.rules.find((rule) => rule.id === "NEXT")?.firstAction, "operator_proposal")
+  const question = due.proposals.find((row) => row.source === "rule:NEXT")
+  assert.ok(question, "a question to the operator")
+  assert.equal(question.kind, "operator_question")
+  assert.equal(question.waitingOn, "operator")
+  assert.match(due.reason, /Question for you/)
+  assert.equal(due.group, "needs_action")
+
+  const answered = order(await engine.apply({ type: "answerQuestion", proposalId: question.id, answer: "Expenses decides both claims today." }), "CD-420326")
+  assert.equal(answered.proposals.find((row) => row.id === question.id)?.status, "answered")
+  assert.ok(!answered.rules.some((rule) => rule.id === "NEXT" && rule.outcome === "fail"), "the answered thread's check no longer fires")
+  assert.notEqual(answered.group, "needs_action")
 })
 
 test("an order with no next check has no NEXT rule", async () => {

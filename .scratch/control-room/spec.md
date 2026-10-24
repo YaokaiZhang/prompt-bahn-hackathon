@@ -179,7 +179,7 @@ Every model call goes through it, and every call reports its `usage.cost`. Every
 
 | Job | Model | Notes |
 |---|---|---|
-| Reviewer and other reasoning | `anthropic/claude-haiku-5.5` | Effort set per job: medium for the reviewer and call summaries, low for the digest. |
+| Reviewer and other reasoning | `anthropic/claude-haiku-5.5` | Effort set per job: medium for the reviewer and call summaries, low for the digest; the tier-2 per-turn check, which also writes the call summary, runs with reasoning off for latency (see Implementation Notes). |
 | Speech | `openai/gpt-4o-mini-tts` | Tier-1 prompts are generated once and cached. |
 | Tier-2 live voice | An audio-in, audio-out chat model such as `openai/gpt-4o-audio-preview`, streamed | Haiku runs on each turn's transcript to check evidence and policy and to write the structured result. |
 | Tier-2 fallback | An audio-input or transcription model (`openai/whisper-large-v3`) as the ear | Haiku replies, TTS speaks. |
@@ -358,3 +358,17 @@ Every model call goes through it, and every call reports its `usage.cost`. Every
 - Audio-model latency and tool use over streaming are the main technical risk. The tier-2 fallback pipeline exists for that.
 - The cost meter depends on OpenRouter reporting `usage.cost` on streamed audio responses. Verify this early.
 - The seed-time sweep needs `OPENROUTER_API_KEY`. Without a key, seeding still works and orders show "not reviewed yet" instead of failing.
+
+## Implementation Notes
+
+Deliberate additions and choices made while building, which the stories above do not ask for in so many words:
+
+- **Seed-time sweep is opt-in.** Story 25 sweeps every order at seed time. Because that calls the model on all 100 orders, `npm run db:seed` runs it only with `--review` (or `SEED_REVIEW=1`); otherwise review a few named orders with `npm run review:sweep -- CD-…`.
+- **Tight-ETA check.** A car whose latest ETA is inside the promise but within 10 minutes of its end gets an "on time?" question on its driver line (CD-420437, CD-420710). It is "on request": the operator rings it live; the agent never starts it and it holds no group. This gives story 71 its trigger, since R12 alone (ETA after the promise end) does not fire on CD-420437.
+- **R12 and a reported ETA.** When the late ETA is one the driver reported on a call (`eta_reported`), R12's first action is "show to a person", not another driver call: the driver already said it, and the operator decides what to tell the customer. The same goes for a tracking ETA the driver answered on a call with anything other than "can still deliver on time"; that answer makes R12 pass. R10 likewise reads the driver's word on a call as the latest position.
+- **"Needs person" call line.** After three call attempts with no answer, the line is "needs a person" and the order goes to Needs action.
+- **NEXT rule's first action.** A due next check the pickup site cannot settle becomes a proposal to the operator (story 69): a customer-side contact when the open question is with the customer (CD-420458, CD-420009), else an operator question (CD-420326). Its answer supersedes the thread, so the check stops firing.
+- **Normal after a reviewer pass.** An order whose strong rule asked for a reviewer pass (R3, R7, R13) and whose review found nothing is Normal, and its reason says "The reviewer cleared R7: …" instead of claiming every check passed.
+- **Digest prose guard.** Besides typed digits, the digest rejects counts written as words ("twenty", "both", "a couple"), so every number comes from the rule facts (story 81).
+- **No push for orders urgent at the start.** Urgent pushes go only to (order, reason) pairs that were not urgent at the snapshot time; the 09:00 digest already lists those.
+- **Reasoning effort for calls.** The tier-2 per-turn check runs with reasoning off (`effort: "none"`): with reasoning on, Haiku spent its token budget and took about 7 s per turn, too slow for a live call. It is also the call summary: each turn's check carries the call's cumulative claims and a one-line summary, and the last one is the summary on the order, so there is no separate end-of-call summary call to give medium effort. Tier-1 summaries are template text.

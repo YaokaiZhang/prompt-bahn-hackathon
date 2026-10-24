@@ -100,10 +100,13 @@ export type EffectInput = Effect & Versioning & {
   source: string
 }
 
-/** What `recordEffect` takes: an effect on an order; `by` defaults to the agent. */
 /** An effect with its versioning: what a change proposal carries. */
 export type EffectSpec = Effect & Versioning
 
+/**
+ * What `recordEffect` takes: an effect on an order. `by` defaults to the agent, which may
+ * commit only call results and reported ETAs; anything else needs `by: "operator"`.
+ */
 export type EffectWrite = EffectSpec & { orderId: string; source: string; by?: Actor }
 
 /** An effect event as stored and read back. */

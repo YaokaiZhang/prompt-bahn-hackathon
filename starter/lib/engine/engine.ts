@@ -18,7 +18,7 @@ import { writeProse, type ProseOptions } from "./digest-prose"
 import { becameDue, digestDueItems, dueAsOf, nextCheckItems, nextDueAfter, type DueItem } from "./due"
 import { applyEffects, checkEffect, defaultFact, effectId, effectTarget, effectText, isCustomerStatement, statementsBy, type EffectEvent, type EffectInput, type EffectSpec, type EffectWrite } from "./effects"
 import {
-  answersFor, changeDraft, changeEffect, instructionsFor, proposalsFor, type OrderProposals, type Proposal, type StoredProposalEvent, type Unreachable,
+  answeredBy, answersFor, changeDraft, changeEffect, instructionsFor, nextCheckDrafts, proposalsFor, type OrderProposals, type Proposal, type StoredProposalEvent, type Unreachable,
 } from "./proposals"
 import { createReviewLayer, reviewTotals, type OrderReview, type ReviewInputs, type ReviewOptions, type ReviewTotals } from "./reviews"
 import { buildFleet, evaluateRules, type Evaluation } from "./rules"
@@ -27,7 +27,7 @@ import { createCallRunner, type CallOptions } from "./call-runner"
 import type { PhonePersona, PhoneView } from "./phone"
 import type { AudioClip } from "./voice-agent"
 import { latestEta } from "./eta"
-import { answeredRecords, callbackItems, orderCalls, reportedEta, utcTime, type BlockedCall, type Call, type CalleeInput, type CallLine, type CallLineView, type Handover, type OrderCalls } from "./calls"
+import { answeredRecords, callbackItems, orderCalls, reportedEta, statedByCallee, utcTime, type BlockedCall, type Call, type CalleeInput, type CallLine, type CallLineView, type Handover, type OrderCalls } from "./calls"
 
 /** The snapshot as the engine reads it: one bundle per order. */
 export type Snapshot = { snapshotAt: string; bundles: Bundle[] }
@@ -60,8 +60,11 @@ export type Command =
       /** The effect event approving it writes (contact confirmed, window changed...); absent: an attributed claim by `contact`. */
       effect?: EffectSpec }
   /**
-   * Writes one effect event now, without a proposal: a call result (ticket 10), or any
-   * other committed change whose approval already happened. The order is re-reviewed.
+   * Writes one effect event now, without a proposal. `by` defaults to the agent, which
+   * may commit only attributed statements from its calls (`call_result_recorded`,
+   * `eta_reported`); every other type (a change to the order, an answer) is refused
+   * unless `by` is "operator", whose explicit write is the yes (ADR 0001). The order is
+   * re-reviewed.
    */
   | { type: "recordEffect"; effect: EffectWrite }
   /**
@@ -206,6 +209,9 @@ export type EngineDeps = {
 
 const MINUTE = 60_000
 
+/** Effects the agent may commit without an operator: attributed statements from its calls. */
+const AGENT_STATEMENTS = new Set<EffectWrite["type"]>(["call_result_recorded", "eta_reported"])
+
 function assertNever(value: never): never {
   throw new Error(`Unknown command: ${JSON.stringify(value)}`)
 }
@@ -339,7 +345,7 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
       const bundle = bundleOf(order.id)
       const evaluation = evaluations.get(order.id)!
       const review = read.get(order.id)!
-      const work = proposalsFor(bundle, review, events.get(order.id) ?? [])
+      const work = proposalsFor(bundle, review, events.get(order.id) ?? [], nextCheckDrafts(bundle, evaluation.rules))
       // A done review fulfils the reviewer pass (verdictFor); the call lines carry the planned calls.
       return {
         bundle, evaluation, review, work, effects: effects.get(order.id) ?? [],
@@ -476,8 +482,7 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     if (!call.claims.length && !eta) return
     // The callee's own earlier statements on the questions the call answered are superseded,
     // and so is every record the answered topics asked about.
-    const marks = [call.callee.handle, call.callee.name].filter((mark): mark is string => !!mark).map((mark) => mark.toLowerCase())
-    const byCallee = (statedBy: string) => marks.some((mark) => statedBy.toLowerCase().includes(mark))
+    const byCallee = statedByCallee(call.callee)
     const current = eta ? latestEta(bundleOf(call.orderId)) : null
     const replacedEta = current && !current.superseded ? [current.recordId] : []
     const supersedes = [...new Set([...statementsBy(carried.flatMap((proposal) => proposal.evidence), byCallee), ...answeredRecords(call)])]
@@ -719,7 +724,13 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
         break
       }
       case "recordEffect": {
-        const [event] = await commitEffects([{ ...command.effect, by: command.effect.by ?? "agent" } as EffectInput])
+        // ADR 0001: the agent commits only what a person said on its calls (attributed
+        // statements). Any change to the order, or an answer, is the operator's to write.
+        const by = command.effect.by ?? "agent"
+        if (by !== "operator" && !AGENT_STATEMENTS.has(command.effect.type)) {
+          throw new Error(`A ${command.effect.type.replace(/_/g, " ")} effect needs the operator: only call results and reported ETAs are committed by the agent`)
+        }
+        const [event] = await commitEffects([{ ...command.effect, by } as EffectInput])
         await rereview(event.orderId)
         break
       }
@@ -763,7 +774,7 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
           // A new version of the point the question settles; it replaces the customer side's own earlier statements on it.
           effect: {
             type: "customer_answer_recorded", from: `${name} (${proposal.contact.typeLabel.toLowerCase()})`, question: proposal.script, answer,
-            fact: { key: `answer:${proposal.id}`, label: proposal.script }, supersedes: statementsBy(proposal.evidence, isCustomerStatement), answers: [proposal.id],
+            fact: { key: `answer:${proposal.id}`, label: proposal.script }, supersedes: answeredBy(proposal, isCustomerStatement), answers: [proposal.id],
           },
         }, await clock())
         const from = `${name} (${proposal.contact.typeLabel.toLowerCase()}), recorded by the operator`
@@ -783,7 +794,7 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
         // The operator's own answer needs no further yes: it is committed as an attributed note at once.
         await commitEffects([{
           type: "operator_answer_recorded", question: proposal.script, answer, orderId: proposal.orderId, by: "operator", source: proposal.id,
-          fact: { key: `answer:${proposal.id}`, label: proposal.script }, supersedes: statementsBy(proposal.evidence, (by) => /^operator(:|$)/i.test(by)), answers: [proposal.id],
+          fact: { key: `answer:${proposal.id}`, label: proposal.script }, supersedes: answeredBy(proposal, (by) => /^operator(:|$)/i.test(by)), answers: [proposal.id],
         }])
         await rereview(proposal.orderId)
         break

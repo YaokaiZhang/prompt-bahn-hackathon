@@ -47,10 +47,14 @@ async function seed(): Promise<void> {
 }
 
 // The one-time reviewer sweep (ticket 06): every order not reviewed yet, so "Normal" means
-// checked. Skip with `--no-review` or SEED_REVIEW=0; cap with REVIEW_SWEEP_LIMIT=N. Without
-// OPENROUTER_API_KEY it only reports "not reviewed yet". Re-run alone: `npm run review:sweep`.
+// checked. It calls the real model on up to 100 orders, so it is opt-in: `npm run db:seed --
+// --review` (or SEED_REVIEW=1); cap with REVIEW_SWEEP_LIMIT=N. Without OPENROUTER_API_KEY it
+// only reports "not reviewed yet". A few named orders: `npm run review:sweep -- CD-420516`.
 async function reviewAfterSeed(): Promise<void> {
-  if (process.argv.includes("--no-review") || process.env.SEED_REVIEW === "0") return
+  if (!process.argv.includes("--review") && process.env.SEED_REVIEW !== "1") {
+    console.log("Reviewer sweep not run (it calls the model on every order). Opt in with `npm run db:seed -- --review`, or review a few orders with `npm run review:sweep -- CD-420516`.")
+    return
+  }
   const limit = process.env.REVIEW_SWEEP_LIMIT ? Number(process.env.REVIEW_SWEEP_LIMIT) : undefined
   try {
     await sweep({ url: url!, limit })

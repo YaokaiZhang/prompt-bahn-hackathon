@@ -15,9 +15,12 @@ export type SourceRef = { collection: string; id: string; label: string }
  * What a rule asks for first when it fails (or, for a weak rule, when it plans a call):
  * - `site_call` / `driver_call`: a routine tier-1 call, no approval needed;
  * - `reviewer_pass`: the reviewer reads the order's records;
- * - `show_person`: the order goes to Needs action with the evidence.
+ * - `show_person`: the order goes to Needs action with the evidence;
+ * - `operator_proposal`: the agent drafts the next step as a proposal to the operator
+ *   (a customer-side contact or an operator question, proposals.ts), which puts the
+ *   order in Needs action until the operator decides it (spec story 69).
  */
-export type FirstAction = "site_call" | "driver_call" | "reviewer_pass" | "show_person"
+export type FirstAction = "site_call" | "driver_call" | "reviewer_pass" | "show_person" | "operator_proposal"
 
 /**
  * `pass`: checked and fine. `fail`: the rule fired. `unknown`: it could not be
@@ -152,9 +155,17 @@ export function verdictFor(evaluation: Evaluation, review: ReviewSignal | null =
   const unreachable = work.unreachable.map((finding) => `Reviewer: ${sentence(finding.title)}, but no contact is on record, so it couldn't be checked.`)
   const gaps = rules.filter((row) => row.outcome === "unknown").length + work.unreachable.length
   if (finished && gaps === 0) return { group: "done", reason: ["Finished with nothing open.", readNote, ...results].filter(Boolean).join(" "), rules, planned, urgency }
-  const checked = rules.length
-  const ruleNote = gaps ? `The rules found nothing to act on; ${gaps === 1 ? "one gap" : `${gaps} gaps`} couldn't be checked.` : `All ${checked} checks passed.`
-  return { group: "normal", reason: [...results, readNote, ...unreachable, ruleNote].filter(Boolean).join(" "), rules, planned, urgency }
+  // Normal is "passed the rules and the reviewer" (spec "Grouping"): a strong rule whose
+  // first action is a reviewer pass fired, and the done review found nothing to act on.
+  // The reason says so rather than claiming every check passed.
+  const cleared = reviewed ? rules.filter((row) => row.outcome === "fail" && row.firstAction === "reviewer_pass") : []
+  const clearedNote = cleared.map((row) => `The reviewer cleared ${row.id}: ${sentence(row.detail)}.`)
+  const others = rules.length - cleared.length
+  const gapNote = `${gaps === 1 ? "one gap" : `${gaps} gaps`} couldn't be checked`
+  const ruleNote = cleared.length
+    ? gaps ? `Nothing else to act on; ${gapNote}.` : `The other ${others} checks passed.`
+    : gaps ? `The rules found nothing to act on; ${gapNote}.` : `All ${rules.length} checks passed.`
+  return { group: "normal", reason: [...results, readNote, ...clearedNote, ...unreachable, ruleNote].filter(Boolean).join(" "), rules, planned, urgency }
 }
 
 const URGENT_FIRST = (a: Urgency, b: Urgency) => Number(b.urgent) - Number(a.urgent)

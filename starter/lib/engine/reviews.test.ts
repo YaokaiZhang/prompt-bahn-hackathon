@@ -56,6 +56,18 @@ test("the sweep reviews every order; a quiet Normal order says how many records 
   assert.match(quiet.reason, new RegExp(`Reviewer read ${quiet.review.recordsRead} records, no conflict`))
 })
 
+test("an order whose failed reviewer-pass rule the reviewer cleared says so; its reason never claims every check passed", async () => {
+  const engine = await testEngine({ gateway: await testGateway() })
+  const before = find((await engine.state()).orders, "CD-420338")
+  assert.equal(before.rules.find((rule) => rule.id === "R7")?.outcome, "fail", "R7: the promise differs from the requested slot")
+  assert.equal(before.group, "in_progress", "a reviewer pass is planned")
+  const order = find((await engine.apply({ type: "review" })).orders, "CD-420338")
+  assert.equal(order.review.findings.length, 0)
+  assert.equal(order.group, "normal", "Normal: it passed the rules' first action, the reviewer")
+  assert.match(order.reason, /The reviewer cleared R7: The promise .* differs from the slot the customer requested/)
+  assert.doesNotMatch(order.reason, /All \d+ checks passed|The rules found nothing to act on/)
+})
+
 test("a finding quotes its cited records; a routine site finding puts the order In progress (the agent calls)", async () => {
   const engine = await testEngine({ gateway: await testGateway() })
   const before = find((await engine.state()).orders, "CD-420516")

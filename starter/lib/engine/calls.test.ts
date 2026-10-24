@@ -7,7 +7,7 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import type { Engine, OrderState } from "./engine"
 import { scriptedPerson, scriptedSpeech } from "./call-testing"
-import { orderCalls } from "./calls"
+import { orderCalls, tightEta } from "./calls"
 import type { PlannedAction, RuleId } from "./checks"
 import { eachStore, testEngine, testGateway, type TestEngineOptions } from "./testing"
 
@@ -148,6 +148,18 @@ test("the background site calls go out on their own, including pickup-readiness 
   assert.ok(after.orders.every((row) => row.calls.every((call) => call.answerer === "simulated")), "nothing rings live unless asked")
 })
 
+test("the tight-ETA check reads the order the way the rules do: the selected promise on the final delivery point, and never a cancelled order", async () => {
+  const engine = await testEngine()
+  const bundle = engine.bundle((await order(engine, "CD-420437")).id)
+  assert.ok(bundle)
+  assert.ok(tightEta(bundle), "CD-420437: ETA 13:58Z, 2 min before the promise ends")
+  // Cancelled (cancelled_at set while the status still reads in transit): nothing to ask.
+  assert.equal(tightEta({ ...bundle, order: { ...bundle.order, details: { ...bundle.order.details, cancelled_at: "2026-10-21T08:00:00Z" } } }), null)
+  // The promise sits on another point than the final delivery point: R12 sees no promise, and neither does this check.
+  const elsewhere = (bundle.related.time_windows ?? []).map((row) => row.details.purpose === "CUSTOMER_DELIVERY_PROMISE" ? { ...row, details: { ...row.details, point_id: "pt-elsewhere" } } : row)
+  assert.equal(tightEta({ ...bundle, related: { ...bundle.related, time_windows: elsewhere } }), null)
+})
+
 test("the call layer's own guard: a customer-side pickup contact takes only a pickup-readiness call", async () => {
   const engine = await testEngine()
   const row = await order(engine, "CD-420449")
@@ -161,6 +173,13 @@ test("the call layer's own guard: a customer-side pickup contact takes only a pi
   const now = "2026-10-21T09:00:00Z"
   // A pickup-readiness topic (contact not confirmed) is called.
   assert.equal(orderCalls(bundle, plannedCall(["R5"]), [], [], now).blocked.length, 0)
+  // R6 (promise not set by the customer) reaches the pickup place only as a readiness question,
+  // never as a question about the delivery promise, which stays the customer's (ADR 0001).
+  const r6 = orderCalls(bundle, plannedCall(["R6"]), [], [], now)
+  assert.equal(r6.blocked.length, 0)
+  const topic = r6.lines[0].open.find((row) => row.id === "rule:R6")
+  assert.match(topic?.title ?? "", /ready/i)
+  assert.doesNotMatch(topic?.title ?? "", /promise/i)
   // Any other topic for the same customer-given person is blocked: propose only.
   const other = orderCalls(bundle, plannedCall(["R12"]), [], [], now)
   assert.equal(other.blocked.length, 1)

@@ -305,6 +305,12 @@ async function main(): Promise<void> {
   const rulesText = rulesPage.ok ? await rulesPage.text() : ""
   if (!rulesText.includes("customer-side") || !rulesText.includes("pickup-readiness")) throw new Error(`Rules page did not render the policy (${rulesPage.status})`)
   console.log(`Proposals: ${approvals.waiting.length} waiting for a yes, each with its policy row; the Rules page lists the policy.`)
+  // Spec story 14: the starter's lane board stays on its own route, cards in lane order without the engine's verdict.
+  const boardPage = await appFetch(`${base}/board`)
+  if (!boardPage.ok) throw new Error(`The lane board did not render (${boardPage.status})`)
+  const boardCards = await (await appFetch(`${base}/api/overview?view=board`)).json() as { visible: { verdict?: unknown }[]; total: number }
+  if (boardCards.visible.length !== boardCards.total || boardCards.visible.some((card) => card.verdict)) throw new Error("The lane board's cards are not the starter's view")
+  console.log("Lane board: /board renders the starter's lanes for reference.")
   // Ticket 11: each persona's phone holds at most one live call of its own line; the rest queue. Read-only.
   for (const persona of ["site", "driver"] as const) {
     const phoneResponse = await fetch(`${base}/api/phone`, { headers: { cookie: `persona=${persona}` } })

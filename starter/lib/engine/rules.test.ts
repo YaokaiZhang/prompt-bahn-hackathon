@@ -145,7 +145,7 @@ test("a positioning expense with no reservation on its assignment asks for a rev
 })
 
 const STRONG = ["R1", "R3", "R7", "R10", "R11", "R12", "R13"]
-const FIRST_ACTIONS = ["site_call", "driver_call", "reviewer_pass", "show_person"]
+const FIRST_ACTIONS = ["site_call", "driver_call", "reviewer_pass", "show_person", "operator_proposal"]
 
 test("every order reports every strong rule as passed, failed or not evaluable, and each failure declares a first action", async () => {
   const state = await snapshotState()

@@ -12,7 +12,9 @@ import { bool, finalDeliveryPoint, obj, originPickupPoint, rows, str } from "@/l
 import { fmtDateTime } from "@/lib/present/time"
 import { endpointContactType, pickupCallAllowed } from "./contacts"
 import { nextChecksOf, type NextCheck } from "./due"
-import { latestEta } from "./eta"
+import { currentRecord, latestEta, latestPosition, type PositionStatement } from "./eta"
+import { ON_TIME_CLAIM } from "./call-script"
+import { isFinished, movingAssignments, selectedPromise, windowOn } from "./order-facts"
 import type { Callee, FirstAction, PlannedAction, RuleId, RuleResult, SourceRef, Urgency } from "./checks"
 
 /** One driver duty, indexed across all orders, for the positioning rule. */
@@ -54,24 +56,17 @@ type Facts = {
   callee: Callee | null
 }
 
-function windowOn(bundle: Bundle, pointId: string | undefined, purpose: string, selected: boolean | null): RelatedRow | null {
-  return rows(bundle, "time_windows").find((row) =>
-    row.details.point_id === pointId && row.details.purpose === purpose
-    && (selected === null || bool(row.details.is_selected) === selected)) ?? null
-}
-
 function gather(bundle: Bundle, context: RuleContext): Facts {
   const now = ms(context.now) ?? 0
-  const status = bundle.order.status
-  const finished = status === "DELIVERED" || status === "CANCELLED" || !!str(bundle.order.details.cancelled_at)
+  const finished = isFinished(bundle)
   const pickupPoint = originPickupPoint(bundle)
   const deliveryPoint = finalDeliveryPoint(bundle)
   const endpoints = rows(bundle, "order_endpoint_details")
   const pickupEndpoint = endpoints.find((row) => pickupPoint && row.details.point_id === pickupPoint.id)
     ?? endpoints.find((row) => row.details.boundary === "PICKUP") ?? null
   const pickupSlot = windowOn(bundle, pickupPoint?.id, "SELECTED_PICKUP_SLOT", true)
-  const promise = windowOn(bundle, deliveryPoint?.id, "CUSTOMER_DELIVERY_PROMISE", true)
-  const moving = rows(bundle, "work_assignments").filter((row) => row.details.order_id === bundle.order.id && row.details.status === "IN_PROGRESS")
+  const promise = selectedPromise(bundle)
+  const moving = movingAssignments(bundle)
   const pickedUp = !!pickupPoint && bundle.events.some((event) => event.command === "vehicle.picked_up" && event.targetId === pickupPoint.id)
   const start = ms(str(pickupSlot?.details.start_at))
   const pickupSoon = !finished && !pickedUp && start !== null && start - now <= CALL_AHEAD_HOURS * HOUR
@@ -169,26 +164,39 @@ function promiseVersusRequest(facts: Facts): RuleResult {
 export const STALE_TRACKING_HOURS = 4
 const OPEN_ALERT = new Set(["OPEN", "ACKNOWLEDGED"])
 
-const byObserved = (a: RelatedRow, b: RelatedRow) => String(a.details.observed_at ?? "").localeCompare(String(b.details.observed_at ?? ""))
-
-// R10 — In transit with tracking missing or older than 4 h, and no open alert.
+// R10 — In transit with tracking missing or older than 4 h, and no open alert. It reads
+// current records only: once a call result or a reported ETA supersedes the latest
+// tracking row, the driver's word on the call is the latest position statement.
 function staleTracking(facts: Facts): RuleResult {
   const title = RULE_CATALOGUE.R10.title
   const { bundle } = facts
   if (!facts.moving.length) return result("R10", "strong", title, "pass", "No driver is on the road with this car.", null, [])
-  const observations = rows(bundle, "tracking_observations")
   const alerts = bundle.alerts.filter((alert) => OPEN_ALERT.has(alert.status))
-  const stale: { assignment: RelatedRow; last: RelatedRow | null }[] = []
+  const stale: PositionStatement[] = []
+  const missing: RelatedRow[] = []
   const sources: SourceRef[] = []
   for (const assignment of facts.moving) {
-    const last = observations.filter((row) => row.details.assignment_id === assignment.id).sort(byObserved).pop() ?? null
-    if (last) sources.push(ref("tracking_observations", last, "Latest position"))
-    else sources.push(ref("work_assignments", assignment, "Assignment in progress"))
-    const observed = ms(str(last?.details.observed_at))
-    if (observed === null || facts.now - observed > STALE_TRACKING_HOURS * HOUR) stale.push({ assignment, last })
+    const last = latestPosition(bundle, assignment.id)
+    if (!last) {
+      sources.push(ref("work_assignments", assignment, "Assignment in progress"))
+      missing.push(assignment)
+      continue
+    }
+    sources.push(ref(last.collection, last.row, last.collection === "tracking_observations" ? "Latest position" : "Driver's word on a call"))
+    const observed = ms(last.at)
+    if (observed === null || facts.now - observed > STALE_TRACKING_HOURS * HOUR) stale.push(last)
   }
-  if (!stale.length) return result("R10", "strong", title, "pass", `The latest position is less than ${STALE_TRACKING_HOURS} h old.`, null, sources)
-  const what = stale.map(({ last }) => last ? `the last position is from ${fmtDateTime(str(last.details.observed_at), null)}` : "no position has been received").join("; ")
+  if (!stale.length && !missing.length) {
+    const spoke = sources.some((source) => source.collection === "effect_events")
+    return result("R10", "strong", title, "pass", spoke
+      ? `The driver spoke on a call less than ${STALE_TRACKING_HOURS} h ago, after the last tracked position.`
+      : `The latest position is less than ${STALE_TRACKING_HOURS} h old.`, null, sources)
+  }
+  const what = [
+    ...stale.map((last) => last.collection === "tracking_observations"
+      ? `the last position is from ${fmtDateTime(last.at, null)}` : `the driver last spoke on a call at ${fmtDateTime(last.at, null)}`),
+    ...missing.map(() => "no position has been received"),
+  ].join("; ")
   if (alerts.length) {
     return result("R10", "strong", title, "pass", `Tracking is stale (${what}), but an open alert already covers the order.`, null,
       [...sources, ...alerts.map((alert) => ({ collection: "alerts", id: alert.id, label: `Alert ${alert.signal.toLowerCase().replace(/_/g, " ")}` }))])
@@ -214,6 +222,20 @@ function etaAfterPromise(facts: Facts): RuleResult {
   const end = str(promise.details.end_at)
   const zone = str(promise.details.timezone)
   if ((ms(eta) ?? 0) > (ms(end) ?? Infinity)) {
+    // A tracking ETA a call result superseded: the driver already answered on a call.
+    const tracked = latest.superseded ? rows(facts.bundle, latest.collection).find((row) => row.id === latest.recordId) : undefined
+    const answer = tracked ? currentRecord(facts.bundle, tracked) : undefined
+    if (answer && answer.id !== tracked?.id && answer.details.effect === "CALL_RESULT_RECORDED") {
+      const said = String(answer.details.claim ?? "")
+      const answerSources = [ref("effect_events", answer, "Driver's answer on a call"), ref("time_windows", promise, "Delivery promise")]
+      if (said.split("; ").includes(ON_TIME_CLAIM)) {
+        return result("R12", "strong", title, "pass",
+          `The tracking ETA ${fmtDateTime(eta, zone)} was after the promise end, but on a call the driver said: ${said}.`, null, answerSources)
+      }
+      return result("R12", "strong", title, "fail",
+        `The tracking ETA ${fmtDateTime(eta, zone)} is after the promise ends at ${fmtDateTime(end, zone)}, and on a call the driver said: ${said}. Decide what to tell the customer.`,
+        "show_person", answerSources)
+    }
     if (latest.reported) {
       return result("R12", "strong", title, "fail",
         `${latest.statedBy ?? "The driver"} reported an ETA of ${fmtDateTime(eta, zone)}, after the promise ends at ${fmtDateTime(end, zone)}. Decide what to tell the customer.`,
@@ -295,8 +317,8 @@ function nothingOpen(facts: Facts): RuleResult {
 
 /**
  * What a next check waits on, when it is the pickup site: a routine site call follows up.
- * Anything else (the customer, a seller hold, Ops' own review) goes to a person; tickets 07/08
- * turn that into a proposal or an operator question.
+ * Anything else (the customer, a seller hold, Ops' own review) becomes a proposal to the
+ * operator (proposals.ts `nextCheckDrafts`): a customer-side contact or an operator question.
  */
 const SITE_WAITS = new Set(["SITE_CONFIRMATION", "STOCK_CONTROL_REPLY"])
 
@@ -313,8 +335,8 @@ function nextCheckDue(facts: Facts, checks: NextCheck[]): RuleResult {
     return result("NEXT", "strong", title, "pass", `Not due yet: ${checks.map(what).join("; ")}.`, null, checks.map(source))
   }
   const toSite = due.every((check) => check.waitingOn !== null && SITE_WAITS.has(check.waitingOn))
-  const action: FirstAction = toSite && facts.callee ? "site_call" : "show_person"
-  const follow = action === "site_call" ? "a routine site call follows up" : "the open question is not the site's to answer, so it goes to a person"
+  const action: FirstAction = toSite && facts.callee ? "site_call" : "operator_proposal"
+  const follow = action === "site_call" ? "a routine site call follows up" : "the open question is not one a site call can settle, so the agent proposes the next step to the operator"
   const listed = due.map(what).join("; ")
   return result("NEXT", "strong", title, "fail", `${listed[0].toUpperCase()}${listed.slice(1)} ${due.length === 1 ? "is" : "are"} due; ${follow}.`, action, due.map(source))
 }
@@ -495,7 +517,7 @@ export const RULE_CATALOGUE: Record<RuleId, RuleInfo> = {
   R12: { id: "R12", strength: "strong", title: "Latest ETA within the delivery promise", firstAction: "Routine driver call (\"can you still deliver on time?\")" },
   R13: { id: "R13", strength: "strong", title: "Positioning costs match a travel reservation", firstAction: "Reviewer pass" },
   CLOSE: { id: "CLOSE", strength: "strong", title: "Nothing left open on the finished order", firstAction: "Shown to a person (finished orders only)" },
-  NEXT: { id: "NEXT", strength: "strong", title: "Scheduled next checks are followed up when due", firstAction: "Routine site call when the check waits on the pickup site; otherwise shown to a person" },
+  NEXT: { id: "NEXT", strength: "strong", title: "Scheduled next checks are followed up when due", firstAction: "Routine site call when the check waits on the pickup site; otherwise a proposal to the operator (a customer-side contact or an operator question)" },
   R4: { id: "R4", strength: "weak", title: "Handover details confirmed by someone about this order", firstAction: "Couldn't check; a routine site call when pickup is within 48 h and a contact is known" },
   R5: { id: "R5", strength: "weak", title: "Handover contacts on record and confirmed for this order", firstAction: "Couldn't check; a routine site call when pickup is within 48 h and a contact is known" },
   R6: { id: "R6", strength: "weak", title: "Delivery promise set by the customer", firstAction: "Couldn't check; a routine site call when pickup is within 48 h and a contact is known" },

@@ -76,7 +76,13 @@ test("a reported problem moves the live call to tier 2: the voice agent greets t
 })
 
 const LATE = "I'm stuck in traffic after an accident, I'll be about forty minutes late, around half past four."
-const NEW_ETA = { title: "Record the driver's new ETA", change: "Driver expects to deliver at about 16:30 local, after the promise ends at 16:00.", claim: "Expects to arrive around 16:30 local" }
+// A new arrival time is a reported ETA (`eta`, committed at once; supersedes.test.ts), never a
+// change. A change is something the order would have to do differently, such as another handover place.
+const NEXT_DOOR = "Nobody is here to take the car. Can I leave it with the dealership next door?"
+const LEAVE_NEXT_DOOR = {
+  title: "Change where the car is handed over", change: "Leave the car with the dealership next door, because nobody is at the delivery address to take it.",
+  claim: "Nobody at the delivery address; asks to leave the car with the dealership next door",
+}
 
 test("each spoken turn is transcribed, answered aloud by the audio model and checked; its cost goes on the meter", async () => {
   const voice = scriptedVoice(["I'm sorry to hear that. Is the road moving again, or are you still stopped?"])
@@ -115,15 +121,15 @@ test("each spoken turn is transcribed, answered aloud by the audio model and che
 })
 
 test("the agent never agrees to a change: a reply that does is replaced, and the change becomes a proposal for the operator's yes", async () => {
-  const voice = scriptedVoice(["No problem, I'll move your delivery to half past four."])
+  const voice = scriptedVoice(["No problem, just leave it next door."])
   const checker = scriptedChecker([{
-    heard: LATE, claims: ["Expects to arrive around 16:30 local"], changes: [NEW_ETA], replyOk: false,
-    replyIssue: "The draft agrees to move the delivery.", next: "resolved",
-    reply: "Thank you, I've noted that you expect to arrive around half past four. A colleague will review it with the customer. Goodbye.",
-    summary: "Stuck in traffic after an accident; expects to arrive around 16:30 local, after the promise.",
+    heard: NEXT_DOOR, claims: [LEAVE_NEXT_DOOR.claim], changes: [LEAVE_NEXT_DOOR], replyOk: false,
+    replyIssue: "The draft agrees to change the handover place.", next: "resolved",
+    reply: "Thank you, I've noted that nobody is there to take the car. A colleague will review it with the customer. Goodbye.",
+    summary: "Nobody at the delivery address; the driver asks to leave the car with the dealership next door.",
   }])
   const speech = scriptedSpeech()
-  const engine = await engineWith({ speech, voice: createVoiceAgent({ voice, ear: scriptedEar([LATE]), checker }) })
+  const engine = await engineWith({ speech, voice: createVoiceAgent({ voice, ear: scriptedEar([NEXT_DOOR]), checker }) })
   const call = (await toTier2(engine))!
 
   await engine.apply({ type: "voiceTurn", callId: call.id, audio: testClip() })
@@ -133,19 +139,20 @@ test("the agent never agrees to a change: a reply that does is replaced, and the
   const ended = row.calls[0]
   assert.equal(ended.outcome, "resolved")
   assert.equal(ended.tier, 2)
-  assert.ok(!ended.transcript.some((line) => /I'll move your delivery/.test(line.text)), "the agreeing reply is never said")
+  assert.ok(!ended.transcript.some((line) => /leave it next door/.test(line.text)), "the agreeing reply is never said")
   const reply = ended.transcript.filter((line) => line.by === "agent").at(-1)!
   assert.match(reply.text, /A colleague will review it/)
   assert.ok(speech.spoken.includes(reply.text), "spoken by text to speech instead")
   assert.equal(reply.path, "replaced")
   assert.match(ended.transcript.find((line) => line.check)?.text ?? "", /Audio reply not used/)
-  assert.deepEqual(ended.changes, [NEW_ETA])
-  assert.match(ended.summary ?? "", /expects to arrive around 16:30/)
+  assert.deepEqual(ended.changes, [LEAVE_NEXT_DOOR])
+  assert.match(ended.summary ?? "", /leave the car with the dealership next door/)
 
   const change = row.proposals.find((proposal) => proposal.kind === "change")
-  assert.ok(change, "the new ETA waits for the operator")
+  assert.ok(change, "the handover change waits for the operator")
   assert.equal(change.status, "proposed")
-  assert.equal(change.change, NEW_ETA.change)
+  assert.equal(change.change, LEAVE_NEXT_DOOR.change)
+  assert.ok(!row.effects.some((event) => event.type === "eta_reported"), "no arrival time was said, so no ETA is reported")
   assert.equal(row.group, "needs_action")
   assert.match(row.reason, /Waiting for your yes/)
   assert.equal(row.callLines.find((line) => line.line === "driver")?.status, "done", "the on-time check is covered")
@@ -155,7 +162,7 @@ test("when the audio model fails, the ear, the checker and text to speech comple
   const voice = scriptedVoice([], "OpenRouter 503: no audio provider available")
   const checker = scriptedChecker([
     { heard: LATE, claims: ["Expects to arrive around 16:30 local"], reply: "I'm sorry to hear that. Are you still stopped, or moving again?", replyOk: null },
-    { heard: "Moving again slowly.", claims: ["Expects to arrive around 16:30 local", "Traffic is moving again slowly"], changes: [NEW_ETA], next: "resolved", reply: "Thank you, I've noted it. Goodbye.", summary: "Late after an accident; expects 16:30 local." },
+    { heard: "Moving again slowly.", claims: ["Expects to arrive around 16:30 local", "Traffic is moving again slowly"], eta: { local: "16:30", claim: "Expects to arrive around 16:30 local" }, next: "resolved", reply: "Thank you, I've noted it. Goodbye.", summary: "Late after an accident; expects 16:30 local." },
   ])
   const speech = scriptedSpeech()
   const engine = await engineWith({ speech, voice: createVoiceAgent({ voice, ear: scriptedEar([LATE, "Moving again slowly."]), checker }) })
@@ -174,6 +181,9 @@ test("when the audio model fails, the ear, the checker and text to speech comple
   assert.equal(ended.outcome, "resolved")
   assert.deepEqual(ended.claims.slice(-2), ["Expects to arrive around 16:30 local", "Traffic is moving again slowly"])
   assert.ok(ended.transcript.filter((line) => line.path).every((line) => line.path === "fallback"))
+  const reported = (await order(engine, "CD-420437")).effects.find((event) => event.type === "eta_reported")
+  assert.ok(reported && reported.type === "eta_reported", "the new arrival time is a reported ETA, not a change proposal")
+  assert.equal(reported.etaAt, "2026-10-21T14:30:00.000Z")
 })
 
 test("an unresolved tier-2 call ends politely as a handover with the open question and a next step", async () => {

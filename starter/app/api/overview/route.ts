@@ -52,7 +52,10 @@ export async function GET(request: NextRequest) {
   const laneOrdered = LANE_ORDER.flatMap((lane) => matches.filter((card) => card.displayLane === lane).sort(laneSort(lane)))
   const needs = laneOrdered.filter((card) => card.verdict?.group === "needs_action")
     .sort((a, b) => { const x = urgency(a); const y = urgency(b); return x && y ? compareUrgency(x, y) : 0 })
-  const visible = [...needs, ...laneOrdered.filter((card) => card.verdict?.group !== "needs_action")]
+  // `?view=board`: the starter's lane board (kept at /board for reference) reads the cards in lane order, without the engine's verdict.
+  const visible = request.nextUrl.searchParams.get("view") === "board"
+    ? laneOrdered.map(({ verdict: _verdict, ...card }) => card)
+    : [...needs, ...laneOrdered.filter((card) => card.verdict?.group !== "needs_action")]
   const body: Overview = { snapshotAt, total: all.length, counts, attentionCounts, visible, query, groupCounts: state.groupCounts, now: state.now }
   return NextResponse.json(body)
 }

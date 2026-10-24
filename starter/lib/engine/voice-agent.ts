@@ -23,6 +23,7 @@ import { DEFAULT_REVIEWER_MODEL } from "@/lib/reviewer/reviewer"
 import { rows, str, type Bundle } from "@/lib/present/bundle"
 import { localTime, type Call, type CallChange } from "./calls"
 import { latestEta } from "./eta"
+import { selectedPromise } from "./order-facts"
 import type { Speech } from "./speech"
 import { estimateSeconds } from "./speech"
 
@@ -186,7 +187,7 @@ export function briefFor(bundle: Bundle, call: Call): string {
   const name = call.callee.name ? call.callee.name.split(",")[0] : call.callee.handle
   const windowOf = (purpose: string) => rows(bundle, "time_windows").find((row) => row.details.purpose === purpose && row.details.is_selected === true)
   const facts: string[] = []
-  const promise = windowOf("CUSTOMER_DELIVERY_PROMISE")
+  const promise = selectedPromise(bundle)
   const slot = windowOf("SELECTED_PICKUP_SLOT")
   if (call.line === "driver") {
     const start = str(promise?.details.start_at)

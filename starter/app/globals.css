@@ -258,6 +258,8 @@ ul, ol { padding: 0; list-style: none; }
 .queue-head h1 { font-size: 44px; }
 .queue-sub { margin-top: 10px; font-size: 15px; color: var(--muted); }
 .queue-sub b { font-weight: 600; color: var(--ink); }
+.queue-link { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
+.queue-link:hover { color: var(--ink); }
 .queue-tools { display: grid; gap: 12px; margin-top: 18px; }
 .filters { display: flex; flex-wrap: wrap; gap: 4px; }
 .filter { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border: 0; border-radius: var(--r-pill); background: var(--sand-50); font-size: 14px; font-weight: 600; color: var(--brown); white-space: nowrap; transition: background-color 0.18s var(--ease), color 0.18s var(--ease); }

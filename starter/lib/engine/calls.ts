@@ -30,14 +30,15 @@
 import { createHash } from "node:crypto"
 import { rows, str, type Bundle } from "@/lib/present/bundle"
 import { endpointContactType, pickupCallAllowed } from "./contacts"
-import { isCustomerSide, type ContactType } from "@/lib/reviewer/policy"
+import { CONTACT_TYPE_LABEL, isCustomerSide, type ContactType } from "@/lib/reviewer/policy"
 import {
   AVAILABLE_OPTIONS, CALLBACK_MINUTES, CALLBACK_OPTIONS, CALLBACK_QUESTION, callbackLine, CLOSING, greeting, HANDOVER_LINE,
   questionsFor, RETRY_PREFIX, type KeyOption, type OptionEffect, type Question, type Topic,
 } from "./call-script"
-import type { PlannedAction, SourceRef } from "./checks"
+import type { PlannedAction, RuleId, SourceRef } from "./checks"
 import type { DueItem } from "./due"
 import { latestEta } from "./eta"
+import { isFinished, movingAssignments, selectedPromise } from "./order-facts"
 import type { Proposal } from "./proposals"
 import type { TurnCheck, TurnPath } from "./voice-agent"
 
@@ -591,7 +592,7 @@ export type CallLineView = {
 }
 
 /** A planned call the agent will not make: the callee is on the customer side (ADR 0001). */
-export type BlockedCall = { line: CallLine; ruleIds: string[]; text: string }
+export type BlockedCall = { line: CallLine; ruleIds: RuleId[]; text: string }
 
 export type OrderCalls = {
   orderId: string
@@ -604,13 +605,22 @@ export type OrderCalls = {
   carried: Set<string>
 }
 
-const RULE_TOPIC_TITLE: Record<string, string> = {
-  R1: "Signed release", R4: "Contact confirmed only from the site profile", R5: "Contact not confirmed", R6: "Delivery promise not from the customer",
+/**
+ * A call topic's title per rule: what the call asks the callee about. R6 (the delivery
+ * promise was not set by the customer) asks the pickup place only whether the car will be
+ * ready in the booked slot (call-script.ts "ready"); the promise itself stays the
+ * customer's and is never discussed on a call (ADR 0001).
+ */
+const RULE_TOPIC_TITLE: Partial<Record<RuleId, string>> = {
+  R1: "Signed release", R4: "Contact confirmed only from the site profile", R5: "Contact not confirmed", R6: "Car ready in the booked pickup slot",
   NEXT: "Next check due", R10: "Tracking is stale", R12: "ETA after the promise",
 }
 
-/** The rules whose site call is a pickup-readiness call (release, contact, car ready). */
-const PICKUP_READINESS_RULES = new Set(["R1", "R4", "R5", "R6", "NEXT"])
+/**
+ * The rules whose site call is a pickup-readiness call (release, contact, car ready). R6 stays:
+ * its question is the readiness one, which keeps the 18 planned site calls the user approved.
+ */
+const PICKUP_READINESS_RULES = new Set<RuleId>(["R1", "R4", "R5", "R6", "NEXT"])
 
 /**
  * The contact type of a planned call's endpoint (ADR 0001, contacts.ts), and whether the
@@ -618,7 +628,7 @@ const PICKUP_READINESS_RULES = new Set(["R1", "R4", "R5", "R6", "NEXT"])
  * third-party site, yes; the customer side only for a pickup-readiness call (policy row
  * pickup-readiness: a pickup endpoint, every topic a pickup-readiness rule); otherwise no.
  */
-function plannedContact(bundle: Bundle, endpointId: string, ruleIds: string[]): { type: ContactType; allowed: boolean } {
+function plannedContact(bundle: Bundle, endpointId: string, ruleIds: RuleId[]): { type: ContactType; allowed: boolean } {
   const endpoint = rows(bundle, "order_endpoint_details").find((row) => row.id === endpointId)
   if (!endpoint) return { type: "third_party_site", allowed: true }
   const type = endpointContactType(bundle, endpoint)
@@ -636,12 +646,10 @@ export const TIGHT_ETA_MINUTES = 10
  * (story 71, CD-420437). R12 covers an ETA after the end; this is the near miss.
  */
 export function tightEta(bundle: Bundle): { text: string; recordId: string } | null {
-  const status = String(bundle.order.status)
-  if (status === "DELIVERED" || status === "CANCELLED") return null
-  const moving = rows(bundle, "work_assignments").some((row) => row.details.order_id === bundle.order.id && row.details.status === "IN_PROGRESS")
-  if (!moving) return null
-  const windows = rows(bundle, "time_windows").filter((row) => row.details.purpose === "CUSTOMER_DELIVERY_PROMISE")
-  const promise = windows.find((row) => row.details.is_selected === true) ?? null
+  // The same reading as R12 (order-facts.ts): a finished order, no car on the road or no
+  // selected promise on the final delivery point means nothing to ask.
+  if (isFinished(bundle) || !movingAssignments(bundle).length) return null
+  const promise = selectedPromise(bundle)
   // The latest ETA as it stands now: a driver's reported time replaces the tracking
   // estimate, and an estimate a call already answered is no reason to ask again.
   const latest = latestEta(bundle)
@@ -671,9 +679,15 @@ export function askedRecords(sources: SourceRef[] | undefined): string[] {
  * party's statement stays live: a driver does not overwrite what the customer said.
  */
 export function proposalRecords(proposal: Proposal, callee: { name: string | null; handle: string }): string[] {
-  const marks = [callee.handle, callee.name].filter((mark): mark is string => !!mark).map((mark) => mark.toLowerCase())
+  const byCallee = statedByCallee(callee)
   return [...new Set(proposal.evidence.filter((cited) => cited.role === "conflict"
-    && (!cited.statedBy || marks.some((mark) => cited.statedBy!.toLowerCase().includes(mark)))).map((cited) => cited.recordId))]
+    && (!cited.statedBy || byCallee(cited.statedBy))).map((cited) => cited.recordId))]
+}
+
+/** Whether a record's `stated_by` names the callee (their handle or name appears in it). */
+export function statedByCallee(callee: { name: string | null; handle: string }): (statedBy: string) => boolean {
+  const marks = [callee.handle, callee.name].filter((mark): mark is string => !!mark).map((mark) => mark.toLowerCase())
+  return (statedBy) => marks.some((mark) => statedBy.toLowerCase().includes(mark))
 }
 
 /**
@@ -691,8 +705,7 @@ export function answeredRecords(call: Call): string[] {
 }
 
 export function driverOf(bundle: Bundle): CallCallee | null {
-  const moving = rows(bundle, "work_assignments").filter((row) => row.details.order_id === bundle.order.id && row.details.status === "IN_PROGRESS")
-  const assignment = moving[0] ?? rows(bundle, "work_assignments").find((row) => row.details.order_id === bundle.order.id)
+  const assignment = movingAssignments(bundle)[0] ?? rows(bundle, "work_assignments").find((row) => row.details.order_id === bundle.order.id)
   const driverId = str(assignment?.details.driver_id)
   if (!assignment || !driverId) return null
   return { name: bundle.dir.driverName(driverId), handle: driverId, role: "driver", contactType: "driver", recordId: assignment.id }
@@ -725,7 +738,7 @@ export function orderCalls(bundle: Bundle, planned: PlannedAction[], proposals: 
     if (action.kind === "site_call" && action.callee) {
       const { type, allowed } = plannedContact(bundle, action.callee.endpointId, action.ruleIds)
       if (!allowed) {
-        blocked.push({ line, ruleIds: action.ruleIds, text: `No call to ${action.callee.name ?? action.callee.handle}: a ${type === "customer_owned_site" ? "customer-owned site" : "contact the customer gave"} is customer side and this is not a pickup-readiness call, so the agent only proposes.` })
+        blocked.push({ line, ruleIds: action.ruleIds, text: `No call to ${action.callee.name ?? action.callee.handle}: a ${CONTACT_TYPE_LABEL[type].toLowerCase()} is customer side and this is not a pickup-readiness call, so the agent only proposes.` })
         continue
       }
       callee = { name: action.callee.name, handle: action.callee.handle, role: action.callee.role, contactType: type, recordId: action.callee.endpointId }
