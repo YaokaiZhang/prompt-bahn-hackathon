@@ -22,7 +22,7 @@ export function GroupPill({ group, urgent = false }: { group: Group; urgent?: bo
 }
 
 const FIRST_ACTION: Record<FirstAction, string> = {
-  site_call: "routine site call", driver_call: "routine driver call", reviewer_pass: "reviewer pass", show_person: "shown to a person",
+  site_call: "routine site call", driver_call: "routine driver call", reviewer_pass: "reviewer pass", show_person: "shown to a person", operator_proposal: "a proposal to you",
 }
 
 /** The folded record section on the order page that holds each collection. */
@@ -51,7 +51,7 @@ function Sources({ orderId, sources, samePage }: { orderId: string; sources: Sou
 const OUTCOME_ICON = { fail: "alert", unknown: "note", pass: "check" } as const
 
 function RuleItem({ orderId, rule, samePage }: { orderId: string; rule: RuleResult; samePage: boolean }) {
-  const tone: Tone = rule.outcome === "fail" ? (rule.firstAction === "show_person" ? "danger" : "warn") : rule.outcome === "pass" ? "ok" : "neutral"
+  const tone: Tone = rule.outcome === "fail" ? (rule.firstAction === "show_person" || rule.firstAction === "operator_proposal" ? "danger" : "warn") : rule.outcome === "pass" ? "ok" : "neutral"
   return <li className="check">
     <Icon name={OUTCOME_ICON[rule.outcome]} className={`tone-${tone}`} />
     <div>

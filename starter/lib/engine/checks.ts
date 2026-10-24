@@ -15,9 +15,12 @@ export type SourceRef = { collection: string; id: string; label: string }
  * What a rule asks for first when it fails (or, for a weak rule, when it plans a call):
  * - `site_call` / `driver_call`: a routine tier-1 call, no approval needed;
  * - `reviewer_pass`: the reviewer reads the order's records;
- * - `show_person`: the order goes to Needs action with the evidence.
+ * - `show_person`: the order goes to Needs action with the evidence;
+ * - `operator_proposal`: the agent drafts the next step as a proposal to the operator
+ *   (a customer-side contact or an operator question, proposals.ts), which puts the
+ *   order in Needs action until the operator decides it (spec story 69).
  */
-export type FirstAction = "site_call" | "driver_call" | "reviewer_pass" | "show_person"
+export type FirstAction = "site_call" | "driver_call" | "reviewer_pass" | "show_person" | "operator_proposal"
 
 /**
  * `pass`: checked and fine. `fail`: the rule fired. `unknown`: it could not be

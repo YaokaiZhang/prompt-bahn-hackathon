@@ -323,8 +323,8 @@ function nothingOpen(facts: Facts): RuleResult {
 
 /**
  * What a next check waits on, when it is the pickup site: a routine site call follows up.
- * Anything else (the customer, a seller hold, Ops' own review) goes to a person; tickets 07/08
- * turn that into a proposal or an operator question.
+ * Anything else (the customer, a seller hold, Ops' own review) becomes a proposal to the
+ * operator (proposals.ts `nextCheckDrafts`): a customer-side contact or an operator question.
  */
 const SITE_WAITS = new Set(["SITE_CONFIRMATION", "STOCK_CONTROL_REPLY"])
 
@@ -341,8 +341,8 @@ function nextCheckDue(facts: Facts, checks: NextCheck[]): RuleResult {
     return result("NEXT", "strong", title, "pass", `Not due yet: ${checks.map(what).join("; ")}.`, null, checks.map(source))
   }
   const toSite = due.every((check) => check.waitingOn !== null && SITE_WAITS.has(check.waitingOn))
-  const action: FirstAction = toSite && facts.callee ? "site_call" : "show_person"
-  const follow = action === "site_call" ? "a routine site call follows up" : "the open question is not the site's to answer, so it goes to a person"
+  const action: FirstAction = toSite && facts.callee ? "site_call" : "operator_proposal"
+  const follow = action === "site_call" ? "a routine site call follows up" : "the open question is not one a site call can settle, so the agent proposes the next step to the operator"
   const listed = due.map(what).join("; ")
   return result("NEXT", "strong", title, "fail", `${listed[0].toUpperCase()}${listed.slice(1)} ${due.length === 1 ? "is" : "are"} due; ${follow}.`, action, due.map(source))
 }
@@ -523,7 +523,7 @@ export const RULE_CATALOGUE: Record<RuleId, RuleInfo> = {
   R12: { id: "R12", strength: "strong", title: "Latest ETA within the delivery promise", firstAction: "Routine driver call (\"can you still deliver on time?\")" },
   R13: { id: "R13", strength: "strong", title: "Positioning costs match a travel reservation", firstAction: "Reviewer pass" },
   CLOSE: { id: "CLOSE", strength: "strong", title: "Nothing left open on the finished order", firstAction: "Shown to a person (finished orders only)" },
-  NEXT: { id: "NEXT", strength: "strong", title: "Scheduled next checks are followed up when due", firstAction: "Routine site call when the check waits on the pickup site; otherwise shown to a person" },
+  NEXT: { id: "NEXT", strength: "strong", title: "Scheduled next checks are followed up when due", firstAction: "Routine site call when the check waits on the pickup site; otherwise a proposal to the operator (a customer-side contact or an operator question)" },
   R4: { id: "R4", strength: "weak", title: "Handover details confirmed by someone about this order", firstAction: "Couldn't check; a routine site call when pickup is within 48 h and a contact is known" },
   R5: { id: "R5", strength: "weak", title: "Handover contacts on record and confirmed for this order", firstAction: "Couldn't check; a routine site call when pickup is within 48 h and a contact is known" },
   R6: { id: "R6", strength: "weak", title: "Delivery promise set by the customer", firstAction: "Couldn't check; a routine site call when pickup is within 48 h and a contact is known" },

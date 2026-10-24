@@ -18,7 +18,7 @@ import { writeProse, type ProseOptions } from "./digest-prose"
 import { becameDue, digestDueItems, dueAsOf, nextCheckItems, nextDueAfter, type DueItem } from "./due"
 import { applyEffects, checkEffect, defaultFact, effectId, effectTarget, effectText, isCustomerStatement, statementsBy, type EffectEvent, type EffectInput, type EffectSpec, type EffectWrite } from "./effects"
 import {
-  answersFor, changeDraft, changeEffect, instructionsFor, proposalsFor, type OrderProposals, type Proposal, type StoredProposalEvent, type Unreachable,
+  answeredBy, answersFor, changeDraft, changeEffect, instructionsFor, nextCheckDrafts, proposalsFor, type OrderProposals, type Proposal, type StoredProposalEvent, type Unreachable,
 } from "./proposals"
 import { createReviewLayer, reviewTotals, type OrderReview, type ReviewInputs, type ReviewOptions, type ReviewTotals } from "./reviews"
 import { buildFleet, evaluateRules, type Evaluation } from "./rules"
@@ -339,7 +339,7 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
       const bundle = bundleOf(order.id)
       const evaluation = evaluations.get(order.id)!
       const review = read.get(order.id)!
-      const work = proposalsFor(bundle, review, events.get(order.id) ?? [])
+      const work = proposalsFor(bundle, review, events.get(order.id) ?? [], nextCheckDrafts(bundle, evaluation.rules))
       // A done review fulfils the reviewer pass (verdictFor); the call lines carry the planned calls.
       return {
         bundle, evaluation, review, work, effects: effects.get(order.id) ?? [],
@@ -763,7 +763,7 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
           // A new version of the point the question settles; it replaces the customer side's own earlier statements on it.
           effect: {
             type: "customer_answer_recorded", from: `${name} (${proposal.contact.typeLabel.toLowerCase()})`, question: proposal.script, answer,
-            fact: { key: `answer:${proposal.id}`, label: proposal.script }, supersedes: statementsBy(proposal.evidence, isCustomerStatement), answers: [proposal.id],
+            fact: { key: `answer:${proposal.id}`, label: proposal.script }, supersedes: answeredBy(proposal, isCustomerStatement), answers: [proposal.id],
           },
         }, await clock())
         const from = `${name} (${proposal.contact.typeLabel.toLowerCase()}), recorded by the operator`
@@ -783,7 +783,7 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
         // The operator's own answer needs no further yes: it is committed as an attributed note at once.
         await commitEffects([{
           type: "operator_answer_recorded", question: proposal.script, answer, orderId: proposal.orderId, by: "operator", source: proposal.id,
-          fact: { key: `answer:${proposal.id}`, label: proposal.script }, supersedes: statementsBy(proposal.evidence, (by) => /^operator(:|$)/i.test(by)), answers: [proposal.id],
+          fact: { key: `answer:${proposal.id}`, label: proposal.script }, supersedes: answeredBy(proposal, (by) => /^operator(:|$)/i.test(by)), answers: [proposal.id],
         }])
         await rereview(proposal.orderId)
         break
