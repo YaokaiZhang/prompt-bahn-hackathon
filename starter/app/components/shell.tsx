@@ -8,7 +8,7 @@ import { DemoClock } from "./demo-clock"
 import { BahnLogo } from "./logo"
 import { PersonaSwitch, usePersona } from "./persona"
 
-export type Section = "orders" | "briefing" | "inbox" | "customers" | "drivers" | "sites"
+export type Section = "orders" | "briefing" | "inbox" | "customers" | "drivers" | "sites" | "rules"
 
 const LINKS: { section: Section; href: string; label: string }[] = [
   { section: "orders", href: "/", label: "Orders" },
@@ -17,6 +17,7 @@ const LINKS: { section: Section; href: string; label: string }[] = [
   { section: "customers", href: "/customers", label: "Customers" },
   { section: "drivers", href: "/drivers", label: "Drivers" },
   { section: "sites", href: "/sites", label: "Places" },
+  { section: "rules", href: "/rules", label: "Rules" },
 ]
 
 /**

@@ -74,35 +74,66 @@ export type Verdict = {
 /** What grouping needs from the order's review (ticket 06). */
 export type ReviewSignal = { status: "reviewed" | "not_reviewed"; recordsRead: number; findings: { title: string }[] }
 
+/** What grouping needs from the order's proposals (ticket 07, lib/engine/proposals.ts). */
+export type ProposalSignal = {
+  title: string
+  kind: "call" | "operator_question" | "customer_contact" | "change"
+  status: "proposed" | "approved" | "answered" | "dismissed"
+  waitingOn: "operator" | "agent" | null
+  contact: { name: string }
+}
+
+/** The order's proposals, and findings the agent cannot act on for lack of a contact. */
+export type WorkSignal = { proposals: ProposalSignal[]; unreachable: { title: string }[] }
+
+const sentence = (text: string) => text.replace(/[.]$/, "")
+
+function waitingText(proposal: ProposalSignal): string {
+  if (proposal.status === "proposed") return `Waiting for your yes: ${sentence(proposal.title)}.`
+  if (proposal.kind === "customer_contact") return `Customer contact is with you: ${sentence(proposal.title)}.`
+  if (proposal.kind === "operator_question") return `Question for you: ${sentence(proposal.title)}.`
+  return `Waiting on you: ${sentence(proposal.title)}.`
+}
+
 /**
- * The one place groups are decided. Rules first (ticket 03), then the reviewer:
- * - a strong fail shown to a person, or any reviewer finding -> Needs action;
- * - else planned agent work -> In progress (a done review fulfils the rules' reviewer pass);
+ * The one place groups are decided. Rules first (ticket 03), then the reviewer's
+ * findings as proposals under the approval policy (ticket 07):
+ * - a strong fail shown to a person, or a proposal waiting on the operator (a yes, a
+ *   customer contact handed over, a question) -> Needs action;
+ * - else planned agent work or a routine call the agent will make -> In progress
+ *   (a done review fulfils the rules' reviewer pass);
  * - else finished with nothing open -> Done; else Normal, which says what the reviewer read.
- * Ticket 07 refines findings: a routine-policy finding becomes a call (In progress).
+ * Decided proposals (dismissed, answered, an approved change) no longer hold an order.
+ * A finding with no contact on record is a gap ("couldn't check"), not a decision.
  */
-export function verdictFor(evaluation: Evaluation, review: ReviewSignal | null = null): Verdict {
+export function verdictFor(evaluation: Evaluation, review: ReviewSignal | null = null, work: WorkSignal = { proposals: [], unreachable: [] }): Verdict {
   const { rules, urgency, finished } = evaluation
   const reviewed = review?.status === "reviewed"
   const planned = reviewed ? evaluation.planned.filter((action) => action.kind !== "reviewer_pass") : evaluation.planned
   const decisions = rules.filter((row) => row.outcome === "fail" && row.firstAction === "show_person")
-  const findings = reviewed ? review.findings : []
-  if (decisions.length || findings.length) {
-    const reason = [
-      ...findings.map((finding) => `Reviewer: ${finding.title.replace(/[.]$/, "")}.`),
-      ...decisions.map((row) => row.detail),
-    ].join(" ")
+  const forOperator = work.proposals.filter((proposal) => proposal.waitingOn === "operator")
+  if (decisions.length || forOperator.length) {
+    const reason = [...forOperator.map(waitingText), ...decisions.map((row) => row.detail)].join(" ")
     return { group: "needs_action", reason, rules, planned, urgency }
   }
-  if (planned.length) {
-    return { group: "in_progress", reason: planned.map((action) => action.reason).join(" "), rules, planned, urgency }
+  const forAgent = work.proposals.filter((proposal) => proposal.waitingOn === "agent")
+  if (planned.length || forAgent.length) {
+    const reason = [
+      ...forAgent.map((proposal) => `Agent will call ${proposal.contact.name}: ${sentence(proposal.title)}.`),
+      ...planned.map((action) => action.reason),
+    ].join(" ")
+    return { group: "in_progress", reason, rules, planned, urgency }
   }
-  const readNote = reviewed ? `Reviewer read ${review.recordsRead} records, no conflict.` : null
-  const gaps = rules.filter((row) => row.outcome === "unknown").length
+  const decided = work.proposals.length
+  const readNote = reviewed
+    ? decided ? `Reviewer read ${review.recordsRead} records; ${decided === 1 ? "its proposal is" : `all ${decided} proposals are`} decided.` : `Reviewer read ${review.recordsRead} records, no conflict.`
+    : null
+  const unreachable = work.unreachable.map((finding) => `Reviewer: ${sentence(finding.title)}, but no contact is on record, so it couldn't be checked.`)
+  const gaps = rules.filter((row) => row.outcome === "unknown").length + work.unreachable.length
   if (finished && gaps === 0) return { group: "done", reason: ["Finished with nothing open.", readNote].filter(Boolean).join(" "), rules, planned, urgency }
   const checked = rules.length
   const ruleNote = gaps ? `The rules found nothing to act on; ${gaps === 1 ? "one gap" : `${gaps} gaps`} couldn't be checked.` : `All ${checked} checks passed.`
-  return { group: "normal", reason: [readNote, ruleNote].filter(Boolean).join(" "), rules, planned, urgency }
+  return { group: "normal", reason: [readNote, ...unreachable, ruleNote].filter(Boolean).join(" "), rules, planned, urgency }
 }
 
 const URGENT_FIRST = (a: Urgency, b: Urgency) => Number(b.urgent) - Number(a.urgent)

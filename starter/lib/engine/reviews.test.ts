@@ -56,13 +56,13 @@ test("the sweep reviews every order; a quiet Normal order says how many records 
   assert.match(quiet.reason, new RegExp(`Reviewer read ${quiet.review.recordsRead} records, no conflict`))
 })
 
-test("an order with a finding moves to Needs action, with the cited records quoted", async () => {
+test("a finding quotes its cited records; a routine site finding puts the order In progress (the agent calls)", async () => {
   const engine = await testEngine({ gateway: await testGateway() })
   const before = find((await engine.state()).orders, "CD-420516")
   assert.notEqual(before.group, "needs_action")
   const order = find((await engine.apply({ type: "review" })).orders, "CD-420516")
-  assert.equal(order.group, "needs_action")
-  assert.match(order.reason, /Pickup key holder unknown/)
+  assert.equal(order.group, "in_progress")
+  assert.match(order.reason, /Agent will call .*Pickup key holder unknown/)
   const [finding] = order.review.findings
   assert.equal(finding.policyRow, "site-routine")
   const note = finding.cited.find((cited) => cited.recordId === "note-x7b4b75e5977108cd")
@@ -139,6 +139,6 @@ test("reviews swept by one process are read by another from the Postgres cache, 
   const order = find((await app.apply({ type: "reset" })).orders, "CD-420516")
   assert.equal(order.review.status, "reviewed")
   assert.equal(order.review.cost, 0.0213)
-  assert.equal(order.group, "needs_action")
+  assert.equal(order.group, "in_progress")
   await db.delete(reviewResults)
 })

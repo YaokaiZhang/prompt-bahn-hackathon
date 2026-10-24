@@ -157,6 +157,8 @@ export type FactsOrder = {
   urgency: { urgent: boolean; reasons: UrgentLine["reasons"]; dueAt: string | null }
   rules: { title: string; outcome: string; firstAction: string | null; strength: string }[]
   review: { status: string; findings: unknown[] }
+  /** Ticket 07: what keeps a proposal open (`waitingOn`) decides whether it holds the order in Needs action. */
+  proposals: { kind: string; status: string; waitingOn: "operator" | "agent" | null }[]
 }
 
 const ref = (row: FactsOrder): DigestOrder => ({ orderId: row.id, reference: row.reference })
@@ -185,7 +187,11 @@ export function digestFacts(input: {
   const causes = new Map<string, number>()
   for (const row of needs) {
     const labels = new Set<string>()
-    if (row.review.status === "reviewed" && row.review.findings.length) labels.add("Reviewer finding")
+    // Ticket 07: findings reach Needs action only as proposals waiting on the operator.
+    for (const proposal of row.proposals) {
+      if (proposal.waitingOn !== "operator") continue
+      labels.add(proposal.status === "proposed" ? "Proposal waiting for a yes" : proposal.kind === "operator_question" ? "Question for the operator" : "Customer contact with the operator")
+    }
     for (const rule of row.rules) if (rule.outcome === "fail" && rule.firstAction === "show_person") labels.add(rule.title)
     if (!labels.size) labels.add("Other")
     for (const label of labels) causes.set(label, (causes.get(label) ?? 0) + 1)

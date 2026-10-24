@@ -366,6 +366,82 @@ ul, ol { padding: 0; list-style: none; }
   .finding-facts > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 }
 
+/* ── Proposals, batch approval, Rules page (ticket 07) ──────────────────── */
+.proposal { margin-top: 10px; padding: 16px 18px 14px; border-radius: var(--r-md); background: var(--birch); scroll-margin-top: calc(var(--bar-h) + 16px); }
+.proposal:target { box-shadow: inset 0 0 0 2px var(--ink); }
+.proposal-head { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 12px; align-items: start; }
+.proposal-head .icon { margin-top: 2px; }
+.proposal-title { font-size: 16px; font-weight: 700; line-height: 1.35; color: var(--ink); }
+.proposal-dismissed .proposal-title, .proposal-answered .proposal-title { color: var(--muted); }
+.proposal .finding-facts > div { grid-template-columns: 112px minmax(0, 1fr); }
+.proposal-script { margin: 8px 0 0 32px; padding: 12px 16px; border-radius: var(--r-sm); background: var(--sand-50); font-size: 15px; font-weight: 600; line-height: 1.45; color: var(--ink); max-width: 72ch; white-space: pre-wrap; }
+.proposal-decide, .proposal-form { margin: 14px 0 0 32px; }
+.proposal-will { font-size: 14.5px; color: var(--body); max-width: 72ch; }
+.proposal-will b { font-weight: 600; color: var(--ink); }
+.proposal-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.proposal-label { display: block; margin-bottom: 6px; font-size: 13.5px; font-weight: 600; color: var(--muted); }
+.proposal textarea { display: block; width: 100%; max-width: 72ch; padding: 12px 16px; border: 0; border-radius: var(--r-md); background: var(--sand-50); font: inherit; font-size: 15px; line-height: 1.45; color: var(--ink); resize: vertical; transition: background-color 0.18s var(--ease), box-shadow 0.18s var(--ease); }
+.proposal textarea:hover { background: var(--birch); box-shadow: inset 0 0 0 1px var(--sand-200); }
+.proposal textarea:focus { outline: 0; background: var(--birch); box-shadow: inset 0 0 0 2px var(--ink); }
+.proposal-error { margin: 10px 0 0 32px; padding: 10px 14px; border-radius: var(--r-sm); background: var(--red-bg); color: var(--red-ink); font-size: 14px; }
+.proposal .more { margin: 12px 0 0 32px; }
+.proposal-history { list-style: none; display: grid; gap: 6px; margin: 8px 0 0; padding: 0; }
+.proposal-history li { display: grid; grid-template-columns: 96px 150px minmax(0, 1fr); gap: 10px; font-size: 13.5px; color: var(--body); }
+.proposal-history-at { color: var(--muted); }
+.proposal-history-by { font-weight: 600; color: var(--brown); }
+.policy-link { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; color: var(--body); font-size: 14px; }
+.policy-link span:last-child { text-decoration: underline; text-decoration-color: var(--sand-200); text-underline-offset: 3px; }
+.policy-link:hover span:last-child { text-decoration-color: var(--ink); }
+.review-unreachable { margin-top: 8px; }
+
+.queue-batch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; }
+.queue-batch span { font-size: 14px; color: var(--muted); }
+.batch { padding: 24px 28px 0; animation: rise 0.28s var(--ease); }
+.batch-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.batch-title { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+.batch-sub { margin-top: 6px; font-size: 15px; color: var(--muted); max-width: 70ch; }
+.batch-done { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 10px 14px; border-radius: var(--r-sm); background: var(--green-bg); color: var(--green-ink); font-size: 14px; font-weight: 600; }
+.batch-list { list-style: none; display: grid; gap: 8px; margin: 16px 0 0; padding: 0; }
+.batch-row { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; padding: 16px 18px; border-radius: var(--r-md); background: var(--birch); }
+.batch-check input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--ink); }
+.batch-row-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; font-size: 14px; font-weight: 600; }
+.batch-row-title { margin-top: 4px; font-size: 16px; font-weight: 700; line-height: 1.35; }
+.batch-row .proposal-script { margin-left: 0; }
+.batch-row .proposal-will { margin-top: 8px; }
+.batch-meta { margin-top: 6px; font-size: 13.5px; color: var(--muted); }
+.batch-actions { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px -28px 0; padding: 14px 28px 20px; background: var(--sand-50); box-shadow: 0 -10px 16px -12px rgba(18, 17, 14, 0.18); }
+.batch-actions .hint { font-size: 14px; color: var(--muted); }
+
+.rules-page h1 { font-size: 44px; }
+.rules-intro { margin-top: 12px; font-size: 17px; color: var(--body); max-width: 70ch; }
+.rules-section { margin-top: 48px; }
+.rules-section h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+.rules-section > p { margin-top: 6px; font-size: 15px; color: var(--muted); max-width: 72ch; }
+.rules-list { list-style: none; display: grid; gap: 8px; margin: 16px 0 0; padding: 0; }
+.rule-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.4fr); gap: 8px 20px; padding: 16px 20px; border-radius: 18px; background: var(--sand-50); scroll-margin-top: calc(var(--bar-h) + 16px); }
+.rule-row:target { background: var(--sand-100); box-shadow: inset 0 0 0 2px var(--ink); }
+.rule-row dt { font-size: 13px; font-weight: 600; color: var(--muted); }
+.rule-row dd { margin: 4px 0 0; font-size: 15px; color: var(--body); }
+.rule-row .rule-name { font-size: 16px; font-weight: 700; color: var(--ink); }
+.rule-id { display: inline-block; margin-right: 8px; }
+.rule-types { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+@media (max-width: 900px) {
+  .proposal { padding: 14px; }
+  .proposal-script, .proposal-decide, .proposal-form, .proposal-error, .proposal .more { margin-left: 0; }
+  .proposal-head { grid-template-columns: 20px minmax(0, 1fr); }
+  .proposal-head .pill { grid-column: 2; justify-self: start; }
+  .proposal .finding-facts > div { grid-template-columns: minmax(0, 1fr); }
+  .proposal-history li { grid-template-columns: minmax(0, 1fr); gap: 0; padding-bottom: 6px; border-bottom: 1px solid var(--sand-50); }
+  .rules-page h1 { font-size: 34px; }
+  .rule-row { grid-template-columns: minmax(0, 1fr); padding: 14px 16px; }
+  /* On a phone the batch takes the queue's place: the preview panel shows, the list hides. */
+  .home.batching .preview { display: block; margin-top: 16px; overflow: visible; }
+  .home.batching .queue-tools, .home.batching .queue-list { display: none; }
+  .batch { padding: 18px 16px 0; }
+  .batch-actions { margin: 16px -16px 0; padding: 12px 16px 16px; }
+  .batch-row { padding: 14px; }
+}
+
 /* ── Pages: order record, entity, index ─────────────────────────────────── */
 .page { width: 100%; max-width: 1180px; margin: 0 auto; padding: 8px var(--gutter) 120px; }
 .crumbs { display: flex; align-items: center; gap: 8px; margin: 4px 0 18px; font-size: 14px; color: var(--muted); }

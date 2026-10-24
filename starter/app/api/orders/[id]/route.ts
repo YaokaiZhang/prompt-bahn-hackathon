@@ -18,7 +18,10 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   const state = await engine.state()
   const verdict = state.orders.find((row) => row.id === order.id)
   const checks: OrderChecks | null = verdict
-    ? { now: state.now, group: verdict.group, reason: verdict.reason, rules: verdict.rules, planned: verdict.planned, urgency: verdict.urgency, review: verdict.review }
+    ? {
+      now: state.now, group: verdict.group, reason: verdict.reason, rules: verdict.rules, planned: verdict.planned, urgency: verdict.urgency,
+      review: verdict.review, proposals: verdict.proposals, unreachable: verdict.unreachable,
+    }
     : null
   return NextResponse.json({
     order, customer, pickup, delivery, pickupSite, deliverySite, items, drivers, alerts, conversations: threads, messages, events,

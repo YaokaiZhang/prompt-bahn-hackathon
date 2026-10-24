@@ -15,7 +15,7 @@
 
 import type { Bundle } from "@/lib/present/bundle"
 import { createMemoryReviewCache, type ReviewCache } from "@/lib/reviewer/cache"
-import type { RuleResult as ReviewerRuleResult } from "@/lib/reviewer/case-file"
+import type { PriorState, RuleResult as ReviewerRuleResult } from "@/lib/reviewer/case-file"
 import type { ModelGateway } from "@/lib/reviewer/gateway"
 import type { CaseRecord } from "@/lib/reviewer/records"
 import { createReviewer, NOT_REVIEWED_YET, type Finding, type Reviewed, type ReviewResult } from "@/lib/reviewer/reviewer"
@@ -95,12 +95,23 @@ export type ReviewOptions = {
   model?: string
 }
 
+/**
+ * What a review reads besides the order's records: the rule results (as of the
+ * review time) and the control room's prior state (operator instructions, ticket 07;
+ * answers and call results come with 08 and 10). Prior state is part of the case
+ * file, so a new instruction makes the order's review miss until it is re-run.
+ */
+export type ReviewInputs = {
+  rules: (bundle: Bundle) => RuleResult[]
+  prior?: (bundle: Bundle) => PriorState | undefined
+}
+
 export type ReviewLayer = {
   canReview: boolean
   /** Every order's review as of now (cache only, no model call). */
-  read(rulesAtReview: (bundle: Bundle) => RuleResult[]): Promise<Map<string, OrderReview>>
+  read(inputs: ReviewInputs): Promise<Map<string, OrderReview>>
   /** Reviews the orders not reviewed yet (all, or `orderIds`), records-triggered first. */
-  run(rulesAtReview: (bundle: Bundle) => RuleResult[], orderIds?: string[]): Promise<void>
+  run(inputs: ReviewInputs, orderIds?: string[]): Promise<void>
   /** Drops what is known about an order's review (after its records change). */
   forget(orderId: string): void
 }
@@ -208,26 +219,27 @@ export function createReviewLayer(bundles: Bundle[], snapshotAt: string, options
     return snapshotAt
   }
 
-  function inputFor(bundle: Bundle, rulesAtReview: (bundle: Bundle) => RuleResult[]) {
-    return { now: reviewAt(bundle), rules: toReviewerRules(rulesAtReview(bundle)) }
+  function inputFor(bundle: Bundle, inputs: ReviewInputs) {
+    const prior = inputs.prior?.(bundle)
+    return { now: reviewAt(bundle), rules: toReviewerRules(inputs.rules(bundle)), ...(prior ? { prior } : {}) }
   }
 
-  function recordsOf(bundle: Bundle, rulesAtReview: (bundle: Bundle) => RuleResult[]): Map<string, CaseRecord> {
+  function recordsOf(bundle: Bundle, inputs: ReviewInputs): Map<string, CaseRecord> {
     let records = caseRecords.get(bundle.order.id)
     if (!records) {
-      records = new Map(reader.caseFile(bundle.order.id, inputFor(bundle, rulesAtReview)).records.map((record) => [record.id, record]))
+      records = new Map(reader.caseFile(bundle.order.id, inputFor(bundle, inputs)).records.map((record) => [record.id, record]))
       caseRecords.set(bundle.order.id, records)
     }
     return records
   }
 
-  async function lookup(bundle: Bundle, rulesAtReview: (bundle: Bundle) => RuleResult[]): Promise<Reviewed | { recordsRead: number }> {
+  async function lookup(bundle: Bundle, inputs: ReviewInputs): Promise<Reviewed | { recordsRead: number }> {
     const id = bundle.order.id
     const hit = hits.get(id)
     if (hit) return hit
     const miss = misses.get(id)
     if (miss && Date.now() - miss.at < MISS_TTL_MS) return miss
-    const result = await reader.review(id, inputFor(bundle, rulesAtReview))
+    const result = await reader.review(id, inputFor(bundle, inputs))
     if (result.status === "reviewed") {
       hits.set(id, result)
       misses.delete(id)
@@ -238,7 +250,7 @@ export function createReviewLayer(bundles: Bundle[], snapshotAt: string, options
     return fresh
   }
 
-  function toOrderReview(bundle: Bundle, found: Reviewed | { recordsRead: number }, rulesAtReview: (bundle: Bundle) => RuleResult[]): OrderReview {
+  function toOrderReview(bundle: Bundle, found: Reviewed | { recordsRead: number }, inputs: ReviewInputs): OrderReview {
     const id = bundle.order.id
     const list = triggers.get(id) ?? []
     const base = { trigger: (list.length ? "records" : "sweep") as ReviewTrigger, triggers: list, reviewAt: reviewAt(bundle) }
@@ -249,7 +261,7 @@ export function createReviewLayer(bundles: Bundle[], snapshotAt: string, options
         reason: cause ? `${NOT_REVIEWED_YET}: ${cause}` : NOT_REVIEWED_YET, cost: 0, model: null, reviewedAt: null,
       }
     }
-    const records = recordsOf(bundle, rulesAtReview)
+    const records = recordsOf(bundle, inputs)
     const findings: ReviewFinding[] = found.findings.map((finding) => {
       const { conflict, ...rest } = finding
       return {
@@ -269,19 +281,19 @@ export function createReviewLayer(bundles: Bundle[], snapshotAt: string, options
     }
   }
 
-  async function read(rulesAtReview: (bundle: Bundle) => RuleResult[]): Promise<Map<string, OrderReview>> {
+  async function read(inputs: ReviewInputs): Promise<Map<string, OrderReview>> {
     const out = new Map<string, OrderReview>()
     await Promise.all(bundles.map(async (bundle) => {
-      out.set(bundle.order.id, toOrderReview(bundle, await lookup(bundle, rulesAtReview), rulesAtReview))
+      out.set(bundle.order.id, toOrderReview(bundle, await lookup(bundle, inputs), inputs))
     }))
     return out
   }
 
-  async function run(rulesAtReview: (bundle: Bundle) => RuleResult[], orderIds?: string[]): Promise<void> {
+  async function run(inputs: ReviewInputs, orderIds?: string[]): Promise<void> {
     const chosen = orderIds ? orderIds.map((id) => byId.get(id)).filter((bundle): bundle is Bundle => Boolean(bundle)) : bundles
     misses.clear()
     const pending: Bundle[] = []
-    for (const bundle of chosen) if (!("status" in await lookup(bundle, rulesAtReview))) pending.push(bundle)
+    for (const bundle of chosen) if (!("status" in await lookup(bundle, inputs))) pending.push(bundle)
     if (!gateway) return
     pending.sort((a, b) => Number((triggers.get(b.order.id) ?? []).length > 0) - Number((triggers.get(a.order.id) ?? []).length > 0))
 
@@ -293,7 +305,7 @@ export function createReviewLayer(bundles: Bundle[], snapshotAt: string, options
         const bundle = pending[next++]
         const id = bundle.order.id
         if (stopped) { failures.set(id, `skipped after ${maxFailures} model failures in a row (last: ${stopped})`); continue }
-        const result = await reviewer.review(id, inputFor(bundle, rulesAtReview))
+        const result = await reviewer.review(id, inputFor(bundle, inputs))
         if (result.status === "reviewed") {
           failuresInRow = 0
           hits.set(id, result)

@@ -131,13 +131,21 @@ const STORES: StoreCase[] = [
   },
 ]
 
-/** Registers `name` once per store. The Postgres run is skipped without TEST_DATABASE_URL. */
-export function eachStore(name: string, body: (engine: Engine) => Promise<void>): void {
+/**
+ * Registers `name` once per store. The Postgres run is skipped without TEST_DATABASE_URL.
+ * `options.gateway` makes a fresh model per run (e.g. `testGateway`); the body gets it too.
+ */
+export function eachStore<G extends ModelGateway | null = null>(
+  name: string,
+  body: (engine: Engine, gateway: G) => Promise<void>,
+  options: { gateway?: () => Promise<G> } = {},
+): void {
   for (const store of STORES) {
     test(`${name} [${store.name}]`, { skip: store.name === "postgres" && !process.env.TEST_DATABASE_URL ? "set TEST_DATABASE_URL" : false }, async () => {
       const made = store.make()
       if (!made) return
-      await body(await testEngine({ store: await made }))
+      const gateway = (options.gateway ? await options.gateway() : null) as G
+      await body(await testEngine({ store: await made, gateway }), gateway)
     })
   }
 }
