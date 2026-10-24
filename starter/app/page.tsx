@@ -13,10 +13,11 @@ import { useClockVersion } from "./components/demo-clock"
 import { Shell } from "./components/shell"
 import { CarPhoto, Pill, StagePill } from "./components/ui"
 
-const GROUP_ORDER: Group[] = ["needs_action", "in_progress", "normal", "done"]
+const GROUP_ORDER: Group[] = ["needs_action", "in_progress", "solved", "normal", "done"]
 const GROUP_EMPTY: Record<Group, string> = {
   needs_action: "No order needs a decision right now.",
   in_progress: "No agent work is planned or running.",
+  solved: "No call result is waiting for your yes.",
   normal: "No order is checked and normal yet.",
   done: "No order is finished with nothing open.",
 }

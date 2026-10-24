@@ -9,6 +9,7 @@ import type { BriefingItem } from "./briefing"
 import type { EffectEvent } from "./effects"
 import type { StoredCallEvent } from "./calls"
 import type { StoredProposalEvent } from "./proposals"
+import type { StoredPublicationEvent } from "./publishing"
 
 export interface EngineStore {
   /** The demo clock, or null when it has not moved from its start. */
@@ -35,6 +36,10 @@ export interface EngineStore {
    * (callId, seq) exists already: another writer took that step first.
    */
   appendCallEvents(events: StoredCallEvent[]): Promise<boolean>
+  /** Every publication event (publishing.ts), in the order they were appended. */
+  readPublicationEvents(): Promise<StoredPublicationEvent[]>
+  /** Appends publication events in one go. */
+  appendPublicationEvents(events: StoredPublicationEvent[]): Promise<void>
   /** Empties every engine table. The snapshot is never touched. */
   reset(): Promise<void>
 }

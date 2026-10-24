@@ -23,8 +23,8 @@ const minutesTo = (at: string, from = START) => (new Date(at).getTime() - new Da
 const plain = (prose: DigestProse["opener"]) => prose.map((segment) => "text" in segment ? segment.text : `[${segment.order.reference}]`).join("")
 
 const countsMatch = (item: DigestItem, state: EngineState) => {
-  const { needs_action, in_progress, normal, done } = item.facts.counts
-  assert.deepEqual({ needs_action, in_progress, normal, done }, state.groupCounts)
+  const { needs_action, in_progress, solved, normal, done } = item.facts.counts
+  assert.deepEqual({ needs_action, in_progress, solved, normal, done }, state.groupCounts)
   assert.equal(item.facts.counts.total, state.orders.length)
   assert.equal(item.facts.counts.urgent, state.orders.filter((row) => row.urgency.urgent).length)
 }

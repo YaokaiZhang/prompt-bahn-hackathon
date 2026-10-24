@@ -106,6 +106,7 @@ function OrderRef({ orderId, reference }: { orderId: string; reference: string }
 const COUNT_TILES: { key: Group | "urgent" | "couldnt_check"; label: string }[] = [
   { key: "needs_action", label: GROUP_LABEL.needs_action },
   { key: "in_progress", label: GROUP_LABEL.in_progress },
+  { key: "solved", label: GROUP_LABEL.solved },
   { key: "normal", label: GROUP_LABEL.normal },
   { key: "done", label: GROUP_LABEL.done },
   { key: "urgent", label: "Urgent" },

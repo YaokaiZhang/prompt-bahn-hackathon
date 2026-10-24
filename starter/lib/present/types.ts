@@ -10,6 +10,8 @@ import type { DueItem } from "@/lib/engine/due"
 import type { BriefingItem } from "@/lib/engine/briefing"
 import type { BlockedCall, Call, CallLineView } from "@/lib/engine/calls"
 import type { EffectEvent, HistoryEntry } from "@/lib/engine/engine"
+import type { DemandCheck, Publication } from "@/lib/engine/publishing"
+import type { TravelPlan } from "@/lib/engine/travel-planner"
 
 export type Tone = "danger" | "warn" | "accent" | "ok" | "neutral"
 
@@ -34,6 +36,8 @@ export type OrderChecks = {
   callLines: CallLineView[]
   /** Planned calls the agent will not make: the callee is on the customer side. */
   blockedCalls: BlockedCall[]
+  /** Its stage after grouping: call results waiting for a yes, on the market, demand filter, travel plan (spec .scratch/publishing). */
+  publication: Publication
   /** Committed changes laid over the snapshot (ticket 09), oldest first. */
   effects: EffectEvent[]
   /** The order's history in sequence: proposals, approvals, answers, effect events. */
@@ -694,3 +698,26 @@ export type InboxView = { snapshotAt: string | null; threads: InboxThreadView[];
 
 export type EntityListItem = { id: string; title: string; subtitle: string | null; count: number; href: string }
 export type EntityList = { kind: EntityKind; kindLabel: string; items: EntityListItem[] }
+
+/**
+ * A job on the driver market as the Driver's phone shows it (spec .scratch/publishing):
+ * live once it passed the demand filter, and, when demanding, once it has a travel plan.
+ */
+export type DriverJob = {
+  orderId: string
+  reference: string
+  car: string | null
+  from: { city: string; country: string }
+  to: { city: string; country: string }
+  pickupWindow: { start: string; end: string; zone: string | null } | null
+  deliveryWindow: { start: string; end: string; zone: string | null } | null
+  /** The driver fee of the order's published offer, when the data has one. */
+  fee: string | null
+  publishedAt: string | null
+  check: DemandCheck
+  /** A suggestion only; null on a job that is not demanding. */
+  plan: TravelPlan | null
+  budgetEur: number
+}
+
+export type DriverJobs = { now: string; jobs: DriverJob[] }

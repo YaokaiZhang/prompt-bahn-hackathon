@@ -98,7 +98,8 @@ export function templateProse(facts: DigestFacts, note: string): DigestProse {
   const { counts } = facts
   const opener: ProseSegment[] = [{
     text: `${GREETING[facts.slot]} ${plural(counts.needs_action, "order needs", "orders need")} a decision, ${counts.in_progress} ${counts.in_progress === 1 ? "is" : "are"} with the agent, `
-      + `${counts.normal} ${counts.normal === 1 ? "is" : "are"} checked normal and ${counts.done} ${counts.done === 1 ? "is" : "are"} done.`,
+      + `${counts.solved} ${counts.solved === 1 ? "waits" : "wait"} for your yes on call results, `
+      + `${counts.normal} ${counts.normal === 1 ? "is" : "are"} checked normal and ${counts.done} ${counts.done === 1 ? "is" : "are"} finished.`,
   }]
   if (counts.urgent) {
     const top = facts.urgent.slice(0, 3)

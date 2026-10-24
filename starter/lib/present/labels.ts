@@ -5,6 +5,8 @@
 export const LANES = [
   ["intake", "New orders"],
   ["ready", "Ready to post"],
+  // Not a dataset lane: an order not on the market yet that is Solved waits here for the operator's yes (lib/engine/publishing.ts).
+  ["confirm", "Confirm before publishing"],
   ["market", "Finding a driver"],
   ["booked", "Driver assigned"],
   ["moving", "Moving"],

@@ -76,8 +76,32 @@ The group of orders where an agent action is running or waiting on a reply.
 **Normal**:
 The group of orders that are checked normal and not finished.
 
-**Done**:
+**Solved**:
+The group of orders where the agent's calls settled the open points and the operator has not confirmed the call results yet. An order not on the market yet waits in Confirm before publishing.
+_Avoid_: Done, resolved
+
+**Finished**:
 The group of orders that are finished completely: delivered or cancelled, with nothing open.
+_Avoid_: Done
+
+## Publishing
+
+**Confirm before publishing**:
+The stage of a Solved order not on the driver market yet. The operator reads each rewrite and the call transcripts; their approval confirms the changes and publishes the order.
+
+**Rewrite**:
+One call result shown as before (what the records said) and now (what the person said on the call), with the call's transcript.
+
+**Published**:
+On the driver market (Finding a driver), by the agent for a reviewed Normal order, or by the operator.
+_Avoid_: Posted, listed
+
+**Demanding job**:
+A job on the market that is cross-country, needs more than 12 hours of driving, or needs a ferry or train between the endpoints. The demand filter decides it before drivers see the job.
+
+**Travel plan**:
+The travel planner's rough suggestion for a demanding job: getting to pickup, a hotel when needed, ferry or train tickets, the way home, against the order's travel budget. Nothing is booked.
+_Avoid_: Booking, itinerary
 _Avoid_: Delivered (a delivered order can still have gaps)
 
 ## Agent work and decisions

@@ -6,15 +6,16 @@ import { Icon } from "./icons"
 import { CallsBlock } from "./calls"
 import { EffectsBlock } from "./effects"
 import { CompactProposals, ProposalsBlock } from "./proposals"
+import { PublishingBlock } from "./publishing"
 import { ReviewBlock } from "./review"
 import { More, Pill } from "./ui"
 
 export const GROUP_LABEL: Record<Group, string> = {
-  needs_action: "Needs action", in_progress: "In progress", normal: "Normal", done: "Done",
+  needs_action: "Needs action", in_progress: "In progress", solved: "Solved", normal: "Normal", done: "Finished",
 }
 
 export function groupTone(group: Group, urgent = false): Tone {
-  return group === "needs_action" ? (urgent ? "danger" : "warn") : group === "in_progress" ? "accent" : group === "done" ? "ok" : "neutral"
+  return group === "needs_action" ? (urgent ? "danger" : "warn") : group === "in_progress" || group === "solved" ? "accent" : group === "done" ? "ok" : "neutral"
 }
 
 export function GroupPill({ group, urgent = false }: { group: Group; urgent?: boolean }) {
@@ -85,6 +86,7 @@ export function ChecksPanel({ orderId, checks, compact = false }: { orderId: str
     </div>
     <p className={`checks-reason tone-${groupTone(checks.group, urgent)}`}>{checks.reason}</p>
     {urgent && <p className="checks-urgency">{checks.urgency.reasons.map((reason) => reason.text).join(" · ")}</p>}
+    {checks.publication && <PublishingBlock orderId={orderId} publication={checks.publication} group={checks.group} calls={checks.calls ?? []} reviewed={checks.review?.status === "reviewed"} />}
     {checks.planned.length > 0 && <div className="checks-block">
       <h3>Planned agent work</h3>
       <ul className="checks-list">{checks.planned.map((action) => <li className="check" key={action.kind}>

@@ -94,7 +94,7 @@ function TurnCheckView({ check, cost }: { check: TurnCheck; cost: number }) {
   </dl>
 }
 
-function Transcript({ call }: { call: Call }) {
+export function Transcript({ call }: { call: Call }) {
   const start = new Date(call.transcript[0]?.wallAt ?? call.startedAt).getTime()
   const end = useRef<HTMLLIElement | null>(null)
   const live = call.state !== "ended"
