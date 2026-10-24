@@ -16,5 +16,5 @@
 
 ## Comments
 
-- The full seed sweep over all 100 orders has not been run against the real model yet (the orchestrator capped it). Run `npm run review:sweep` (or `npm run db:seed`) to do it. A capped real run on 3 orders worked through the proxy, at about $0.002 to $0.005 per order.
+- The full seed sweep over all 100 orders has not been run against the real model yet (the orchestrator capped it). Run `npm run review:sweep` (or `npm run db:seed -- --review`; the seed sweep is opt-in since the final review fixes) to do it. A capped real run on 3 orders worked through the proxy, at about $0.002 to $0.005 per order.
 - Reasons a review failed ("model call failed", "skipped after 3 failures") live only in the engine's memory for that process. A fresh process shows such orders as a plain "not reviewed yet".

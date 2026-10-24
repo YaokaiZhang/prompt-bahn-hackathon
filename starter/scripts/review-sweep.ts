@@ -1,7 +1,7 @@
 // The reviewer sweep: reviews every order not reviewed yet and stores the results in
-// cr_review_results, where the app reads them. `npm run db:seed` runs it once after
-// seeding; re-run it any time (for example once the model is reachable). Orders already
-// reviewed are served from the cache and cost nothing.
+// cr_review_results, where the app reads them. `npm run db:seed -- --review` runs it once
+// after seeding (opt-in: the seed alone never calls the model); run it any time on a few
+// named orders. Orders already reviewed are served from the cache and cost nothing.
 //
 //   npm run review:sweep                       every order not reviewed yet
 //   npm run review:sweep -- --limit 5          at most 5 (records-triggered orders first)

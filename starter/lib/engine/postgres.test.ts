@@ -66,3 +66,13 @@ test("our tables hold no foreign keys, and the starter's seed runs beside them w
   assert.equal(await store.readClock(), "2026-10-21T11:00:00.000Z")
   await store.reset()
 })
+
+test("the seed never sweeps orders with the model unless asked with --review, even with a model key set", { skip }, async () => {
+  const seed = spawnSync("npx", ["tsx", "scripts/seed.ts"], {
+    // A key that is set but not real: a default sweep would start calling the model with it.
+    env: { ...process.env, DATABASE_URL: process.env.TEST_DATABASE_URL, OPENROUTER_API_KEY: "not-a-real-key", SEED_REVIEW: "" }, encoding: "utf8",
+  })
+  assert.equal(seed.status, 0, seed.stderr)
+  assert.doesNotMatch(seed.stdout, /reviewing \d+ order/i)
+  assert.match(seed.stdout, /--review/, "it says how to opt in")
+})
