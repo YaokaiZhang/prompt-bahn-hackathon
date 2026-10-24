@@ -26,7 +26,8 @@ import type { EngineStore } from "./store"
 import { createCallRunner, type CallOptions } from "./call-runner"
 import type { PhonePersona, PhoneView } from "./phone"
 import type { AudioClip } from "./voice-agent"
-import { callbackItems, orderCalls, utcTime, type BlockedCall, type Call, type CalleeInput, type CallLine, type CallLineView, type Handover, type OrderCalls } from "./calls"
+import { latestEta } from "./eta"
+import { answeredRecords, callbackItems, orderCalls, reportedEta, utcTime, type BlockedCall, type Call, type CalleeInput, type CallLine, type CallLineView, type Handover, type OrderCalls } from "./calls"
 
 /** The snapshot as the engine reads it: one bundle per order. */
 export type Snapshot = { snapshotAt: string; bundles: Bundle[] }
@@ -420,7 +421,7 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     if (!call) throw new Error(`No call ${callId}`)
     if (call.outcome !== "handover" || !call.handover) throw new Error(`${call.reference}: call ${callId} was not handed over to a person`)
     if (call.handover.closed) throw new Error(`${call.reference}: the handover from call ${callId} is already closed`)
-    const agent = (effects.get(call.orderId) ?? []).find((event) => event.source === call.id && event.by === "agent")
+    const agent = (effects.get(call.orderId) ?? []).find((event) => event.source === call.id && event.by === "agent" && event.type === "call_result_recorded")
     const answered = call.topics.filter((topic) => topic.kind === "proposal").map((topic) => ({ id: topic.id.slice("proposal:".length), script: topic.script ?? topic.title }))
     const who = call.callee.name ?? call.callee.handle
     await commitEffects([{
@@ -450,6 +451,13 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
    * answer, question and who said it) on each call proposal the call carried, then,
    * when the person said something, the "call result recorded" effect event (an
    * attributed claim, source = the call id; ticket 09) and a re-review of the order.
+   *
+   * Versioning: the call result supersedes the records of every topic the person
+   * answered (a rule's sources, the tracking ETA the tight-ETA check read, a proposal's
+   * conflict evidence), whoever stated them: the person on the call gives the newer
+   * version. A new arrival time they gave is its own typed fact, `eta_reported`
+   * (committed at once: it is what the driver said, not a change to the order), which
+   * supersedes the ETA that was current until then.
    */
   async function recordCallResult(call: Call): Promise<void> {
     const answer = call.summary ?? call.outcome ?? "ended"
@@ -464,17 +472,29 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
       const event = await eventFor(proposal, "answered", `Call result (${call.id}): ${answer}`, { answer, question: proposal.script, from })
       await store.appendProposalEvents([{ ...event, by: "agent" }])
     }
-    if (!call.claims.length) return
-    // The callee's own earlier statements on the questions the call answered are superseded.
+    const eta = call.line === "driver" ? reportedEta(call) : null
+    if (!call.claims.length && !eta) return
+    // The callee's own earlier statements on the questions the call answered are superseded,
+    // and so is every record the answered topics asked about.
     const marks = [call.callee.handle, call.callee.name].filter((mark): mark is string => !!mark).map((mark) => mark.toLowerCase())
     const byCallee = (statedBy: string) => marks.some((mark) => statedBy.toLowerCase().includes(mark))
-    await commitEffects([{
-      type: "call_result_recorded", with: `${who} (${call.line})`, claim: call.claims.join("; "), callId: call.id,
-      orderId: call.orderId, by: "agent", source: call.id,
-      fact: callFact(call, carried),
-      supersedes: statementsBy(carried.flatMap((proposal) => proposal.evidence), byCallee),
-      answers: carried.map((proposal) => proposal.id),
-    }])
+    const current = eta ? latestEta(bundleOf(call.orderId)) : null
+    const replacedEta = current && !current.superseded ? [current.recordId] : []
+    const supersedes = [...new Set([...statementsBy(carried.flatMap((proposal) => proposal.evidence), byCallee), ...answeredRecords(call)])]
+      .filter((id) => !replacedEta.includes(id))
+    const assignment = call.callee.recordId && bundleOf(call.orderId).related.work_assignments?.some((row) => row.id === call.callee.recordId) ? call.callee.recordId : null
+    await commitEffects([
+      ...(call.claims.length ? [{
+        type: "call_result_recorded" as const, with: `${who} (${call.line})`, claim: call.claims.join("; "), callId: call.id,
+        orderId: call.orderId, by: "agent" as const, source: call.id,
+        fact: callFact(call, carried), supersedes,
+        answers: carried.map((proposal) => proposal.id),
+      }] : []),
+      ...(eta ? [{
+        type: "eta_reported" as const, etaAt: eta.at, statedBy: `${who} (driver)`, statedAt: eta.statedAt, assignmentId: assignment, callId: call.id,
+        orderId: call.orderId, by: "agent" as const, source: call.id, supersedes: replacedEta,
+      }] : []),
+    ])
     await rereview(call.orderId)
   }
 

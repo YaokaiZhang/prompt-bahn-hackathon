@@ -32,7 +32,19 @@ export type Question = {
 }
 
 /** A topic is one reason to call: `rule:R10`, `proposal:<id>`, or `check:on_time` (asked only when the operator rings live). */
-export type Topic = { id: string; kind: "rule" | "proposal" | "check"; title: string; script?: string }
+export type Topic = {
+  id: string
+  kind: "rule" | "proposal" | "check"
+  title: string
+  script?: string
+  /**
+   * The records the topic asks about: a rule's restatable sources, the tracking
+   * observation (or reported ETA) the tight-ETA check read, a proposal's conflict
+   * evidence. A call result that answers the topic supersedes them. Absent on calls
+   * stored before topics named their records.
+   */
+  records?: string[]
+}
 
 export const CALLBACK_MINUTES: Record<string, number> = { "1": 15, "2": 60, "3": 120 }
 

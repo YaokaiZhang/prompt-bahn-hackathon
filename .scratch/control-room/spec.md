@@ -203,7 +203,8 @@ Every model call goes through it, and every call reports its `usage.cost`. Every
   | contact confirmed | endpoint `contact_status` and `last_confirmed_source` |
   | contact changed | endpoint contact name, handle and role |
   | window changed | the selected pickup slot or delivery promise |
-  | call result recorded | an attributed claim, with the source being the call |
+  | call result recorded | an attributed claim, with the source being the call; it supersedes the records the answered call topics asked about |
+  | ETA reported | the driver's new ETA as a time, with the source being the call; it supersedes the ETA that was current (never the delivery promise) |
   | customer answer recorded | an attributed claim, with the source being the operator's record of the customer |
   | operator answer recorded | an attributed note |
   | cost approved | an expense or cost line |

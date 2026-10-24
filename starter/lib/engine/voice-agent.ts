@@ -22,6 +22,7 @@ import type { ChatMessage, ModelGateway } from "@/lib/reviewer/gateway"
 import { DEFAULT_REVIEWER_MODEL } from "@/lib/reviewer/reviewer"
 import { rows, str, type Bundle } from "@/lib/present/bundle"
 import { localTime, type Call, type CallChange } from "./calls"
+import { latestEta } from "./eta"
 import type { Speech } from "./speech"
 import { estimateSeconds } from "./speech"
 
@@ -55,6 +56,11 @@ export type TurnCheck = {
   claims: string[]
   /** Changes the callee asked for or reported: each becomes a change proposal (needs a yes). */
   changes: CallChange[]
+  /**
+   * The newest arrival time the callee gave (their local "HH:MM"), or null. Not a change
+   * to the order: the engine records it as the driver's reported ETA (`eta_reported`).
+   */
+  eta?: CheckedEta | null
   /** Where what they said disagrees with the records in the brief. */
   conflicts: string[]
   /** Did the audio model's reply stay inside the policy (no promise, no agreeing to a change)? Null when there was no reply to check. */
@@ -72,6 +78,9 @@ export type TurnCheck = {
   /** The checker failed and this safe check stands in: it records nothing. */
   failed?: boolean
 }
+
+/** An ETA the callee stated: local "HH:MM" in their zone (or `at`, ISO UTC, when known) and their words. */
+export type CheckedEta = { local: string; at?: string; claim: string }
 
 /** Who made the words the agent said: the audio model ("voice"), the checker because the audio model's reply was not allowed ("replaced"), or the checker because the audio model failed ("fallback"). */
 export type TurnPath = "voice" | "replaced" | "fallback"
@@ -183,10 +192,8 @@ export function briefFor(bundle: Bundle, call: Call): string {
     const start = str(promise?.details.start_at)
     const end = str(promise?.details.end_at)
     if (start && end) facts.push(`Delivery promise to the customer: ${local(start)} to ${local(end)} (${call.zone}).`)
-    const eta = rows(bundle, "tracking_observations").filter((row) => str(row.details.estimated_delivery_at))
-      .sort((a, b) => String(a.details.observed_at ?? "").localeCompare(String(b.details.observed_at ?? ""))).pop()
-    const at = str(eta?.details.estimated_delivery_at)
-    if (at) facts.push(`Latest ETA on record: ${local(at)}.`)
+    const eta = latestEta(bundle)
+    if (eta) facts.push(`Latest ETA on record: ${local(eta.at)}${eta.reported ? " (reported by the driver on an earlier call)" : ""}.`)
   } else {
     const start = str(slot?.details.start_at)
     const end = str(slot?.details.end_at)
@@ -231,12 +238,13 @@ function checkMessages(input: { brief: string; history: VoiceTurn[]; heard: stri
     "Return exactly this JSON object:",
     `{"heard": string (what the person said, cleaned up),
  "claims": string[] (ALL facts the person has stated on this call so far, merged and without repeats, short, e.g. "Expects to arrive at 16:40 local"),
- "changes": {"title": string, "change": string, "claim": string}[] (ALL changes to the order the person asked for or reported on this call so far, one per subject, e.g. a new ETA after the promise, a new address; empty if none),
+ "changes": {"title": string, "change": string, "claim": string}[] (ALL changes to the order the person asked for or reported on this call so far, one per subject, e.g. a new address or a different receiver; NOT an arrival time, which goes in "eta"; empty if none),
+ "eta": {"local": "HH:MM" (24-hour, the person's local time), "claim": string} | null (the newest arrival time the person gave on this call, e.g. "about half past four" -> "16:30"; null if they gave none),
  "conflicts": string[] (where the person's words disagree with the facts in the brief),
  "replyOk": boolean | null (null when there is no draft reply; false ONLY if the draft agrees to, promises or confirms a change, invents facts, discusses prices, or makes no sense after what the person said; wording and style are not reasons),
  "replyIssue": string | null,
  "reply": string (what the agent should say next, following the policy; when next is "continue" it asks one short question; when next is not "continue" it asks nothing, says what was noted and ends with "Goodbye."),
- "next": "continue" | "resolved" | "handover" ("resolved" when the agent knows what the problem is, what it means for the delivery and what the person will do, or the person has nothing more to say; a reported change such as a later ETA does NOT need a handover, it becomes a proposal for the operator; "handover" only when the person needs a decision now, asks for a person, or the situation is still unclear; if the only open matter is a change you listed, next is "resolved"),
+ "next": "continue" | "resolved" | "handover" ("resolved" when the agent knows what the problem is, what it means for the delivery and what the person will do, or the person has nothing more to say; a new arrival time does NOT need a handover, it is recorded as the driver's ETA, and a reported change becomes a proposal for the operator; "handover" only when the person needs a decision now, asks for a person, or the situation is still unclear; if the only open matter is a change you listed, next is "resolved"),
  "openQuestion": string | null (for handover: the question a person must settle),
  "nextStep": string | null (for handover: the proposed next step for the operator),
  "summary": string (one line: what the call learned so far)}`,
@@ -273,10 +281,14 @@ export function parseCheck(content: string, heard: string, hadDraft: boolean): T
     const change = text(item.change)
     return title && change ? [{ title, change, claim: text(item.claim) ?? change }] : []
   }) : []
+  const etaRaw = raw.eta && typeof raw.eta === "object" ? raw.eta as Record<string, unknown> : null
+  const etaLocal = text(etaRaw?.local)
+  const eta: CheckedEta | null = etaLocal && /^\d{1,2}:\d{2}$/.test(etaLocal) ? { local: etaLocal, claim: text(etaRaw?.claim) ?? `Expects to arrive at ${etaLocal} local` } : null
   return {
     heard: text(raw.heard) ?? heard,
     claims: strings(raw.claims),
     changes,
+    eta,
     conflicts: strings(raw.conflicts),
     replyOk: hadDraft ? raw.replyOk === true : null,
     replyIssue: text(raw.replyIssue),

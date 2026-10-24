@@ -12,6 +12,7 @@ import { bool, finalDeliveryPoint, obj, originPickupPoint, rows, str } from "@/l
 import { fmtDateTime } from "@/lib/present/time"
 import { endpointContactType, pickupCallAllowed } from "./contacts"
 import { nextChecksOf, type NextCheck } from "./due"
+import { latestEta } from "./eta"
 import type { Callee, FirstAction, PlannedAction, RuleId, RuleResult, SourceRef, Urgency } from "./checks"
 
 /** One driver duty, indexed across all orders, for the positioning rule. */
@@ -195,21 +196,29 @@ function staleTracking(facts: Facts): RuleResult {
   return result("R10", "strong", title, "fail", `Car in transit and ${what}, with no alert open.`, "driver_call", sources)
 }
 
-// R12 — The latest ETA is after the promise end.
+// R12 — The latest ETA is after the promise end. The latest ETA is the newest one
+// stated: a tracking estimate, or the driver's own word on a call (`eta_reported`).
+// A late ETA the driver reported needs no second call: the operator decides what to
+// tell the customer (the promise is the customer's; ADR 0001).
 function etaAfterPromise(facts: Facts): RuleResult {
   const title = RULE_CATALOGUE.R12.title
   if (!facts.moving.length || facts.finished) return result("R12", "strong", title, "pass", "The car is not on the road, so there is no ETA to compare.", null, [])
   const promise = facts.promise
-  const latest = rows(facts.bundle, "tracking_observations").filter((row) => str(row.details.estimated_delivery_at)).sort(byObserved).pop() ?? null
+  const latest = latestEta(facts.bundle)
   if (!promise || !latest) {
     return result("R12", "strong", title, "unknown", promise ? "The car is moving but no ETA has been received." : "The car is moving but no delivery promise is selected.", null,
       promise ? [ref("time_windows", promise, "Delivery promise")] : [])
   }
-  const sources = [ref("tracking_observations", latest, "Latest ETA"), ref("time_windows", promise, "Delivery promise")]
-  const eta = str(latest.details.estimated_delivery_at)
+  const sources = [ref(latest.collection, { id: latest.recordId }, latest.reported ? "ETA the driver reported" : "Latest ETA"), ref("time_windows", promise, "Delivery promise")]
+  const eta = latest.at
   const end = str(promise.details.end_at)
   const zone = str(promise.details.timezone)
   if ((ms(eta) ?? 0) > (ms(end) ?? Infinity)) {
+    if (latest.reported) {
+      return result("R12", "strong", title, "fail",
+        `${latest.statedBy ?? "The driver"} reported an ETA of ${fmtDateTime(eta, zone)}, after the promise ends at ${fmtDateTime(end, zone)}. Decide what to tell the customer.`,
+        "show_person", sources)
+    }
     return result("R12", "strong", title, "fail", `The latest ETA ${fmtDateTime(eta, zone)} is after the promise ends at ${fmtDateTime(end, zone)}.`, "driver_call", sources)
   }
   return result("R12", "strong", title, "pass", `The latest ETA ${fmtDateTime(eta, zone)} is inside the promise.`, null, sources)
@@ -388,6 +397,7 @@ function plan(facts: Facts, rules: RuleResult[]): PlannedAction[] {
     planned.push({
       kind,
       ruleIds: asking.map((row) => row.id),
+      sources: Object.fromEntries(asking.map((row) => [row.id, row.sources])),
       reason: `${CALL_REASON[kind]}. ${asking.map((row) => row.detail).join(" ")}`,
       callee: kind === "site_call" ? facts.callee : null,
     })

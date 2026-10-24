@@ -3,11 +3,13 @@
 // `applyEffects` lays the events over a bundle, and the order view, the rules and
 // the reviewer all read that overlaid bundle.
 //
-// Seven types (spec "Our own tables"):
+// Eight types (spec "Our own tables"):
 //   contact_confirmed          endpoint contact_status / last_confirmed_source / last_confirmed_at
 //   contact_changed            endpoint contact name, handle and role
 //   window_changed             the selected pickup slot or the delivery promise (start/end)
 //   call_result_recorded       an attributed claim; the source is the call
+//   eta_reported               a new ETA as a time, stated by the driver on a call; it supersedes
+//                              the tracking observation it replaces (never the delivery promise, ADR 0001)
 //   customer_answer_recorded   an attributed claim; the source is the operator's record of the customer
 //   operator_answer_recorded   an attributed note by the operator
 //   cost_approved              an expense approved, or a new cost line
@@ -33,10 +35,10 @@ import type { Actor } from "./proposals"
 
 export type EffectType =
   | "contact_confirmed" | "contact_changed" | "window_changed"
-  | "call_result_recorded" | "customer_answer_recorded" | "operator_answer_recorded" | "cost_approved"
+  | "call_result_recorded" | "eta_reported" | "customer_answer_recorded" | "operator_answer_recorded" | "cost_approved"
 
 export const EFFECT_TYPES: EffectType[] = [
-  "contact_confirmed", "contact_changed", "window_changed", "call_result_recorded", "customer_answer_recorded", "operator_answer_recorded", "cost_approved",
+  "contact_confirmed", "contact_changed", "window_changed", "call_result_recorded", "eta_reported", "customer_answer_recorded", "operator_answer_recorded", "cost_approved",
 ]
 
 export const EFFECT_LABEL: Record<EffectType, string> = {
@@ -44,6 +46,7 @@ export const EFFECT_LABEL: Record<EffectType, string> = {
   contact_changed: "Contact changed",
   window_changed: "Window changed",
   call_result_recorded: "Call result recorded",
+  eta_reported: "ETA reported",
   customer_answer_recorded: "Customer answer recorded",
   operator_answer_recorded: "Operator answer recorded",
   cost_approved: "Cost approved",
@@ -59,6 +62,12 @@ export type Effect =
   | { type: "window_changed"; windowId: string; startAt: string; endAt: string; statedBy: string }
   /** `with`: who was on the call; `claim`: what they said; `callId`: the call it came from. */
   | { type: "call_result_recorded"; with: string; claim: string; callId?: string | null }
+  /**
+   * A new ETA (ISO, UTC) for the car, as a time: `statedBy` said it (the driver on a call)
+   * at `statedAt`. It is the driver's statement, not a change to the order: the delivery
+   * promise stays as the customer set it (ADR 0001).
+   */
+  | { type: "eta_reported"; etaAt: string; statedBy: string; statedAt: string; assignmentId?: string | null; callId?: string | null }
   | { type: "customer_answer_recorded"; from: string; question: string; answer: string }
   | { type: "operator_answer_recorded"; question: string; answer: string }
   /** Approves an existing expense (`expenseId`), or adds a cost line (`amountCents`, `currency`, `kind`). */
@@ -148,6 +157,8 @@ export function describeEffect(bundle: Bundle, effect: Effect): string {
     }
     case "call_result_recorded":
       return `${effect.with} said on the call: ${quoted(effect.claim)}`
+    case "eta_reported":
+      return `${effect.statedBy} reported a new ETA of ${effect.etaAt}`
     case "customer_answer_recorded":
       return `${effect.from} answered: ${quoted(effect.answer)}`
     case "operator_answer_recorded":
@@ -196,6 +207,12 @@ export function checkEffect(bundle: Bundle, effect: Effect): void {
       text(effect.with, "who was on the call")
       text(effect.claim, "the call result")
       return
+    case "eta_reported":
+      must(Number.isFinite(Date.parse(effect.etaAt)), "an ETA needs a time")
+      must(Number.isFinite(Date.parse(effect.statedAt)), "an ETA needs the time it was stated")
+      text(effect.statedBy, "who reported the ETA")
+      if (effect.assignmentId) must(rowOf(bundle, "work_assignments", effect.assignmentId), `no assignment ${effect.assignmentId} on this order`)
+      return
     case "customer_answer_recorded":
       text(effect.from, "who answered")
       text(effect.answer, "the answer")
@@ -242,6 +259,7 @@ export function defaultFact(bundle: Bundle, input: Effect & { source: string }):
   }
   if (target) return { key: `${target.id}`, label: `${target.collection.replace(/_/g, " ")} ${target.id}` }
   if (input.type === "cost_approved") return { key: `cost:${input.source}`, label: "cost line" }
+  if (input.type === "eta_reported") return { key: `eta:${input.assignmentId ?? bundle.order.id}`, label: "the car's ETA" }
   if (input.type === "customer_answer_recorded" || input.type === "operator_answer_recorded") return { key: `answer:${input.source}`, label: input.question || "answer" }
   return { key: `claim:${input.source}`, label: "call result" }
 }
@@ -293,6 +311,7 @@ function statedBy(event: EffectEvent): string {
     case "contact_changed": return event.statedBy
     case "window_changed": return event.statedBy
     case "call_result_recorded": return event.with
+    case "eta_reported": return event.statedBy
     case "customer_answer_recorded": return event.from
     case "operator_answer_recorded": return "operator"
     case "cost_approved": return "operator"
