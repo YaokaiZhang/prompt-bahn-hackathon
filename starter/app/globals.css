@@ -925,6 +925,7 @@ details.more > :not(summary) { margin-top: 10px; }
   .call-line-text { grid-column: 2; grid-row: 2; }
   .call-line > :last-child { grid-column: 3; grid-row: 1 / span 2; }
   .call-line-system .call-line-text { grid-row: 1; }
+  .call-line-check .call-line-text { grid-column: 1 / -1; grid-row: 2; }
 }
 
 @media (prefers-reduced-motion: reduce) {

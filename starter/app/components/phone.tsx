@@ -405,9 +405,9 @@ function Tier2Screen({ call, playing, stopPrompt, act, sendVoice }: {
   const release = async () => {
     if (!holding.current) return
     holding.current = false
-    const wav = await stop()
-    if (!wav) { setNote("Hold the button while you speak, then let go."); return }
     setSending(true)
+    const wav = await stop().catch(() => null)
+    if (!wav) { setSending(false); setNote("Hold the button while you speak, then let go."); return }
     const refused = await sendVoice(call.id, wav)
     setSending(false)
     if (refused) setNote(refused)

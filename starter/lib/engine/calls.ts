@@ -450,10 +450,12 @@ export function agentTurn(call: Call, now: string, tier2: string | null, lastEve
 }
 
 function hungUp(call: Call): AgentStep {
-  const summary = `${who(call.callee)} hung up during the voice call. A person should follow up.`
+  const latest = [...call.transcript].reverse().find((line) => line.check && !line.check.failed)?.check
+  const learned = latest ? ` So far: ${latest.summary}` : ""
+  const summary = `${who(call.callee)} hung up during the voice call.${learned} A person should follow up.`
   const { claims, changes } = tier2Said(call)
   return { kind: "ended", outcome: "handover", text: summary, summary, claims, changes,
-    handover: { question: "The callee hung up before the problem was settled.", nextStep: `Call ${who(call.callee)} back.`, summary } }
+    handover: { question: latest?.openQuestion ?? "The callee hung up before the problem was settled.", nextStep: latest?.nextStep ?? `Call ${who(call.callee)} back.`, summary } }
 }
 
 function escalate(call: Call, why: string, tier2: string | null): AgentStep[] {

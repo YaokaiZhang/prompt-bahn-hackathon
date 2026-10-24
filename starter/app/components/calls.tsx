@@ -84,7 +84,7 @@ const NEXT_LABEL: Record<TurnCheck["next"], string> = { continue: "Keep talking"
 
 /** Haiku's structured result for one tier-2 turn. */
 function TurnCheckView({ check, cost }: { check: TurnCheck; cost: number }) {
-  return <dl className="call-check">
+  return <dl className="call-check call-line-text">
     {check.failed && <><dt>Check</dt><dd>Failed: safe reply, nothing recorded.</dd></>}
     {check.claims.length > 0 && <><dt>Said</dt><dd>{check.claims.join("; ")}</dd></>}
     {check.changes.length > 0 && <><dt>Change</dt><dd>{check.changes.map((change) => change.change).join("; ")} <span className="call-line-meta">Needs your yes</span></dd></>}
