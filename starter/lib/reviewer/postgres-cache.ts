@@ -1,5 +1,5 @@
-// The review cache in our own `cr_review_results` table. Engine reset truncates it
-// with the other engine tables.
+// The review cache in our own `cr_review_results` table. Engine reset keeps it: a
+// review is keyed by the hash of what it read (see CACHE_TABLES in lib/engine/schema.ts).
 
 import { eq } from "drizzle-orm"
 import type { Database } from "@/lib/engine/postgres"

@@ -5,6 +5,7 @@ import postgres from "postgres"
 import * as schema from "../lib/schema"
 import { readDataset } from "../lib/snapshot/files"
 import { tablesFromSource } from "../lib/snapshot/tables"
+import { sweep } from "./review-sweep"
 
 // The packet ships its records in ../dataset/data. Set DATASET_DIR to seed another folder with the same files.
 const url = process.env.DATABASE_URL
@@ -45,4 +46,17 @@ async function seed(): Promise<void> {
   console.log(`Seeded ${tables.orders.length} fictional orders and ${[...source.values()].reduce((sum, part) => sum + part.length, 0)} source records.`)
 }
 
-seed().finally(async () => { await client.end() })
+// The one-time reviewer sweep (ticket 06): every order not reviewed yet, so "Normal" means
+// checked. Skip with `--no-review` or SEED_REVIEW=0; cap with REVIEW_SWEEP_LIMIT=N. Without
+// OPENROUTER_API_KEY it only reports "not reviewed yet". Re-run alone: `npm run review:sweep`.
+async function reviewAfterSeed(): Promise<void> {
+  if (process.argv.includes("--no-review") || process.env.SEED_REVIEW === "0") return
+  const limit = process.env.REVIEW_SWEEP_LIMIT ? Number(process.env.REVIEW_SWEEP_LIMIT) : undefined
+  try {
+    await sweep({ url: url!, limit })
+  } catch (error) {
+    console.error(`Review sweep failed (${(error as Error).message}); the seed is in place. Re-run \`npm run review:sweep\`.`)
+  }
+}
+
+seed().finally(async () => { await client.end() }).then(reviewAfterSeed)

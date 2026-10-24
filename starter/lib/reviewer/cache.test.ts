@@ -4,6 +4,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import { createPostgresStore } from "@/lib/engine/postgres"
+import { reviewResults } from "@/lib/engine/schema"
 import { testDatabase } from "@/lib/engine/testing"
 import { createMemoryReviewCache, type ReviewCache } from "./cache"
 import { createPostgresReviewCache } from "./postgres-cache"
@@ -30,7 +31,7 @@ const stores: { name: string; make: () => Promise<ReviewCache> | null }[] = [
       const db = testDatabase()
       if (!db) return null
       return (async () => {
-        await createPostgresStore(db).reset()
+        await db.delete(reviewResults)
         return createPostgresReviewCache(db)
       })()
     },
@@ -50,10 +51,10 @@ for (const store of stores) {
   })
 }
 
-test("engine reset clears cached reviews [postgres]", { skip: process.env.TEST_DATABASE_URL ? false : "set TEST_DATABASE_URL" }, async () => {
+test("engine reset keeps cached reviews: they are keyed by what they read [postgres]", { skip: process.env.TEST_DATABASE_URL ? false : "set TEST_DATABASE_URL" }, async () => {
   const db = testDatabase()!
   const cache = createPostgresReviewCache(db)
   await cache.put("k1", sample)
   await createPostgresStore(db).reset()
-  assert.equal(await cache.get("k1"), null)
+  assert.deepEqual(await cache.get("k1"), sample)
 })

@@ -4,6 +4,7 @@
 // the source fields.
 
 import type { Group, PlannedAction, RuleResult, Urgency } from "@/lib/engine/checks"
+import type { OrderReview } from "@/lib/engine/reviews"
 
 export type Tone = "danger" | "warn" | "accent" | "ok" | "neutral"
 
@@ -16,6 +17,8 @@ export type OrderChecks = {
   rules: RuleResult[]
   planned: PlannedAction[]
   urgency: Urgency
+  /** The reviewer's read of the order: findings with cited records, records read, cost (ticket 06). */
+  review: OrderReview
 }
 
 export type Row = Record<string, unknown>
