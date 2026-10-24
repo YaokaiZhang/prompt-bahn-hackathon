@@ -159,6 +159,8 @@ export type FactsOrder = {
   review: { status: string; findings: unknown[] }
   /** Ticket 07: what keeps a proposal open (`waitingOn`) decides whether it holds the order in Needs action. */
   proposals: { kind: string; status: string; waitingOn: "operator" | "agent" | null }[]
+  /** Ticket 14: an open tier-3 handover ("handover") or a call nobody answered ("needs_person") holds the order too. */
+  callLines?: { status: string }[]
 }
 
 const ref = (row: FactsOrder): DigestOrder => ({ orderId: row.id, reference: row.reference })
@@ -191,6 +193,10 @@ export function digestFacts(input: {
     for (const proposal of row.proposals) {
       if (proposal.waitingOn !== "operator") continue
       labels.add(proposal.status === "proposed" ? "Proposal waiting for a yes" : proposal.kind === "operator_question" ? "Question for the operator" : "Customer contact with the operator")
+    }
+    for (const line of row.callLines ?? []) {
+      if (line.status === "handover") labels.add("Handover from a call")
+      if (line.status === "needs_person") labels.add("Call needs a person")
     }
     for (const rule of row.rules) if (rule.outcome === "fail" && rule.firstAction === "show_person") labels.add(rule.title)
     if (!labels.size) labels.add("Other")

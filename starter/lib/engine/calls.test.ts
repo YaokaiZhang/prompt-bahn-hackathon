@@ -97,13 +97,13 @@ test("a busy person picks a callback time; no answer three times in a row needs 
   assert.match(silent.reason, /No answer from .* after 3 attempts/)
 })
 
-test("a reported problem moves the call to tier 2; with no voice agent yet it ends as a handover to a person", async () => {
+test("a reported problem moves the call to tier 2; with no voice agent it ends as a tier-3 handover to a person", async () => {
   const engine = await callEngine({ "CD-420806": [["answer", "1", "2"]] })
   await engine.apply({ type: "runCalls" })
   const order806 = await order(engine, "CD-420806")
   const [call] = order806.calls
   assert.deepEqual(call.path, ["ringing", "answered", "availability", "tier1", "tier2", "ended"])
-  assert.equal(call.tier, 2)
+  assert.equal(call.tier, 3, "handed over to a person")
   assert.equal(call.outcome, "handover")
   assert.equal(order806.group, "needs_action")
   assert.match(order806.reason, /Driver reports a problem/)

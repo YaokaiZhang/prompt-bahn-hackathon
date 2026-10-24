@@ -78,10 +78,17 @@ export type CallEventKind =
   | "hung_up"
 
 /**
- * What ticket 14 (tier-3 handover) picks up when a tier-2 call ends unresolved: the
- * open question, the proposed next step and the summary (the transcript is on the call).
+ * A tier-3 handover (ticket 14): a call the agent could not resolve ends politely and
+ * hands an operator the open question, the proposed next step and the summary (the
+ * transcript is on the call). Stored on the "ended" event as a `HandoverNote`.
  */
-export type Handover = { question: string; nextStep: string; summary: string }
+export type HandoverNote = { question: string; nextStep: string; summary: string }
+
+/** How the operator closed a handover: what they learned, as the effect event they committed. */
+export type HandoverClosed = { at: string; result: string; effectId: string }
+
+/** A handover as the call shows it: open (`closed` null) until the operator records what they learned. */
+export type Handover = HandoverNote & { closed: HandoverClosed | null }
 
 export type CallChange = { title: string; change: string; claim: string }
 
@@ -121,7 +128,7 @@ export type StoredCallEvent = {
     model?: string | null
     /** Why a tier-2 step fell back (audio model or checker failed). */
     error?: string | null
-    handover?: Handover
+    handover?: HandoverNote
   } | null
 }
 
@@ -186,7 +193,7 @@ export type Call = Omit<CallHeader, "callId"> & {
   summary: string | null
   claims: string[]
   changes: CallChange[]
-  /** A tier-2 call that ended unresolved: what a person must pick up (ticket 14). */
+  /** A call that ended unresolved (tier 3): what a person must pick up, and whether they did (ticket 14). */
   handover: Handover | null
   cost: CallCost
   startedAt: string
@@ -300,8 +307,10 @@ export function foldCall(events: StoredCallEvent[], rates: CostRates = DEFAULT_R
         summary = event.data?.summary ?? null
         claims = event.data?.claims ?? []
         changes = event.data?.changes ?? []
-        handover = event.data?.handover ?? null
+        handover = event.data?.handover ? { ...event.data.handover, closed: null } : null
         endedAt = event.at
+        // Handed over: the call now sits with an operator (tier 3).
+        if (outcome === "handover") tier = 3
         line(event, "system", event.text)
         break
     }
@@ -327,7 +336,7 @@ export type AgentStep =
   | { kind: "said"; text: string; ask?: string }
   | { kind: "tier"; tier: Tier; text: string }
   | { kind: "callback"; callbackAt: string; text: string }
-  | { kind: "ended"; outcome: CallOutcome; text: string; summary: string; claims: string[]; changes: CallChange[]; handover?: Handover }
+  | { kind: "ended"; outcome: CallOutcome; text: string; summary: string; claims: string[]; changes: CallChange[]; handover?: HandoverNote }
 
 const MINUTE = 60_000
 const addMinutes = (iso: string, minutes: number) => new Date(new Date(iso).getTime() + minutes * MINUTE).toISOString()
@@ -395,7 +404,13 @@ function ending(call: Call, outcome: CallOutcome, text: string, extra: { escalat
     : call.path.includes("declined") ? `${name} declined the call.`
     : call.path.includes("no_answer") ? `${name} did not answer.`
     : `${name} was busy and asked for a callback.`
-  return { kind: "ended", outcome, text: summary, summary, claims, changes }
+  // An escalation nobody could talk through (no voice agent, or a simulated callee) is a tier-3 handover too.
+  const handover: HandoverNote | undefined = outcome === "handover" ? {
+    question: `${extra.escalation ?? "The callee needs a conversation"}: what does the order need now?`,
+    nextStep: `Call ${name} back (${call.topics.map((topic) => topic.title).join("; ") || "the call's topics"}), then record what you learned.`,
+    summary: `${name}: ${extra.escalation ?? "needs a conversation"}.`,
+  } : undefined
+  return { kind: "ended", outcome, text: summary, summary, claims, changes, ...(handover ? { handover } : {}) }
 }
 
 /**
@@ -510,7 +525,9 @@ export type LineStatus =
   | "callback"
   /** The callback time has come; the agent calls on its next run. */
   | "callback_due"
-  /** The last call ended needing a person (handover, unreachable). */
+  /** The last call was handed over (tier 3) and the operator has not recorded what they learned yet. */
+  | "handover"
+  /** The last call ended needing a person (no answer after every attempt). */
   | "needs_person"
   /**
    * Something worth asking, but only when the operator rings it live (ticket 12): a
@@ -668,6 +685,10 @@ export function orderCalls(bundle: Bundle, planned: PlannedAction[], proposals: 
     if (latest && latest.state !== "ended") {
       status = "calling"
       text = `Calling ${name} (tier ${latest.tier}): ${latest.reason}`
+    } else if (latest?.outcome === "handover" && latest.handover && !latest.handover.closed) {
+      // An open handover holds the line: no new call until the operator has acted.
+      status = "handover"
+      text = `Handover from the call with ${name}: ${latest.handover.question}`
     } else if (latest?.outcome === "callback" && latest.callbackAt && (open.length || latest.topics.length)) {
       status = latest.callbackAt > now ? "callback" : "callback_due"
       text = status === "callback" ? `Callback to ${name} at ${utcTime(latest.callbackAt)}.` : `Callback to ${name} is due; the agent calls now.`
@@ -677,6 +698,9 @@ export function orderCalls(bundle: Bundle, planned: PlannedAction[], proposals: 
     } else if (open.length) {
       status = "to_call"
       text = `Agent will call ${name}: ${open.map((topic) => topic.title).join("; ")}.`
+    } else if (latest?.handover?.closed) {
+      status = "done"
+      text = `Handover closed by the operator: ${latest.handover.closed.result}`
     } else if (latest && (latest.outcome === "handover" || latest.outcome === "unreachable")) {
       status = "needs_person"
       text = `Call needs a person: ${latest.summary ?? latest.reason}`

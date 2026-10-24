@@ -26,7 +26,7 @@ import type { EngineStore } from "./store"
 import { createCallRunner, type CallOptions } from "./call-runner"
 import type { PhonePersona, PhoneView } from "./phone"
 import type { AudioClip } from "./voice-agent"
-import { callbackItems, orderCalls, utcTime, type BlockedCall, type Call, type CalleeInput, type CallLine, type CallLineView, type OrderCalls } from "./calls"
+import { callbackItems, orderCalls, utcTime, type BlockedCall, type Call, type CalleeInput, type CallLine, type CallLineView, type Handover, type OrderCalls } from "./calls"
 
 /** The snapshot as the engine reads it: one bundle per order. */
 export type Snapshot = { snapshotAt: string; bundles: Bundle[] }
@@ -92,6 +92,12 @@ export type Command =
    * voice agent transcribes it, answers aloud and the checker records the turn's result.
    */
   | { type: "voiceTurn"; callId: string; audio: AudioClip }
+  /**
+   * The operator acted on a tier-3 handover (ticket 14): what they learned is committed
+   * as the call's result (a new version over the agent's record of the call), and the
+   * handover closes, so it no longer holds the order in Needs action.
+   */
+  | { type: "recordHandoverResult"; callId: string; result: string }
 
 /**
  * One order as the engine reads it at `now`. `group`, `reason`, `rules` (every
@@ -327,7 +333,7 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     const evaluations = evaluationsAt(at)
     const events = eventsByOrder(await store.readProposalEvents())
     const read = await reviews.read(reviewInputs(events, effects))
-    const calls = await callRunner.read()
+    const calls = withClosures(await callRunner.read(), effects)
     return snapshot.bundles.map(({ order }) => {
       const bundle = bundleOf(order.id)
       const evaluation = evaluations.get(order.id)!
@@ -373,6 +379,7 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
   async function callEnded(call: Call): Promise<void> {
     if (call.outcome === "callback") return
     await recordCallResult(call)
+    if (call.outcome === "handover" && call.handover) await pushHandover(call, call.handover)
     for (const change of call.changes) {
       await proposeChange({
         orderId: call.orderId, title: change.title, change: change.change, source: call.id,
@@ -380,6 +387,62 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
         contact: { name: call.callee.name ?? call.callee.handle, type: call.callee.contactType, role: call.line === "driver" ? "driver" : "site", recordId: call.callee.recordId },
       })
     }
+  }
+
+  /** Handovers the operator closed: their `call_result_recorded` effect event (by the operator, source = the call). */
+  function withClosures(calls: Map<string, Call[]>, effects: Map<string, EffectEvent[]>): Map<string, Call[]> {
+    const out = new Map<string, Call[]>()
+    for (const [orderId, list] of calls) {
+      const closing = (effects.get(orderId) ?? []).filter((event) => event.type === "call_result_recorded" && event.by === "operator")
+      out.set(orderId, list.map((call) => {
+        const event = call.handover ? closing.find((row) => row.source === call.id) : undefined
+        if (!event || event.type !== "call_result_recorded" || !call.handover) return call
+        return { ...call, handover: { ...call.handover, closed: { at: event.at, result: event.claim, effectId: event.id } } }
+      }))
+    }
+    return out
+  }
+
+  /** The point a call's result settles: the one call proposal it answered, or what the callee said on that line. */
+  function callFact(call: Call, answered: { id: string; script: string }[]): { key: string; label: string } {
+    return answered.length === 1 ? { key: `answer:${answered[0].id}`, label: answered[0].script } : { key: `call:${call.line}`, label: `what the ${call.line} said on the call` }
+  }
+
+  /**
+   * The operator closes a handover with what they learned: a `call_result_recorded`
+   * effect event by the operator (source = the call). It writes the next version of the
+   * point the call settled and names the agent's record of the call it supersedes.
+   */
+  async function recordHandoverResult(callId: string, text: string): Promise<void> {
+    const result = answerText(text)
+    const effects = await sync()
+    const call = [...withClosures(await callRunner.read(), effects).values()].flat().find((row) => row.id === callId)
+    if (!call) throw new Error(`No call ${callId}`)
+    if (call.outcome !== "handover" || !call.handover) throw new Error(`${call.reference}: call ${callId} was not handed over to a person`)
+    if (call.handover.closed) throw new Error(`${call.reference}: the handover from call ${callId} is already closed`)
+    const agent = (effects.get(call.orderId) ?? []).find((event) => event.source === call.id && event.by === "agent")
+    const answered = call.topics.filter((topic) => topic.kind === "proposal").map((topic) => ({ id: topic.id.slice("proposal:".length), script: topic.script ?? topic.title }))
+    const who = call.callee.name ?? call.callee.handle
+    await commitEffects([{
+      type: "call_result_recorded", with: `${who} (${call.line}), followed up by the operator`, claim: result, callId: call.id,
+      orderId: call.orderId, by: "operator", source: call.id,
+      fact: agent?.fact ?? callFact(call, answered),
+      supersedes: agent ? [agent.id] : [],
+      answers: agent?.answers ?? answered.map((proposal) => proposal.id),
+    }])
+    await rereview(call.orderId)
+  }
+
+  /**
+   * A tier-3 handover arrived: one urgent push (spec story 79: at most once per order
+   * per reason, so a second handover on the same order shows only in Needs action).
+   */
+  async function pushHandover(call: Call, handover: Handover): Promise<void> {
+    const who = call.callee.name ?? call.callee.handle
+    await sendPush(store, {
+      orderId: call.orderId, reference: call.reference, reason: "handover", at: await clock(),
+      text: `${who} (${call.line}) needs a person: ${handover.question} Next step: ${handover.nextStep}`,
+    })
   }
 
   /**
@@ -408,7 +471,7 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     await commitEffects([{
       type: "call_result_recorded", with: `${who} (${call.line})`, claim: call.claims.join("; "), callId: call.id,
       orderId: call.orderId, by: "agent", source: call.id,
-      fact: carried.length === 1 ? { key: `answer:${carried[0].id}`, label: carried[0].script } : { key: `call:${call.line}`, label: `what the ${call.line} said on the call` },
+      fact: callFact(call, carried),
       supersedes: statementsBy(carried.flatMap((proposal) => proposal.evidence), byCallee),
       answers: carried.map((proposal) => proposal.id),
     }])
@@ -719,6 +782,9 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
         break
       case "voiceTurn":
         await callRunner.voice(command.callId, command.audio)
+        break
+      case "recordHandoverResult":
+        await recordHandoverResult(command.callId, command.result)
         break
       case "deliverBriefing":
         await deliverBriefing()
