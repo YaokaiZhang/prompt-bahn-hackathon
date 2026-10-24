@@ -5,10 +5,18 @@
 // Extend by adding a method here, then implementing it in `memory.ts` and
 // `postgres.ts` (with a `cr_` table in `schema.ts`). Times cross the port as ISO strings.
 
+import type { BriefingItem } from "./briefing"
+
 export interface EngineStore {
   /** The demo clock, or null when it has not moved from its start. */
   readClock(): Promise<string | null>
   writeClock(now: string): Promise<void>
+  /** Every Briefing item delivered so far (ticket 13), in no particular order. */
+  readBriefing(): Promise<BriefingItem[]>
+  /** Stores an item unless one with its id exists; true when it was added (at most once per id). */
+  addBriefing(item: BriefingItem): Promise<boolean>
+  /** Marks items read (all unread ones when `ids` is absent). */
+  markBriefingRead(ids?: string[]): Promise<void>
   /** Empties every engine table. The snapshot is never touched. */
   reset(): Promise<void>
 }

@@ -15,13 +15,13 @@ const order = (state: EngineState, reference: string) => {
   return found
 }
 
-test("at the start nothing is due yet and the 10:00 next checks come first", async () => {
+test("at the start only the 09:00 digest is due and the 10:00 next checks come first", async () => {
   const state = await (await testEngine()).state()
   assert.equal(state.nextDueAt, TEN)
-  assert.equal(state.dueItems.filter((item) => item.due).length, 0)
+  assert.deepEqual(state.dueItems.filter((item) => item.due).map((item) => item.id), ["digest:09:00"])
   const atTen = state.dueItems.filter((item) => item.at === TEN).map((item) => item.reference).sort()
   assert.deepEqual(atTen, ["CD-420015", "CD-420458", "CD-420516"])
-  for (const item of state.dueItems) assert.equal(item.kind, "next_check")
+  for (const item of state.dueItems) assert.ok(["next_check", "digest"].includes(item.kind))
 })
 
 eachStore("next due item moves the clock to 10:00 and says which next checks came due", async (engine) => {
@@ -95,7 +95,7 @@ eachStore("reset after the 10:00 checks fired brings back the start state", asyn
   const reset = await engine.apply({ type: "reset" })
   assert.equal(reset.now, START)
   assert.equal(reset.nextDueAt, TEN)
-  assert.equal(reset.dueItems.filter((item) => item.due).length, 0)
+  assert.deepEqual(reset.dueItems.filter((item) => item.due).map((item) => item.id), ["digest:09:00"])
   assert.equal(order(reset, "CD-420516").group, "normal")
   assert.deepEqual(reset.groupCounts, start.groupCounts)
   assert.deepEqual(reset.orders, start.orders)

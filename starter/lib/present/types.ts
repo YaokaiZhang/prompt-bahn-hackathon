@@ -6,6 +6,7 @@
 import type { Group, PlannedAction, RuleResult, Urgency } from "@/lib/engine/checks"
 import type { OrderReview } from "@/lib/engine/reviews"
 import type { DueItem } from "@/lib/engine/due"
+import type { BriefingItem } from "@/lib/engine/briefing"
 
 export type Tone = "danger" | "warn" | "accent" | "ok" | "neutral"
 
@@ -36,6 +37,17 @@ export type ClockView = {
   dueCount: number
   /** After a move: the items it passed (empty after reset); null on a plain read. */
   became: DueItem[] | null
+}
+
+/** The Briefing inbox as `/api/briefing` returns it (ticket 13). */
+export type BriefingView = {
+  now: string
+  snapshotAt: string
+  /** Newest first. */
+  items: BriefingItem[]
+  unread: number
+  /** The queue's counts now, to compare with the latest digest. */
+  groupCounts: Record<Group, number>
 }
 
 export type Row = Record<string, unknown>
