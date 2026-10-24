@@ -14,7 +14,7 @@
 import type { Bundle } from "@/lib/present/bundle"
 import { str } from "@/lib/present/bundle"
 
-export type DueKind = "next_check" | "digest"
+export type DueKind = "next_check" | "digest" | "callback"
 
 export type DueItem = {
   /** Stable id: `<kind>:<source record id>`. */

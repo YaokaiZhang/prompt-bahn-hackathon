@@ -7,6 +7,7 @@ type Source = { id: string; order_id?: string; plan_id?: string; active_plan_id?
   link_state?: string; candidate_order_ids?: string[]; linked_order_ids?: string[];
   contact_name?: string | null; contact_handle?: string | null }
 type Related = { id: string; details: Source }
+type SmokeCall = { id: string; state: string; tier: number; transcript: { wallAt: string }[]; cost: { totalEur: number; operatorEur: number } }
 type OrderResponse = { order: { id: string }; items: { vehicle: { syntheticVin: string | null } }[];
   related: Record<string, Related[]> }
 
@@ -166,6 +167,9 @@ async function main(): Promise<void> {
     throw new Error("Inbox link uncertainty was lost from the starter API")
   }
   // The board and the order record must agree on whether an order needs a person.
+  // Background calls run in the server while smoke reads (ticket 10): an order whose call moved after this
+  // moment may change group between the queue read and the order read, so those are not compared.
+  const overviewReadAt = Date.now()
   const overviewResponse = await appFetch(`${base}/api/overview`)
   if (!overviewResponse.ok) throw new Error("Overview did not load")
   const overview = await overviewResponse.json() as {
@@ -204,18 +208,34 @@ async function main(): Promise<void> {
   const groupDisagreements: string[] = []
   const reviewProblems: string[] = []
   let reviewed = 0
+  const callProblems: string[] = []
+  let callCount = 0
+  let running = 0
+  let movedByCalls = 0
   for (let index = 0; index < overview.visible.length; index += 10) {
     const cards = overview.visible.slice(index, index + 10)
     const views = await Promise.all(cards.map(async (card) => {
       const detailResponse = await appFetch(`${base}/api/orders/${card.id}`)
       if (!detailResponse.ok) throw new Error(`Order API returned ${detailResponse.status} for ${card.id}`)
-      const detail = await detailResponse.json() as { view: { attention: unknown[] }; checks: { group: string; review?: { status: string; recordsRead: number; findings: unknown[] } } | null }
+      const detail = await detailResponse.json() as { view: { attention: unknown[] }; checks: { group: string; review?: { status: string; recordsRead: number; findings: unknown[] }; calls?: SmokeCall[] } | null }
       return detail
     }))
     cards.forEach((card, position) => {
       const recordAttention = views[position].view.attention
       const recordGroup = views[position].checks?.group
-      if (!card.verdict || card.verdict.group !== recordGroup) {
+      // Ticket 10: every call shows its tier, state, transcript and a cost below the operator's.
+      const calls = views[position].checks?.calls
+      if (!Array.isArray(calls)) callProblems.push(`${card.reference} (no calls list)`)
+      for (const call of calls ?? []) {
+        callCount += 1
+        if (call.state !== "ended") running += 1
+        if (![1, 2, 3].includes(call.tier) || !call.transcript?.length || !(call.cost?.operatorEur > 0) || !(call.cost.totalEur <= call.cost.operatorEur)) {
+          callProblems.push(`${card.reference} ${call.id}`)
+        }
+      }
+      const moved = (calls ?? []).some((call) => call.state !== "ended" || Date.parse(call.transcript.at(-1)?.wallAt ?? "") >= overviewReadAt - 2_000)
+      if (moved) movedByCalls += 1
+      if (!moved && (!card.verdict || card.verdict.group !== recordGroup)) {
         groupDisagreements.push(`${card.reference} (queue ${card.verdict?.group ?? "none"}, order ${recordGroup ?? "none"})`)
       }
       // Ticket 06: every order says whether the reviewer read it, and how many records.
@@ -237,6 +257,8 @@ async function main(): Promise<void> {
     throw new Error(`Order API has no reviewer status or records-read count for: ${reviewProblems.join(", ")}`)
   }
   console.log(`Reviewer: ${reviewed} of ${overview.visible.length} orders reviewed; the rest read "not reviewed yet".`)
+  if (callProblems.length) throw new Error(`Calls without a calls list, tier, transcript or a cost below the operator's: ${callProblems.join(", ")}`)
+  console.log(`Calls: ${callCount} on record, ${running} running; ${movedByCalls} orders with call activity during the read were not compared for group.`)
   // Ticket 07: every proposal waiting for a yes shows its evidence, contact type, who pays,
   // policy row and what approving will do; the Rules page renders. Read-only: nothing is approved.
   const approvalsResponse = await appFetch(`${base}/api/proposals`)

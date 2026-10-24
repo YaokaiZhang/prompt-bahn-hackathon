@@ -76,6 +76,7 @@ export type ReviewSignal = { status: "reviewed" | "not_reviewed"; recordsRead: n
 
 /** What grouping needs from the order's proposals (ticket 07, lib/engine/proposals.ts). */
 export type ProposalSignal = {
+  id?: string
   title: string
   kind: "call" | "operator_question" | "customer_contact" | "change"
   status: "proposed" | "approved" | "answered" | "dismissed"
@@ -83,8 +84,19 @@ export type ProposalSignal = {
   contact: { name: string }
 }
 
-/** The order's proposals, and findings the agent cannot act on for lack of a contact. */
-export type WorkSignal = { proposals: ProposalSignal[]; unreachable: { title: string }[] }
+/**
+ * What grouping needs from the order's calls (ticket 10, lib/engine/calls.ts): one
+ * entry per call line. A call running, a callback scheduled or due keeps the order
+ * In progress; `needs_person` (a handover, no answer after every attempt) sends it
+ * to Needs action. `carried`: call proposals a running call or callback speaks for.
+ */
+export type CallSignal = {
+  lines: { status: "to_call" | "calling" | "callback" | "callback_due" | "needs_person" | "done"; text: string }[]
+  carried: Set<string>
+}
+
+/** The order's proposals, findings the agent cannot act on for lack of a contact, and its calls. */
+export type WorkSignal = { proposals: ProposalSignal[]; unreachable: { title: string }[]; calls?: CallSignal }
 
 const sentence = (text: string) => text.replace(/[.]$/, "")
 
@@ -112,28 +124,34 @@ export function verdictFor(evaluation: Evaluation, review: ReviewSignal | null =
   const planned = reviewed ? evaluation.planned.filter((action) => action.kind !== "reviewer_pass") : evaluation.planned
   const decisions = rules.filter((row) => row.outcome === "fail" && row.firstAction === "show_person")
   const forOperator = work.proposals.filter((proposal) => proposal.waitingOn === "operator")
-  if (decisions.length || forOperator.length) {
-    const reason = [...forOperator.map(waitingText), ...decisions.map((row) => row.detail)].join(" ")
+  const lines = work.calls?.lines ?? []
+  const forPerson = lines.filter((line) => line.status === "needs_person")
+  if (decisions.length || forOperator.length || forPerson.length) {
+    const reason = [...forOperator.map(waitingText), ...forPerson.map((line) => line.text), ...decisions.map((row) => row.detail)].join(" ")
     return { group: "needs_action", reason, rules, planned, urgency }
   }
-  const forAgent = work.proposals.filter((proposal) => proposal.waitingOn === "agent")
-  if (planned.length || forAgent.length) {
+  const carried = work.calls?.carried ?? new Set<string>()
+  const forAgent = work.proposals.filter((proposal) => proposal.waitingOn === "agent" && !(proposal.id && carried.has(proposal.id)))
+  const calling = lines.filter((line) => line.status === "calling" || line.status === "callback" || line.status === "callback_due")
+  if (planned.length || forAgent.length || calling.length) {
     const reason = [
+      ...calling.map((line) => line.text),
       ...forAgent.map((proposal) => `Agent will call ${proposal.contact.name}: ${sentence(proposal.title)}.`),
       ...planned.map((action) => action.reason),
     ].join(" ")
     return { group: "in_progress", reason, rules, planned, urgency }
   }
+  const results = lines.filter((line) => line.status === "done" && line.text).map((line) => line.text)
   const decided = work.proposals.length
   const readNote = reviewed
     ? decided ? `Reviewer read ${review.recordsRead} records; ${decided === 1 ? "its proposal is" : `all ${decided} proposals are`} decided.` : `Reviewer read ${review.recordsRead} records, no conflict.`
     : null
   const unreachable = work.unreachable.map((finding) => `Reviewer: ${sentence(finding.title)}, but no contact is on record, so it couldn't be checked.`)
   const gaps = rules.filter((row) => row.outcome === "unknown").length + work.unreachable.length
-  if (finished && gaps === 0) return { group: "done", reason: ["Finished with nothing open.", readNote].filter(Boolean).join(" "), rules, planned, urgency }
+  if (finished && gaps === 0) return { group: "done", reason: ["Finished with nothing open.", readNote, ...results].filter(Boolean).join(" "), rules, planned, urgency }
   const checked = rules.length
   const ruleNote = gaps ? `The rules found nothing to act on; ${gaps === 1 ? "one gap" : `${gaps} gaps`} couldn't be checked.` : `All ${checked} checks passed.`
-  return { group: "normal", reason: [readNote, ...unreachable, ruleNote].filter(Boolean).join(" "), rules, planned, urgency }
+  return { group: "normal", reason: [...results, readNote, ...unreachable, ruleNote].filter(Boolean).join(" "), rules, planned, urgency }
 }
 
 const URGENT_FIRST = (a: Urgency, b: Urgency) => Number(b.urgent) - Number(a.urgent)

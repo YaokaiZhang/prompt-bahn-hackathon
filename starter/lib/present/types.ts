@@ -8,6 +8,7 @@ import type { OrderReview } from "@/lib/engine/reviews"
 import type { Proposal, Unreachable } from "@/lib/engine/proposals"
 import type { DueItem } from "@/lib/engine/due"
 import type { BriefingItem } from "@/lib/engine/briefing"
+import type { BlockedCall, Call, CallLineView } from "@/lib/engine/calls"
 
 export type Tone = "danger" | "warn" | "accent" | "ok" | "neutral"
 
@@ -26,6 +27,12 @@ export type OrderChecks = {
   proposals: Proposal[]
   /** Findings with no contact on record: no call, no proposal (couldn't check). */
   unreachable: Unreachable[]
+  /** The agent's calls on the order, oldest first: transcript, tier, state and cost (ticket 10). */
+  calls: Call[]
+  /** The site and driver lines: what is left to call about, a callback, or nothing. */
+  callLines: CallLineView[]
+  /** Planned calls the agent will not make: the callee is on the customer side. */
+  blockedCalls: BlockedCall[]
 }
 
 /** `/api/proposals`: proposals waiting for the operator's yes, across orders, for batch approval. */

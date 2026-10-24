@@ -21,6 +21,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     ? {
       now: state.now, group: verdict.group, reason: verdict.reason, rules: verdict.rules, planned: verdict.planned, urgency: verdict.urgency,
       review: verdict.review, proposals: verdict.proposals, unreachable: verdict.unreachable,
+      calls: verdict.calls, callLines: verdict.callLines, blockedCalls: verdict.blockedCalls,
     }
     : null
   return NextResponse.json({

@@ -797,6 +797,54 @@ details.more > :not(summary) { margin-top: 10px; }
   .digest-counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .digest-prose { font-size: 16px; }
 }
+/* ── Calls: transcript, tier and cost meter (ticket 10) ─────────────────── */
+.call { margin-top: 10px; padding: 16px 18px 14px; border-radius: var(--r-md); background: var(--birch); scroll-margin-top: calc(var(--bar-h) + 16px); }
+.call-running { box-shadow: inset 0 0 0 1px var(--teal); }
+.call-head { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 12px; align-items: start; }
+.call-head .icon { margin-top: 2px; }
+.call-title { font-size: 16px; font-weight: 700; line-height: 1.35; color: var(--ink); }
+.call-sub { margin-top: 2px; font-size: 13.5px; color: var(--muted); overflow-wrap: anywhere; }
+.call-pills { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.call-reason, .call-summary { margin: 8px 0 0 32px; font-size: 14.5px; color: var(--body); max-width: 72ch; }
+.call-summary { font-weight: 600; color: var(--ink); }
+.call-meter { margin: 12px 0 0 32px; padding: 12px 16px; border-radius: var(--r-sm); background: var(--sand-50); max-width: 72ch; }
+.call-meter-row { display: flex; flex-wrap: wrap; gap: 6px 28px; }
+.call-meter-figure { display: grid; gap: 3px; }
+.call-meter-label { font-size: 13px; font-weight: 600; color: var(--muted); }
+.call-meter-figure b { font-size: 20px; font-weight: 700; color: var(--ink); }
+.call-meter-bar { position: relative; height: 4px; margin-top: 10px; border-radius: 2px; background: var(--sand-200); overflow: hidden; }
+.call-meter-bar span { position: absolute; inset: 0 auto 0 0; border-radius: 2px; background: var(--teal); transition: width 0.7s var(--ease); }
+.call-meter-parts { margin-top: 8px; font-size: 13px; color: var(--muted); }
+.call-transcript { list-style: none; margin: 10px 0 0 32px; padding: 0; max-height: 360px; overflow-y: auto; overscroll-behavior: contain; }
+.call .more .call-transcript { margin-left: 0; }
+.call .more { margin: 10px 0 0 32px; }
+.call-line { display: grid; grid-template-columns: 38px 64px minmax(0, 1fr) 30px; gap: 10px; align-items: start; padding: 7px 0; border-top: 1px solid var(--sand-50); font-size: 14.5px; line-height: 1.4; }
+.call-line:first-child { border-top: 0; }
+.call-line-at { font-size: 13px; color: var(--muted); padding-top: 1px; }
+.call-line-by { font-size: 13px; font-weight: 600; color: var(--brown); padding-top: 1px; }
+.call-line-agent .call-line-text { color: var(--ink); }
+.call-line-callee .call-line-text { font-weight: 600; color: var(--teal-ink); }
+.call-line-system .call-line-text { color: var(--muted); }
+.call-play { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: var(--r-pill); background: var(--sand-100); color: var(--ink); transition: background-color 0.18s var(--ease); }
+.call-play:hover { background: var(--sand-200); }
+.call-play[aria-pressed="true"] { background: var(--ink); color: var(--birch); }
+.call-play-tri { width: 0; height: 0; margin-left: 2px; border-left: 8px solid currentColor; border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+.call-play-stop { width: 8px; height: 8px; background: currentColor; border-radius: 1px; }
+.call-waiting { display: flex; align-items: flex-start; gap: 10px; margin-top: 8px; font-size: 14.5px; color: var(--body); max-width: 72ch; }
+.call-waiting .icon { flex: none; margin-top: 2px; }
+@media (max-width: 900px) {
+  .call { padding: 14px; }
+  .call-head { grid-template-columns: 20px minmax(0, 1fr); }
+  .call-pills { grid-column: 1 / -1; justify-content: flex-start; }
+  .call-reason, .call-summary, .call-meter, .call-transcript, .call .more { margin-left: 0; }
+  .call-line { grid-template-columns: 36px minmax(0, 1fr) 30px; row-gap: 2px; }
+  .call-line-at { grid-column: 1; grid-row: 1; }
+  .call-line-by { grid-column: 2; grid-row: 1; }
+  .call-line-text { grid-column: 2; grid-row: 2; }
+  .call-line > :last-child { grid-column: 3; grid-row: 1 / span 2; }
+  .call-line-system .call-line-text { grid-row: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

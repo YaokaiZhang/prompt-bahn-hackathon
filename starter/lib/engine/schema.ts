@@ -3,7 +3,7 @@
 // Every table is prefixed `cr_` and listed in ENGINE_TABLES (state, which reset truncates)
 // or CACHE_TABLES (content-keyed caches, which reset keeps).
 
-import { bigserial, boolean, index, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core"
+import { bigserial, boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core"
 
 /** One row (id "current") once the demo clock has moved; no row means the clock is at its start. */
 export const demoClock = pgTable("cr_demo_clock", {
@@ -59,8 +59,25 @@ export const proposalEvents = pgTable("cr_proposal_events", {
   data: jsonb("data").$type<Record<string, unknown>>(),
 }, (table) => [index("cr_proposal_events_order_idx").on(table.orderId)])
 
+/**
+ * Calls (ticket 10): append-only events per call; the first ("started") carries the
+ * call's header. (call_id, seq) is the key, so two writers cannot take the same step.
+ * Calls, call turns, call costs and callbacks are all folded from these rows (lib/engine/calls.ts).
+ */
+export const callEvents = pgTable("cr_call_events", {
+  callId: text("call_id").notNull(),
+  seq: integer("seq").notNull(),
+  orderId: text("order_id").notNull(),
+  at: timestamp("at", { withTimezone: true }).notNull(),
+  wallAt: timestamp("wall_at", { withTimezone: true }).notNull(),
+  by: text("by").notNull(),
+  kind: text("kind").notNull(),
+  text: text("text").notNull(),
+  data: jsonb("data").$type<Record<string, unknown>>(),
+}, (table) => [primaryKey({ columns: [table.callId, table.seq] }), index("cr_call_events_order_idx").on(table.orderId)])
+
 /** Every engine state table. Add new tables here so reset clears them. */
-export const ENGINE_TABLES = [demoClock, briefingItems, proposalEvents]
+export const ENGINE_TABLES = [demoClock, briefingItems, proposalEvents, callEvents]
 
 /**
  * Caches that reset keeps on purpose (ticket 04). A cached review is keyed by the
