@@ -11,7 +11,7 @@ We want agents to do the cheap work first (read, compare, ask) and bring a perso
 
 ## 2. Goals
 
-1. **Three-group control room.** Operators see every order in one of three groups: **Normal** (checked and normal, not only "no alert"), **Needs action**, and **In progress or done**.
+1. **Four-group control room.** Operators see every order in one of four groups: **Needs action**, **In progress**, **Normal** (checked and normal, not only "no alert"), and **Done** (finished completely).
 2. **One real agent: the Document Reviewer.** An LLM in a tool loop that finds conflicting or wrong information in an order's records and decides who to ask, what to ask, and why.
 3. **Approvals that follow the brief's rules.** Nothing that changes the order or contacts a paying customer happens without a person's yes. Routine questions to sites and drivers go out on their own.
 4. **An action agent with a three-tier mock call.** Fixed keypad questions first, then an LLM voice agent, then a human, with live transcript, tier and cost shown in the control room.
@@ -84,8 +84,11 @@ On the strong rules, about 21 orders are flagged and about 79 come out "checked 
 | Group | Meaning |
 |---|---|
 | **Needs action** | A proposal is waiting for a yes, a tier-3 handover is open, or a flagged order has no plan yet. Sorted by urgency (§9), expanded by default. |
-| **In progress or done** | An agent action is running (call in progress, callback scheduled, waiting on a reply) or was completed with its result recorded. |
+| **In progress** | An agent action is running: a call in progress, a callback scheduled, or waiting on a reply. When the action finishes, the order moves to Needs action (if a change needs a yes) or back to Normal. |
 | **Normal** | All rule checks pass and the reviewer found no conflict. Collapsed to a count with a "checked" badge. |
+| **Done** | Finished completely: delivered or cancelled, with the handover evidence complete, no trade-in still moving, no open proof, claim, alert, work item or proposal. Collapsed. A delivered order that still has a gap (missing signed handover, contested condition, trade-in on the road) is **not** Done. |
+
+An order is in exactly one group. Precedence: Needs action, then In progress, then Done, then Normal.
 
 ### 5.4 Opening a Normal order
 
@@ -210,7 +213,7 @@ Example routine questions: "Is the car ready?", "Are the papers there?", "What d
 ## 9. Summaries and urgency (sketch 5)
 
 - **Briefing page:** in-app, styled like an email, with a copyable or mailto version. Nothing is really sent.
-- **Counts:** from the rule engine only. They cover Needs action by reason, In progress, Normal, and couldn't-check gaps.
+- **Counts:** from the rule engine only. They cover Needs action by reason, In progress, Normal, Done, and couldn't-check gaps.
 - **Urgent reminder** at the top. An order is urgent when any of these holds:
   - an action is due within 2 h of the demo clock;
   - a promise is at risk today (ETA after the promise end);
@@ -275,7 +278,7 @@ Built only if time allows. It would start with a mocked UI and deterministic opt
 
 ## 12. Architecture
 
-- **App:** the starter (Next.js, TypeScript, Postgres, Drizzle). The home page is replaced by the three groups. The old lane board stays at `/board` for reference.
+- **App:** the starter (Next.js, TypeScript, Postgres, Drizzle). The home page is replaced by the four groups. The old lane board stays at `/board` for reference.
 - **Our tables:** separate tables with no foreign keys to the starter tables, so reseeding still works:
   - `review_results` (cached per order by hash)
   - `proposals` and `proposal_history`
