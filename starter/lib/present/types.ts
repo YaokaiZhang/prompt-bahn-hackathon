@@ -4,6 +4,7 @@
 // the source fields.
 
 import type { Group, PlannedAction, RuleResult, Urgency } from "@/lib/engine/checks"
+import type { DueItem } from "@/lib/engine/due"
 
 export type Tone = "danger" | "warn" | "accent" | "ok" | "neutral"
 
@@ -16,6 +17,22 @@ export type OrderChecks = {
   rules: RuleResult[]
   planned: PlannedAction[]
   urgency: Urgency
+}
+
+export type ClockAction = "advance" | "next" | "reset"
+
+/** The demo clock as `/api/clock` returns it. */
+export type ClockView = {
+  now: string
+  snapshotAt: string
+  /** The earliest time something comes due after `now`; null when nothing is left. */
+  nextDueAt: string | null
+  /** The items that come due at `nextDueAt`. */
+  upcoming: DueItem[]
+  /** How many items the clock has reached. */
+  dueCount: number
+  /** After a move: the items it passed (empty after reset); null on a plain read. */
+  became: DueItem[] | null
 }
 
 export type Row = Record<string, unknown>

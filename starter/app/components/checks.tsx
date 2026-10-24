@@ -30,6 +30,7 @@ const SECTION: Record<string, string> = {
   expenses: "costs",
   documents: "evidence-details", proofs: "evidence-details", custody_assets: "evidence-details",
   agent_proposals: "proposals",
+  conversations: "conversations",
 }
 
 export function sourceHref(orderId: string, source: SourceRef, samePage: boolean): string {
