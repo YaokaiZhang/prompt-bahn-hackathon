@@ -18,6 +18,7 @@ const quoted = {
     quote: { type: "string", description: "Exact text copied from that field's value." },
   },
   required: ["record_id", "field", "quote"],
+  additionalProperties: false,
 }
 
 export const SUBMIT_SPEC: ToolSpec = {
@@ -31,6 +32,7 @@ export const SUBMIT_SPEC: ToolSpec = {
         summary: { type: "string", description: "One sentence on what you read and concluded." },
         findings: {
           type: "array",
+          description: "A JSON array of finding objects, not a string. Empty when there is nothing to ask.",
           items: {
             type: "object",
             properties: {
@@ -46,6 +48,7 @@ export const SUBMIT_SPEC: ToolSpec = {
                   name: { type: "string", description: "Who to ask, in words." },
                 },
                 required: ["role", "contact_type", "contact_record_id", "contact_quote", "name"],
+                additionalProperties: false,
               },
               who_pays: { type: "string" },
               policy_row: { type: "string", enum: POLICY_ROW_IDS },
@@ -53,10 +56,12 @@ export const SUBMIT_SPEC: ToolSpec = {
               why: { type: "string" },
             },
             required: ["title", "conflict", "ask", "who_pays", "policy_row", "question", "why"],
+            additionalProperties: false,
           },
         },
       },
       required: ["summary", "findings"],
+      additionalProperties: false,
     },
   },
 }
