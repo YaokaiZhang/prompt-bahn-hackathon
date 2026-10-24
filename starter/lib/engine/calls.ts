@@ -38,6 +38,7 @@ import {
 import type { PlannedAction, SourceRef } from "./checks"
 import type { DueItem } from "./due"
 import { latestEta } from "./eta"
+import { isFinished, movingAssignments, selectedPromise } from "./order-facts"
 import type { Proposal } from "./proposals"
 import type { TurnCheck, TurnPath } from "./voice-agent"
 
@@ -645,12 +646,10 @@ export const TIGHT_ETA_MINUTES = 10
  * (story 71, CD-420437). R12 covers an ETA after the end; this is the near miss.
  */
 export function tightEta(bundle: Bundle): { text: string; recordId: string } | null {
-  const status = String(bundle.order.status)
-  if (status === "DELIVERED" || status === "CANCELLED") return null
-  const moving = rows(bundle, "work_assignments").some((row) => row.details.order_id === bundle.order.id && row.details.status === "IN_PROGRESS")
-  if (!moving) return null
-  const windows = rows(bundle, "time_windows").filter((row) => row.details.purpose === "CUSTOMER_DELIVERY_PROMISE")
-  const promise = windows.find((row) => row.details.is_selected === true) ?? null
+  // The same reading as R12 (order-facts.ts): a finished order, no car on the road or no
+  // selected promise on the final delivery point means nothing to ask.
+  if (isFinished(bundle) || !movingAssignments(bundle).length) return null
+  const promise = selectedPromise(bundle)
   // The latest ETA as it stands now: a driver's reported time replaces the tracking
   // estimate, and an estimate a call already answered is no reason to ask again.
   const latest = latestEta(bundle)
@@ -700,8 +699,7 @@ export function answeredRecords(call: Call): string[] {
 }
 
 export function driverOf(bundle: Bundle): CallCallee | null {
-  const moving = rows(bundle, "work_assignments").filter((row) => row.details.order_id === bundle.order.id && row.details.status === "IN_PROGRESS")
-  const assignment = moving[0] ?? rows(bundle, "work_assignments").find((row) => row.details.order_id === bundle.order.id)
+  const assignment = movingAssignments(bundle)[0] ?? rows(bundle, "work_assignments").find((row) => row.details.order_id === bundle.order.id)
   const driverId = str(assignment?.details.driver_id)
   if (!assignment || !driverId) return null
   return { name: bundle.dir.driverName(driverId), handle: driverId, role: "driver", contactType: "driver", recordId: assignment.id }

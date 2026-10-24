@@ -14,6 +14,7 @@ import { endpointContactType, pickupCallAllowed } from "./contacts"
 import { nextChecksOf, type NextCheck } from "./due"
 import { currentRecord, latestEta, latestPosition, type PositionStatement } from "./eta"
 import { ON_TIME_CLAIM } from "./call-script"
+import { isFinished, movingAssignments, selectedPromise, windowOn } from "./order-facts"
 import type { Callee, FirstAction, PlannedAction, RuleId, RuleResult, SourceRef, Urgency } from "./checks"
 
 /** One driver duty, indexed across all orders, for the positioning rule. */
@@ -55,24 +56,17 @@ type Facts = {
   callee: Callee | null
 }
 
-function windowOn(bundle: Bundle, pointId: string | undefined, purpose: string, selected: boolean | null): RelatedRow | null {
-  return rows(bundle, "time_windows").find((row) =>
-    row.details.point_id === pointId && row.details.purpose === purpose
-    && (selected === null || bool(row.details.is_selected) === selected)) ?? null
-}
-
 function gather(bundle: Bundle, context: RuleContext): Facts {
   const now = ms(context.now) ?? 0
-  const status = bundle.order.status
-  const finished = status === "DELIVERED" || status === "CANCELLED" || !!str(bundle.order.details.cancelled_at)
+  const finished = isFinished(bundle)
   const pickupPoint = originPickupPoint(bundle)
   const deliveryPoint = finalDeliveryPoint(bundle)
   const endpoints = rows(bundle, "order_endpoint_details")
   const pickupEndpoint = endpoints.find((row) => pickupPoint && row.details.point_id === pickupPoint.id)
     ?? endpoints.find((row) => row.details.boundary === "PICKUP") ?? null
   const pickupSlot = windowOn(bundle, pickupPoint?.id, "SELECTED_PICKUP_SLOT", true)
-  const promise = windowOn(bundle, deliveryPoint?.id, "CUSTOMER_DELIVERY_PROMISE", true)
-  const moving = rows(bundle, "work_assignments").filter((row) => row.details.order_id === bundle.order.id && row.details.status === "IN_PROGRESS")
+  const promise = selectedPromise(bundle)
+  const moving = movingAssignments(bundle)
   const pickedUp = !!pickupPoint && bundle.events.some((event) => event.command === "vehicle.picked_up" && event.targetId === pickupPoint.id)
   const start = ms(str(pickupSlot?.details.start_at))
   const pickupSoon = !finished && !pickedUp && start !== null && start - now <= CALL_AHEAD_HOURS * HOUR
