@@ -5,6 +5,8 @@
 //   POST { action: "editScript", proposalId, script }
 //   POST { action: "dismiss", proposalId, note? }
 //   POST { action: "instruct", proposalId, text }      -> re-reviews the order (a model call when a key is set)
+//   POST { action: "recordAnswer", proposalId, answer } -> a customer's answer on an approved customer contact; proposes the update; re-reviews
+//   POST { action: "answerQuestion", proposalId, answer } -> the operator's answer to the agent's question; re-reviews
 // A refused action answers 409 with `{ error }`.
 
 import { NextRequest, NextResponse } from "next/server"
@@ -28,6 +30,8 @@ function toCommand(body: ProposalAction): Command | null {
     case "editScript": return text(body.proposalId) && text(body.script) !== null ? { type: "editScript", proposalId: body.proposalId, script: body.script } : null
     case "dismiss": return text(body.proposalId) ? { type: "dismiss", proposalId: body.proposalId, note: text(body.note) ?? undefined } : null
     case "instruct": return text(body.proposalId) && text(body.text) !== null ? { type: "instruct", proposalId: body.proposalId, text: body.text } : null
+    case "recordAnswer":
+    case "answerQuestion": return text(body.proposalId) && text(body.answer) !== null ? { type: body.action, proposalId: body.proposalId, answer: body.answer } : null
     default: return null
   }
 }

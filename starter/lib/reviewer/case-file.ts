@@ -26,6 +26,8 @@ export type PriorState = {
   openQuestions?: { id: string; at: string; to: string; question: string; nextCheckAt?: string | null }[]
   instructions?: { id: string; at: string; by: string; text: string }[]
   callResults?: { id: string; at: string; with: string; summary: string }[]
+  /** Answers the operator recorded: a customer's answer after a customer-side contact, or the operator's own answer to a question. */
+  answers?: { id: string; at: string; from: string; question: string; answer: string }[]
 }
 
 export type CaseInput = {
@@ -123,6 +125,9 @@ function priorRecords(prior: PriorState | undefined, zone: string | null): CaseR
   }
   for (const item of prior.callResults ?? []) {
     records.push(toCaseRecord({ id: item.id, kind: "call_result", zone, at: item.at, source: "call", statedBy: item.with, details: { summary: item.summary } }))
+  }
+  for (const item of prior.answers ?? []) {
+    records.push(toCaseRecord({ id: item.id, kind: "recorded_answer", zone, at: item.at, source: "control_room", statedBy: item.from, details: { question: item.question, answer: item.answer } }))
   }
   return records
 }

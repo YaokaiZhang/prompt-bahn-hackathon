@@ -49,8 +49,9 @@ export type CountingGateway = ModelGateway & { readonly calls: ChatRequest[] }
 /**
  * The scripted reviewer for engine tests: the permanent hand-written scenarios
  * (CD-420089, 399, 437, 458, 516) and "nothing to ask" for every other order.
+ * `findings` (raw submit_findings items by order reference) replace that answer.
  */
-export async function testGateway(): Promise<CountingGateway> {
+export async function testGateway(findings: Record<string, unknown[]> = {}): Promise<CountingGateway> {
   const scripted = createScriptedGateway(await loadFixtures(SCENARIO_FIXTURE_DIR))
   const known = new Set((await loadFixtures(SCENARIO_FIXTURE_DIR)).map((fixture) => fixture.reference))
   const calls: ChatRequest[] = []
@@ -58,8 +59,9 @@ export async function testGateway(): Promise<CountingGateway> {
     calls,
     async chat(request) {
       calls.push(request)
-      if (known.has(request.subject)) return scripted.chat(request)
-      const args = JSON.stringify({ summary: `Nothing to ask on ${request.subject}.`, findings: [] })
+      if (known.has(request.subject) && !findings[request.subject]) return scripted.chat(request)
+      const raw = findings[request.subject] ?? []
+      const args = JSON.stringify({ summary: raw.length ? `Scripted findings on ${request.subject}.` : `Nothing to ask on ${request.subject}.`, findings: raw })
       return {
         model: "scripted",
         finishReason: "tool_calls",

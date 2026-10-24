@@ -3,6 +3,8 @@
 // Proposals (ticket 07): what the agent wants to do on an order, with the evidence,
 // the contact and its type, who pays and the policy row, and the operator's
 // decisions (approve, edit the script, dismiss, give an instruction) with history.
+// Ticket 08: an approved customer contact takes the customer's answer ("Record the
+// answer"), and a question to the operator takes the operator's ("Answer").
 // Every action posts to /api/proposals and then fires CLOCK_EVENT, which every page
 // that shows engine state already listens to ("engine state changed").
 
@@ -54,7 +56,13 @@ function History({ proposal }: { proposal: Proposal }) {
   </li>)}</ol>
 }
 
-type Mode = null | "edit" | "instruct" | "dismiss"
+type Mode = null | "edit" | "instruct" | "dismiss" | "answer"
+
+function answerLabel(proposal: Proposal): string {
+  return proposal.kind === "customer_contact"
+    ? `What ${proposal.contact.name} answered (after you made the contact). The agent then proposes the order update for your yes.`
+    : "Your answer to the agent (saved here and fed into the order's next review)"
+}
 
 /** One proposal on the order page, with its decisions. */
 export function ProposalCard({ proposal, orderId }: { proposal: Proposal; orderId: string }) {
@@ -64,6 +72,9 @@ export function ProposalCard({ proposal, orderId }: { proposal: Proposal; orderI
   const [error, setError] = useState("")
   const state = proposalState(proposal)
   const open = proposal.waitingOn !== null
+  // A customer contact handed to the operator, or a question to the operator: the operator answers it here.
+  const answerable = proposal.status === "approved" && proposal.waitingOn === "operator"
+    && (proposal.kind === "customer_contact" || proposal.kind === "operator_question")
   const conflict = proposal.evidence.filter((cited) => cited.role === "conflict")
   const contact = proposal.evidence.filter((cited) => cited.role === "contact")
 
@@ -92,6 +103,9 @@ export function ProposalCard({ proposal, orderId }: { proposal: Proposal; orderI
     if (mode === "edit") void run({ action: "editScript", proposalId: proposal.id, script: draft })
     if (mode === "instruct") void run({ action: "instruct", proposalId: proposal.id, text: draft })
     if (mode === "dismiss") void run({ action: "dismiss", proposalId: proposal.id, note: draft })
+    if (mode === "answer") void run(proposal.kind === "customer_contact"
+      ? { action: "recordAnswer", proposalId: proposal.id, answer: draft }
+      : { action: "answerQuestion", proposalId: proposal.id, answer: draft })
   }
 
   return <article className={`proposal proposal-${proposal.status}`} id={proposal.id} aria-label={proposal.title}>
@@ -124,6 +138,20 @@ export function ProposalCard({ proposal, orderId }: { proposal: Proposal; orderI
     </>}
     {contact.length > 0 && <ul className="cited-list">{contact.map((cited, i) => <CitedRow key={`${cited.recordId}-c${i}`} cited={cited} orderId={orderId} samePage />)}</ul>}
 
+    {proposal.answer !== null && <>
+      <h4 className="finding-sub">{proposal.kind === "customer_contact" ? `Answer from the ${proposal.contact.typeLabel.toLowerCase()}, recorded by you` : "Your answer"}</h4>
+      <blockquote className="proposal-script proposal-answer">{proposal.answer}</blockquote>
+    </>}
+
+    {mode === "answer" && <form className="proposal-form" onSubmit={submit}>
+      <label className="proposal-label" htmlFor={`${proposal.id}-answer`}>{answerLabel(proposal)}</label>
+      <textarea id={`${proposal.id}-answer`} value={draft} onChange={(event) => setDraft(event.target.value)} rows={3} autoFocus />
+      <div className="proposal-actions">
+        <button className="btn btn-primary btn-s" type="submit" disabled={busy || !draft.trim()}>{busy ? "Saving…" : "Save answer"}</button>
+        <button className="btn btn-tertiary btn-s" type="button" onClick={() => setMode(null)} disabled={busy}>Cancel</button>
+      </div>
+    </form>}
+
     {(mode === "instruct" || mode === "dismiss") && <form className="proposal-form" onSubmit={submit}>
       <label className="proposal-label" htmlFor={`${proposal.id}-${mode}`}>{mode === "instruct" ? "Your instruction to the agent (saved here and fed into the order's next review)" : "Why dismiss (optional)"}</label>
       <textarea id={`${proposal.id}-${mode}`} value={draft} onChange={(event) => setDraft(event.target.value)} rows={3} autoFocus
@@ -138,9 +166,13 @@ export function ProposalCard({ proposal, orderId }: { proposal: Proposal; orderI
 
     {mode === null && <div className="proposal-decide">
       {proposal.onApprove && <p className="proposal-will"><b>Approving will:</b> {proposal.onApprove}</p>}
+      {answerable && proposal.kind === "customer_contact" && <p className="proposal-will"><b>Yours to make:</b> reach {proposal.contact.name} yourself with the script above, then record the answer here. The agent does not contact them.</p>}
+      {answerable && proposal.kind === "operator_question" && <p className="proposal-will"><b>The agent asks you.</b> Your answer is saved here and goes into the agent&apos;s next review of this order.</p>}
       <div className="proposal-actions">
         {proposal.status === "proposed" && <button className="btn btn-primary btn-s" type="button" disabled={busy}
           onClick={() => void run({ action: "approve", proposalId: proposal.id })}>Approve</button>}
+        {answerable && <button className="btn btn-primary btn-s" type="button" disabled={busy} onClick={() => start("answer")}>
+          {proposal.kind === "customer_contact" ? "Record the answer" : "Answer"}</button>}
         {open && <button className="btn btn-tertiary btn-s" type="button" disabled={busy} onClick={() => start("edit")}>Edit script</button>}
         {open && <button className="btn btn-tertiary btn-s" type="button" disabled={busy} onClick={() => start("dismiss")}>Dismiss</button>}
         <button className="btn btn-tertiary btn-s" type="button" disabled={busy} onClick={() => start("instruct")}>Give an instruction</button>
