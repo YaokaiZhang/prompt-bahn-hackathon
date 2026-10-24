@@ -23,7 +23,7 @@ import { createReviewLayer, reviewTotals, type OrderReview, type ReviewInputs, t
 import { buildFleet, evaluateRules, type Evaluation } from "./rules"
 import type { EngineStore } from "./store"
 import { createCallRunner, type CallOptions } from "./call-runner"
-import { callbackItems, localTime, orderCalls, type BlockedCall, type Call, type CalleeInput, type CallLine, type CallLineView, type OrderCalls } from "./calls"
+import { callbackItems, orderCalls, utcTime, type BlockedCall, type Call, type CalleeInput, type CallLine, type CallLineView, type OrderCalls } from "./calls"
 
 /** The snapshot as the engine reads it: one bundle per order. */
 export type Snapshot = { snapshotAt: string; bundles: Bundle[] }
@@ -267,7 +267,7 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     for (const change of call.changes) {
       await proposeChange({
         orderId: call.orderId, title: change.title, change: change.change, source: call.id,
-        why: `${call.callee.name ?? call.callee.handle} said on the ${call.line} call at ${localTime(call.endedAt ?? call.startedAt)}: ${change.claim}.`,
+        why: `${call.callee.name ?? call.callee.handle} said on the ${call.line} call at ${utcTime(call.endedAt ?? call.startedAt)}: ${change.claim}.`,
         contact: { name: call.callee.name ?? call.callee.handle, type: call.callee.contactType, role: call.line === "driver" ? "driver" : "site", recordId: call.callee.recordId },
       })
     }

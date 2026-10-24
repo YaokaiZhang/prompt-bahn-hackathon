@@ -62,6 +62,8 @@ export type CallHeader = {
   /** Why the agent calls, one line. */
   reason: string
   car: string | null
+  /** The callee's time zone, for times said on the phone. */
+  zone: string
 }
 
 export type CallEventKind = "started" | "answered" | "declined" | "no_answer" | "said" | "pressed" | "tier" | "callback" | "ended"
@@ -282,9 +284,22 @@ export type AgentStep =
 const MINUTE = 60_000
 const addMinutes = (iso: string, minutes: number) => new Date(new Date(iso).getTime() + minutes * MINUTE).toISOString()
 
-/** "14:15" in the callee's zone (Helsinki for the demo data). */
-export function localTime(iso: string, zone = "Europe/Helsinki"): string {
+/** "14:15" in the callee's own zone: what the agent says on the phone. */
+export function localTime(iso: string, zone: string): string {
   return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: zone }).format(new Date(iso))
+}
+
+/** "11:15 UTC": operator-facing times, like the demo clock in the bar. */
+export function utcTime(iso: string): string {
+  return `${localTime(iso, "UTC")} UTC`
+}
+
+/** The callee's time zone: the pickup slot's for a site, the delivery promise's for a driver. */
+function zoneOf(bundle: Bundle, line: CallLine): string {
+  const purpose = line === "site" ? "SELECTED_PICKUP_SLOT" : "CUSTOMER_DELIVERY_PROMISE"
+  const window = rows(bundle, "time_windows").find((row) => row.details.purpose === purpose && row.details.is_selected === true)
+    ?? rows(bundle, "time_windows").find((row) => row.details.purpose === purpose)
+  return str(window?.details.timezone) ?? "Europe/Helsinki"
 }
 
 function who(callee: CallCallee): string {
@@ -314,7 +329,9 @@ function ending(call: Call, outcome: CallOutcome, text: string, extra: { escalat
   const summary = outcome === "resolved" ? `${name}: ${claims.length ? claims.join("; ") : "nothing to report"}.`
     : outcome === "handover" ? `${name}: ${extra.escalation ?? "needs a conversation"}. A person should follow up.`
     : outcome === "unreachable" ? `No answer from ${name} after ${call.attempt} attempts.`
-    : `${name} asked for a callback.`
+    : call.path.includes("declined") ? `${name} declined the call.`
+    : call.path.includes("no_answer") ? `${name} did not answer.`
+    : `${name} was busy and asked for a callback.`
   return { kind: "ended", outcome, text: summary, summary, claims, changes }
 }
 
@@ -335,8 +352,8 @@ export function agentTurn(call: Call, now: string, tier2: boolean, lastEvent: St
     if (call.attempt >= MAX_ATTEMPTS) return [ending(call, "unreachable", "")]
     const callbackAt = addMinutes(now, minutes)
     return [
-      ...(line ? [{ kind: "said" as const, text: callbackLine(localTime(callbackAt)) }] : []),
-      { kind: "callback", callbackAt, text: `Callback scheduled for ${localTime(callbackAt)} (demo clock).` },
+      ...(line ? [{ kind: "said" as const, text: callbackLine(localTime(callbackAt, call.zone ?? "Europe/Helsinki")) }] : []),
+      { kind: "callback", callbackAt, text: `Callback scheduled for ${utcTime(callbackAt)}.` },
       ending(call, "callback", ""),
     ]
   }
@@ -376,7 +393,7 @@ function escalate(call: Call, why: string, tier2: boolean): AgentStep[] {
 function headerOf(call: Call): CallHeader {
   return {
     callId: call.id, orderId: call.orderId, reference: call.reference, line: call.line, attempt: call.attempt, answerer: call.answerer,
-    callee: call.callee, topics: call.topics, questions: call.questions, reason: call.reason, car: call.car,
+    callee: call.callee, topics: call.topics, questions: call.questions, reason: call.reason, car: call.car, zone: call.zone,
   }
 }
 
@@ -531,7 +548,7 @@ export function orderCalls(bundle: Bundle, planned: PlannedAction[], proposals: 
       text = `Calling ${name} (tier ${latest.tier}): ${latest.reason}`
     } else if (latest?.outcome === "callback" && latest.callbackAt && (open.length || latest.topics.length)) {
       status = latest.callbackAt > now ? "callback" : "callback_due"
-      text = status === "callback" ? `Callback to ${name} at ${localTime(latest.callbackAt)}.` : `Callback to ${name} is due; the agent calls now.`
+      text = status === "callback" ? `Callback to ${name} at ${utcTime(latest.callbackAt)}.` : `Callback to ${name} is due; the agent calls now.`
     } else if (open.length) {
       status = "to_call"
       text = `Agent will call ${name}: ${open.map((topic) => topic.title).join("; ")}.`
@@ -570,7 +587,7 @@ export function newCallHeader(bundle: Bundle, line: CallLineView, previous: Call
     orderId: bundle.order.id, reference: bundle.order.reference, line: line.line, attempt, callee, topics,
     questions: questionsFor(topics, callee),
     reason: `${attempt > 1 ? `Callback (attempt ${attempt}). ` : ""}${topics.map((topic) => topic.title).join("; ")}.`,
-    car: carOf(bundle),
+    car: carOf(bundle), zone: zoneOf(bundle, line.line),
   }
   return { ...base, answerer: answerer(base) }
 }

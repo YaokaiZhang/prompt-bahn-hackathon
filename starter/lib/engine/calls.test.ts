@@ -52,7 +52,7 @@ eachStore("a decline schedules a callback that fires when the demo clock reaches
   assert.equal(first.outcome, "callback")
   assert.equal(first.callbackAt, "2026-10-21T10:00:00.000Z", "a declined call is retried an hour later")
   assert.equal(order806.group, "in_progress", "a scheduled callback keeps the order In progress")
-  assert.match(order806.reason, /Callback to .* at 13:00/, "the time is the driver's local time (Helsinki, UTC+3)")
+  assert.match(order806.reason, /Callback to .* at 10:00 UTC/, "operator-facing times are UTC, like the demo clock")
   const state = await engine.state()
   assert.ok(state.dueItems.some((item) => item.id === `callback:${first.id}` && item.kind === "callback" && !item.due))
 
@@ -82,7 +82,7 @@ test("a busy person picks a callback time; no answer three times in a row needs 
   const busy = (await order(engine, "CD-420806")).calls[0]
   assert.deepEqual(busy.path, ["ringing", "answered", "availability", "callback_time", "ended"])
   assert.equal(busy.callbackAt, "2026-10-21T09:15:00.000Z", "1 = in 15 minutes")
-  assert.ok(busy.transcript.some((line) => line.by === "agent" && /call you back at 12:15/.test(line.text)), "the agent says when, in local time")
+  assert.ok(busy.transcript.some((line) => line.by === "agent" && /call you back at 12:15/.test(line.text)), "the agent says when in the driver's time (the promise is in Helsinki, UTC+3)")
 
   for (let i = 0; i < 3; i++) {
     await engine.apply({ type: "advanceClock", minutes: 30 })

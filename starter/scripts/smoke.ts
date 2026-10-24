@@ -197,13 +197,16 @@ async function main(): Promise<void> {
     throw new Error(`The Briefing has digests for ${slots.join(", ") || "nothing"}, but the clock reached ${reached.join(", ")}`)
   }
   const latest = briefing.items.find((item) => item.kind === "digest")
+  // Background calls (ticket 10) change groups without moving the clock: a digest delivered before
+  // a call moved is checked against the queue only when no call moved since (see below).
+  let digestOff: string[] = []
   if (latest?.facts && latest.at === overview.now) {
-    const off = Object.entries(overview.groupCounts).filter(([group, count]) => latest.facts!.counts[group] !== count)
-    if (off.length) throw new Error(`The ${latest.slot} digest's counts differ from the queue for ${off.map(([group]) => group).join(", ")}`)
-    console.log(`Briefing: the ${latest.slot} digest's counts match the queue.`)
+    digestOff = Object.entries(overview.groupCounts).filter(([group, count]) => latest.facts!.counts[group] !== count).map(([group]) => group)
+    if (!digestOff.length) console.log(`Briefing: the ${latest.slot} digest's counts match the queue.`)
   } else {
     console.log(`Briefing: ${slots.length} digests; the clock is not at a digest time, so counts are not compared.`)
   }
+  let lastCallMove = 0
   const disagreements: string[] = []
   const groupDisagreements: string[] = []
   const reviewProblems: string[] = []
@@ -228,6 +231,7 @@ async function main(): Promise<void> {
       if (!Array.isArray(calls)) callProblems.push(`${card.reference} (no calls list)`)
       for (const call of calls ?? []) {
         callCount += 1
+        lastCallMove = Math.max(lastCallMove, Date.parse(call.transcript.at(-1)?.wallAt ?? "") || 0)
         if (call.state !== "ended") running += 1
         if (![1, 2, 3].includes(call.tier) || !call.transcript?.length || !(call.cost?.operatorEur > 0) || !(call.cost.totalEur <= call.cost.operatorEur)) {
           callProblems.push(`${card.reference} ${call.id}`)
@@ -258,6 +262,11 @@ async function main(): Promise<void> {
   }
   console.log(`Reviewer: ${reviewed} of ${overview.visible.length} orders reviewed; the rest read "not reviewed yet".`)
   if (callProblems.length) throw new Error(`Calls without a calls list, tier, transcript or a cost below the operator's: ${callProblems.join(", ")}`)
+  if (digestOff.length) {
+    const delivered = Date.parse((latest as { deliveredAt?: string } | undefined)?.deliveredAt ?? "")
+    if (!(lastCallMove > delivered)) throw new Error(`The ${latest?.slot} digest's counts differ from the queue for ${digestOff.join(", ")}`)
+    console.log(`Briefing: the ${latest?.slot} digest's counts differ for ${digestOff.join(", ")}, but calls moved orders after it was delivered.`)
+  }
   console.log(`Calls: ${callCount} on record, ${running} running; ${movedByCalls} orders with call activity during the read were not compared for group.`)
   // Ticket 07: every proposal waiting for a yes shows its evidence, contact type, who pays,
   // policy row and what approving will do; the Rules page renders. Read-only: nothing is approved.
