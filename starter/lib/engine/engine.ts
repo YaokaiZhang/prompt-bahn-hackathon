@@ -60,8 +60,11 @@ export type Command =
       /** The effect event approving it writes (contact confirmed, window changed...); absent: an attributed claim by `contact`. */
       effect?: EffectSpec }
   /**
-   * Writes one effect event now, without a proposal: a call result (ticket 10), or any
-   * other committed change whose approval already happened. The order is re-reviewed.
+   * Writes one effect event now, without a proposal. `by` defaults to the agent, which
+   * may commit only attributed statements from its calls (`call_result_recorded`,
+   * `eta_reported`); every other type (a change to the order, an answer) is refused
+   * unless `by` is "operator", whose explicit write is the yes (ADR 0001). The order is
+   * re-reviewed.
    */
   | { type: "recordEffect"; effect: EffectWrite }
   /**
@@ -205,6 +208,9 @@ export type EngineDeps = {
 }
 
 const MINUTE = 60_000
+
+/** Effects the agent may commit without an operator: attributed statements from its calls. */
+const AGENT_STATEMENTS = new Set<EffectWrite["type"]>(["call_result_recorded", "eta_reported"])
 
 function assertNever(value: never): never {
   throw new Error(`Unknown command: ${JSON.stringify(value)}`)
@@ -719,7 +725,13 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
         break
       }
       case "recordEffect": {
-        const [event] = await commitEffects([{ ...command.effect, by: command.effect.by ?? "agent" } as EffectInput])
+        // ADR 0001: the agent commits only what a person said on its calls (attributed
+        // statements). Any change to the order, or an answer, is the operator's to write.
+        const by = command.effect.by ?? "agent"
+        if (by !== "operator" && !AGENT_STATEMENTS.has(command.effect.type)) {
+          throw new Error(`A ${command.effect.type.replace(/_/g, " ")} effect needs the operator: only call results and reported ETAs are committed by the agent`)
+        }
+        const [event] = await commitEffects([{ ...command.effect, by } as EffectInput])
         await rereview(event.orderId)
         break
       }
