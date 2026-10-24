@@ -23,7 +23,8 @@ We want agents to do the cheap work first (read, compare, ask) and bring a perso
 - A live operator joining a call (tier 3 is asynchronous).
 - Editing the seed snapshot. All changes are overlays.
 - Real authentication (a reverse-proxy basic-auth is added at publish time).
-- Travel planner in the must-have scope (see §11).
+- Travel in v1: no travel rule, planner or travel site (see §11).
+- Any agent contact with the customer side. The agent proposes it and the operator makes it.
 
 ## 3. Users and personas
 
@@ -61,7 +62,6 @@ Computed from the dataset fields. Counts are from the snapshot.
 | ID | Rule | Source fields | Flags |
 |---|---|---|---|
 | R1 | Site requires a signed release, and there is no verified RELEASE_AUTHORITY document before pickup | `sites.requires_signed_release`, `documents` | ~10 |
-| R2 | Assigned driver has no positioning booking | `work_assignments.positioning.travel_commitment_status` | 4 |
 | R3 | Positioning's previous duty skips another live duty of the same driver | assignments + selected windows | 1 real (CD-420089) |
 | R7 | Selected promise differs from the customer's requested delivery slot | `time_windows` | 5 |
 | R10 | In transit, tracking missing or older than 4 h, no open alert | `tracking_observations`, `alerts` | 4 |
@@ -191,7 +191,7 @@ A config file, shown read-only on a **Rules** page. Every proposal cites its row
 | Pickup site or seller's site (not paying) | Routine question or call | Agent does it |
 | Driver | Routine question or call | Agent does it |
 | Operator | Clarifying question | Agent does it |
-| Paying customer (dealer or buyer) | Any contact | **Needs a yes** |
+| Customer side: the paying customer, a contact the customer gave us (`stated_by: CUSTOMER_ORDER_INPUT`), or a site the customer owns | Any contact | **Propose only.** The operator makes the contact and records the answer. |
 | Anyone | Order change from a call (new date, cost, booking, order update) | **Needs a yes** |
 
 Example routine questions: "Is the car ready?", "Are the papers there?", "What documents do you need for the pickup?", "Can you still deliver on time?". The operator sees the results.
@@ -274,16 +274,16 @@ The LLM writes the prose. It never owns a number or an order reference.
 
 1. The operator logs in by picking the Operator persona.
 2. They open the Briefing. CD-420437 is in the urgent block.
-3. They open the order. The conflicting records are highlighted (contact-hours messages, the promise window, the slipping ETA, the overdue work item), and the draft call to the buyer is shown with "who pays: Calverona Auto, cus-025 → needs a yes".
-4. They edit the script or approve it. Any instruction they give is saved on the proposal.
-5. The Site persona's phone rings as "Calverona Auto". A teammate or the auto-answer script answers.
-6. The agent records the answer and moves the task state to answered.
+3. They open the order. The conflicting records are highlighted (contact-hours messages, the promise window, the slipping ETA, the overdue work item), and a proposal to ask the buyer who may sign is shown with a drafted script and "who pays: Calverona Auto, cus-025 → propose only".
+4. They edit the script or accept it. Any instruction they give is saved on the proposal.
+5. The operator contacts the buyer through the existing support conversation.
+6. The operator records the buyer's answer on the proposal, and the task moves to answered.
 7. A proposal to update the order (for example "receiver: Celia Hollowmere confirmed until 18:00") appears. The operator approves it, and an effect event is written.
 8. **Variant:** the scripted answer names a different receiver. That creates a new conflict, and the order goes back to the reviewer.
 
 **Acceptance criteria:**
 
-- No customer contact happens before approval.
+- The agent never contacts the customer side. It only proposes.
 - Every question cites the records that disagree and the record that names the contact.
 - The order history shows the reviewer finding, the approval, the call, the answer, the update approval and the effect event.
 

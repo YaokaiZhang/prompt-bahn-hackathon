@@ -27,7 +27,7 @@ A control room that sorts every order into one of four groups: **Needs action**,
 
 **The reviewer's output:** for each conflict it finds, it cites the records that disagree and the record that names the contact. It then drafts who to ask and what to ask.
 
-**Approval:** an approval policy decides what needs an operator's yes. Contact with anyone who pays Bahn needs a yes, and so does any change to the order. Routine questions to pickup sites, sellers' sites, drivers and operators go out on their own.
+**Approval:** an approval policy decides what needs an operator's yes. Routine questions to third-party pickup sites, sellers' sites, drivers and operators go out on their own. The agent never contacts the customer side: the paying customer, a contact the customer gave us, or a site the customer owns. For those it proposes the action to the operator, with a drafted script, and the operator makes the contact and records the answer. Any change to the order needs a yes.
 
 **Calls run in three tiers, cheapest first:**
 1. Fixed questions read by a real TTS voice, answered on a keypad.
@@ -66,9 +66,11 @@ The calls go to a mock phone page that a teammate opens as the Site or Driver pe
 19. As an operator, I want every checked item to link to its source record, so that I can verify it myself.
 
 ### Rule checks
-20. As an operator, I want deterministic rules to flag orders on their own (missing signed release, no positioning booking, positioning that skips a live duty, promise differing from the customer's requested slot, stale tracking with no alert, missed slot, ETA after promise, positioning expense with no reservation), so that clear problems never depend on an LLM.
+20. As an operator, I want deterministic rules to flag orders on their own (missing signed release, positioning that skips a live duty, promise differing from the customer's requested slot, stale tracking with no alert, missed slot, ETA after promise, positioning expense with no reservation), so that clear problems never depend on an LLM.
 21. As an operator, I want weak signals (missing contact, confirmed only from the site profile, promise not set by the customer) to go to "couldn't check" instead of flagging the order, so that common gaps don't flood my queue.
 22. As an operator, I want a weak signal on an order whose pickup is within 48 hours to trigger a routine site call when a contact is known, so that gaps close before the driver travels.
+22a. As an operator, I want each rule to declare its first action (routine call, reviewer pass, or show to a person with the evidence), so that no flagged order sits in my queue with nothing to decide.
+22b. As an operator, I want stale tracking or an ETA after the promise to start a routine driver call, not to wait for me, so that the agent does the cheap work first.
 23. As an operator, I want rules recomputed only at load, on a clock move or after an effect event, so that pages are fast.
 
 ### Document Reviewer agent
@@ -93,9 +95,10 @@ The calls go to a mock phone page that a teammate opens as the Site or Driver pe
 ### Operator approval
 41. As an operator, I want a read-only Rules page listing who is contacted, the kind of action, and whether the agent acts alone or needs a yes, so that I understand the agent's authority.
 42. As an operator, I want routine questions to pickup sites, sellers' sites, drivers and operators to go out without my approval, and to see their results, so that cheap work happens on its own.
-43. As an operator, I want any contact with a paying customer to wait for my yes, so that the agent never contacts a customer on its own.
+43. As an operator, I want the agent never to contact the customer side itself (the paying customer, a contact the customer gave us, or a site the customer owns), and instead to propose the contact to me with a drafted script, so that customer contact stays with people.
+43a. As an operator, I want to record the customer's answer on the proposal after I make the contact, so that the agent can continue from it.
 44. As an operator, I want any change coming out of a call (new date, cost, booking, order update) to wait for my yes, so that nothing changes without a person.
-45. As an operator, I want to approve several customer messages in one click, with each script visible, so that approval is fast.
+45. As an operator, I want to approve several proposals in one click, with each script visible, so that approval is fast.
 46. As an operator, I want to edit a proposal's script before approving, so that the message says what I want.
 47. As an operator, I want to dismiss a proposal, so that a wrong suggestion goes away without losing history.
 48. As an operator, I want to tell the agent to act differently and have that instruction saved on the proposal, so that the history shows why the plan changed.
@@ -119,11 +122,13 @@ The calls go to a mock phone page that a teammate opens as the Site or Driver pe
 64. As a teammate, I want no real phone numbers involved, so that nothing real is contacted.
 
 ### Demo journeys
-65. As an operator, I want CD-420437 to show the receiver-authority conflict and a drafted call to the buyer (Calverona Auto) that needs my yes, so that I can approve a customer contact (journey 1).
-66. As an operator, I want an approved buyer call on CD-420437 to ring on the Site persona's phone as "Calverona Auto", so that the approval gate visibly lets a real call through.
+65. As an operator, I want CD-420437 to show the receiver-authority conflict and a proposal to ask the buyer (Calverona Auto) who may sign, with a drafted script, so that I can take on a customer contact with the evidence ready (journey 1).
+66. As an operator, I want to accept the CD-420437 proposal, make the contact myself, and record the buyer's answer, after which the agent proposes the order update for my yes, so that the journey ends with a governed change.
 67. As an operator, I want an answer naming a different receiver to create a new conflict and send the order back to review, so that the loop is shown.
 68. As a site teammate, I want CD-420516 to call me without approval about who holds the keys, so that the routine site call journey is shown.
-69. As an operator, I want site calls with a next check at 10:00 (ord-00516, ord-00458, CD-420015) to fire when the clock reaches 10:00, so that scheduled checks work.
+69. As an operator, I want checks due at 10:00 (CD-420516, CD-420458, CD-420015) to fire when the clock reaches 10:00, so that scheduled checks work. For CD-420458 the next step is a proposal to me, because the open question is with the customer.
+69a. As a demo runner, I want background calls that nobody is watching to be answered by a scripted simulated person, and only demo cases or calls I mark "ring live" to ring on the phone page, so that the phone page isn't flooded at startup.
+69b. As a teammate, I want my persona's phone to take one live call at a time and queue the rest, so that two calls on one order (CD-420437) don't collide.
 70. As a driver teammate, I want CD-420806 to give me a tier-1 "still on track? press 1" check-in, so that the cheap path that ends without a person is shown.
 71. As a driver teammate, I want CD-420437 to ask whether I can still deliver on time and hand me to the voice agent if I report a problem, so that the escalation path is shown.
 72. As an operator, I want CD-420089 to ask me, in the app, whether the Lahti train in my colleague's note is still right, so that operator clarification is shown.
@@ -162,6 +167,7 @@ The calls go to a mock phone page that a teammate opens as the Site or Driver pe
 - **Reading:** `state(now)` returns per-order group, rule results (checked, passed and couldn't-check), urgency flags, proposals, call states, and the digest facts.
 - **Changing:** `apply(command)` takes these commands:
   - approve, approve a batch, edit script, dismiss, give an instruction;
+  - record a customer answer (after the operator made a customer-side contact);
   - start a call, record a call event, record a call outcome;
   - answer an operator question;
   - advance the clock;
@@ -190,25 +196,44 @@ Every model call goes through it, and every call reports its `usage.cost`. Every
   - demo clock.
 - Reset truncates only these tables.
 - Effect events are append-only. The view applies them on top of the snapshot, and seed data is never changed.
+- **Effect event types (v1):**
+
+  | Type | Overlays |
+  |---|---|
+  | contact confirmed | endpoint `contact_status` and `last_confirmed_source` |
+  | contact changed | endpoint contact name, handle and role |
+  | window changed | the selected pickup slot or delivery promise |
+  | call result recorded | an attributed claim, with the source being the call |
+  | customer answer recorded | an attributed claim, with the source being the operator's record of the customer |
+  | operator answer recorded | an attributed note |
+  | cost approved | an expense or cost line |
+
+  Rules and the reviewer read the overlaid view. Every effect event invalidates that order's review cache.
 
 ### Grouping
 - An order is in exactly one group, with precedence Needs action, then In progress, then Done, then Normal.
-- **Needs action:** a proposal is waiting for a yes, a tier-3 handover is open, an operator question is unanswered, or an order is flagged with no plan yet.
+- **Needs action:** a proposal is waiting for a yes, a customer-side contact is waiting for the operator, a tier-3 handover is open, an operator question is unanswered, or a rule whose first action is "show to a person" has fired.
 - **In progress:** a call is running, a callback is scheduled, or the agent is waiting on a reply.
 - **Done:** delivered or cancelled, with no open proof, claim, alert, work item, proposal, custody follow-up or moving trade-in.
 - **Normal:** everything else that passed the rules and the reviewer.
+- **Delivered or cancelled orders with a gap:** a strong-rule gap or an open record sends them to Needs action. A weak gap keeps them Normal, listed under "couldn't check". Only an order with nothing open is Done.
 
 ### Rules
 - Pure functions over a bundle plus the effect events and the clock.
-- **Strong rules that flag an order:**
-  - signed release required but no verified release-authority document;
-  - no positioning booking;
-  - positioning that skips another live duty;
-  - selected promise differs from the requested slot;
-  - in transit with tracking missing or older than 4 h and no open alert;
-  - pickup slot passed with no pickup;
-  - ETA after the promise end;
-  - positioning expense with no reservation.
+- **Every rule declares its first action:** a routine call (no approval), a reviewer pass, or "show to a person with the evidence". No flagged order reaches Needs action without something to decide.
+- **Strong rules:**
+
+  | Rule | First action |
+  |---|---|
+  | Signed release required but no verified release-authority document | Routine site call when pickup is within 48 h; otherwise show to a person |
+  | Positioning that skips another live duty | Reviewer pass (it becomes an operator question, as on CD-420089) |
+  | Selected promise differs from the requested slot | Reviewer pass |
+  | In transit with tracking missing or older than 4 h and no open alert | Routine driver check-in call |
+  | Pickup slot passed with no pickup | Show to a person |
+  | ETA after the promise end | Routine driver call ("can you still deliver on time?") |
+  | Positioning expense with no reservation | Reviewer pass (as on CD-420399) |
+
+- **Travel is ignored in v1.** There is no "no positioning booking" rule. Travel records are still read by the reviewer as evidence.
 - **Weak rules** (contact missing, confirmed only from the site profile, promise source not the customer) feed "couldn't check". They become a tier-1 site call when pickup is within 48 h and a contact is known.
 - **Urgency** is computed from the rules and the clock.
 
@@ -225,13 +250,23 @@ Every model call goes through it, and every call reports its `usage.cost`. Every
 - **Validation:** the server checks that cited records exist and that quotes match. A failing finding gets one repair attempt and is then dropped.
 - **Cache key:** a hash of the case file.
 
-### Contact lookup
-- The order's endpoint contact, then the site profile email. If neither exists, there is no call and no proposal.
-- Drivers are addressed by driver ID.
-- Whether approval is needed depends on whether the contacted party is the order's paying customer, never on which persona answers.
+### Contact lookup and contact types
+- **Lookup order:** the order's endpoint contact, then the site profile email. If neither exists, there is no call and no proposal. Drivers are addressed by driver ID.
+- **Every contact gets a type.** The type, never the persona who answers, decides what the agent may do:
+
+  | Contact type | How it's recognised | Agent may |
+  |---|---|---|
+  | Paying customer | `orders.customer_id`; reached through its existing support conversation (customers have no contact fields) | Propose only. The operator contacts them. |
+  | Customer-given contact | endpoint `stated_by` is `CUSTOMER_ORDER_INPUT` (for example Celia Hollowmere on CD-420437) | Propose only |
+  | Customer-owned site | `site.customer_id` equals `orders.customer_id` | Propose only |
+  | Third-party site or seller's site | any other site or endpoint contact | Call on its own |
+  | Driver | assignment `driver_id` | Call on its own |
+  | Operator | note or event author role | Ask in the app on its own |
+
+- A customer-side proposal holds the drafted script, the evidence and the question. On accept, it becomes an operator task. The operator records the answer, and the agent continues from it.
 
 ### Approval policy
-- A config table: contact type × action type → acts alone or needs a yes.
+- A config table: contact type × action type → acts alone, needs a yes, or propose only (the customer side).
 - Rendered read-only on the Rules page and cited by every proposal.
 
 ### Call state machine
@@ -246,6 +281,9 @@ Every model call goes through it, and every call reports its `usage.cost`. Every
 | End | ended, with an outcome |
 
 - Callbacks fire when the demo clock reaches them.
+- **Background calls:** a call rings live on a persona's phone page only for demo cases or when the operator marks it "ring live". Every other call is answered by a scripted simulated person, so the 18 routine site calls due at load complete on their own and show as results or scheduled callbacks.
+- **One live call per phone:** each persona's phone page takes one live call at a time, and the rest queue.
+- **Voice agent authority:** the voice agent only gathers information. It never agrees to a date, cost, booking or handover, and says it will pass the point to the team. If Haiku's check on a turn finds a commitment outside policy, it flags it and the voice agent corrects itself on the next turn.
 - Call events stream to the control room for the live transcript, tier and cost.
 - The cost is the summed model `usage.cost`, plus €0.01 per minute of mock phone time, compared with a configurable €0.70 per operator-minute.
 
@@ -270,14 +308,17 @@ Every model call goes through it, and every call reports its `usage.cost`. Every
 
 - **What a good test is:** it checks external behaviour through the operations engine only: groups, findings, proposals, policy rows, effect events, call outcomes and digest facts for given inputs. It never checks private helpers or the database layout.
 - **Engine tests:**
-  - **Setup:** built from the real dataset files, with the clock fixed at 2026-10-21T09:00Z, an in-memory store, and a scripted `ModelGateway` that replays recorded reviewer findings and call turns.
+  - **Setup:** built from the real dataset files, with the clock fixed at 2026-10-21T09:00Z, an in-memory store, and a scripted `ModelGateway`. That gateway replays reviewer findings and call turns recorded by the reviewer eval script and committed as fixtures.
   - **Cases to cover:**
     - each demo case lands in the expected group with the expected reason;
-    - CD-420437's buyer contact needs a yes and cites its policy row;
+    - CD-420437's buyer question is a propose-only proposal that cites its policy row, and no call to the customer side is ever started, including to Celia Hollowmere;
+    - every rule's first action is taken, and no Needs action order lacks a decision;
+    - background calls finish through the simulated person, and only demo or "ring live" calls ring;
     - CD-420516's site call goes out without approval;
     - CD-420458 produces no new question;
     - an order with no contact gets no proposal;
-    - approval leads to call, then outcome, then a change proposal, then an effect event, then a re-review;
+    - a routine call leads to an outcome, then a change proposal, then an effect event, then a re-review;
+    - accepting a customer-side proposal, then recording the answer, leads to a change proposal;
     - a decline schedules a callback that fires on a clock move;
     - the reset clears state;
     - Done excludes delivered orders that still have gaps;
@@ -299,7 +340,8 @@ Every model call goes through it, and every call reports its `usage.cost`. Every
 - A live operator joining a call (tier 3 is an asynchronous handover).
 - Editing the seed snapshot.
 - Real authentication.
-- The travel planner and the mock driver travel site. They are a stretch goal with a separate spec if built. Their triggers are CD-420399 and CD-420311.
+- Travel, entirely, in v1: the travel planner, the mock driver travel site, and any travel rule. The planner is a stretch goal with a separate spec if built. Its triggers are CD-420399 and CD-420311.
+- Any agent contact with the customer side.
 - The final visual design. The UI design template is still to come, and this spec defines behaviour and content, not styling.
 - Browser Web Push notifications.
 
@@ -307,7 +349,9 @@ Every model call goes through it, and every call reports its `usage.cost`. Every
 
 - The dataset is a fixed snapshot. Without the demo clock, every deadline shows as late.
 - Missing contacts are common (57 of 200 endpoints have no handle). Site profiles all carry a contact email but no phone or named person. Calls are mocked, so a handle is enough to identify the callee.
-- On the strong rules, about 21 orders flag and about 79 are expected to be checked normal.
+- At load, 18 orders have a pickup within 48 h and a weak contact signal, so they start background site calls. Compute the final group counts in a test; don't assume them.
 - One order's records take about 4k tokens at the median and 9k at most, so the case file fits a single call.
 - OpenRouter's pages disagree on whether Haiku 5.5 thinking can be disabled. Set effort explicitly per job.
 - Audio-model latency and tool use over streaming are the main technical risk. The tier-2 fallback pipeline exists for that.
+- The cost meter depends on OpenRouter reporting `usage.cost` on streamed audio responses. Verify this early.
+- The seed-time sweep needs `OPENROUTER_API_KEY`. Without a key, seeding still works and orders show "not reviewed yet" instead of failing.
