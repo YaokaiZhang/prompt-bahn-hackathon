@@ -6,9 +6,9 @@
 //   endpoint claims, inbox threads naming the order, open alerts, work items or
 //   incidents) go to the reviewer ("records"); every other order is covered by the
 //   one-time sweep ("sweep"). `run()` reviews both kinds; the seed sweep calls it.
-// - Reviews read a stable time (`reviewAt`, the snapshot time), not the demo clock,
-//   so moving the clock never re-reviews. Ticket 09 should move an order's
-//   `reviewAt` to its last effect event and call `forget(orderId)`.
+// - Reviews read a stable time (`reviewAt`: the snapshot time, or the order's last
+//   effect event), not the demo clock, so moving the clock never re-reviews. The
+//   engine hands the layer an order's overlaid bundle with `replace` (ticket 09).
 // - Results live in the review cache (cr_review_results in the app), keyed by the
 //   case file's hash. Reading never calls the model; without a gateway, or when the
 //   model fails, orders read "not reviewed yet".
@@ -114,6 +114,11 @@ export type ReviewLayer = {
   run(inputs: ReviewInputs, orderIds?: string[]): Promise<void>
   /** Drops what is known about an order's review (after its records change). */
   forget(orderId: string): void
+  /**
+   * The order as the reviewer now reads it (the snapshot with its effect events
+   * applied) and the time it is read as of (its last effect event). Forgets its review.
+   */
+  replace(bundle: Bundle, reviewAt: string): void
 }
 
 const OPEN_ALERT = (status: string) => status !== "RESOLVED"
@@ -200,13 +205,16 @@ const MISS_TTL_MS = 5_000
 export function createReviewLayer(bundles: Bundle[], snapshotAt: string, options: ReviewOptions = {}): ReviewLayer {
   const gateway = options.gateway ?? null
   const cache = options.cache ?? createMemoryReviewCache()
-  const source: ReviewSource = { snapshot: { snapshotAt, bundles }, inboxMessages: options.inboxMessages ?? [] }
+  // The layer's own list: `replace` swaps in an order's overlaid bundle (tools read other orders from it too).
+  const current = [...bundles]
+  const source: ReviewSource = { snapshot: { snapshotAt, bundles: current }, inboxMessages: options.inboxMessages ?? [] }
   const reviewer = createReviewer({ gateway, source, cache, model: options.model })
   // Reads never call the model: the same cache, no gateway.
   const reader = createReviewer({ gateway: null, source, cache, model: options.model })
   const concurrency = Math.max(1, options.concurrency ?? 4)
   const maxFailures = Math.max(1, options.maxConsecutiveFailures ?? 3)
   const byId = new Map(bundles.map((bundle) => [bundle.order.id, bundle]))
+  const readAt = new Map<string, string>()
   const triggers = new Map(bundles.map((bundle) => [bundle.order.id, unreadableRecords(bundle)]))
 
   const hits = new Map<string, Reviewed>()
@@ -215,8 +223,8 @@ export function createReviewLayer(bundles: Bundle[], snapshotAt: string, options
   const failures = new Map<string, string>()
   const caseRecords = new Map<string, Map<string, CaseRecord>>()
 
-  function reviewAt(_bundle: Bundle): string {
-    return snapshotAt
+  function reviewAt(bundle: Bundle): string {
+    return readAt.get(bundle.order.id) ?? snapshotAt
   }
 
   function inputFor(bundle: Bundle, inputs: ReviewInputs) {
@@ -283,14 +291,14 @@ export function createReviewLayer(bundles: Bundle[], snapshotAt: string, options
 
   async function read(inputs: ReviewInputs): Promise<Map<string, OrderReview>> {
     const out = new Map<string, OrderReview>()
-    await Promise.all(bundles.map(async (bundle) => {
+    await Promise.all(current.map(async (bundle) => {
       out.set(bundle.order.id, toOrderReview(bundle, await lookup(bundle, inputs), inputs))
     }))
     return out
   }
 
   async function run(inputs: ReviewInputs, orderIds?: string[]): Promise<void> {
-    const chosen = orderIds ? orderIds.map((id) => byId.get(id)).filter((bundle): bundle is Bundle => Boolean(bundle)) : bundles
+    const chosen = orderIds ? orderIds.map((id) => byId.get(id)).filter((bundle): bundle is Bundle => Boolean(bundle)) : current
     misses.clear()
     const pending: Bundle[] = []
     for (const bundle of chosen) if (!("status" in await lookup(bundle, inputs))) pending.push(bundle)
@@ -333,7 +341,18 @@ export function createReviewLayer(bundles: Bundle[], snapshotAt: string, options
     caseRecords.delete(orderId)
   }
 
-  return { canReview: gateway !== null, read, run, forget }
+  function replace(bundle: Bundle, at: string): void {
+    const id = bundle.order.id
+    const index = current.findIndex((row) => row.order.id === id)
+    if (index < 0) throw new Error(`Unknown order ${id}`)
+    current[index] = bundle
+    byId.set(id, bundle)
+    if (at === snapshotAt) readAt.delete(id)
+    else readAt.set(id, at)
+    forget(id)
+  }
+
+  return { canReview: gateway !== null, read, run, forget, replace }
 }
 
 export function reviewTotals(canReview: boolean, reviews: OrderReview[]): ReviewTotals {

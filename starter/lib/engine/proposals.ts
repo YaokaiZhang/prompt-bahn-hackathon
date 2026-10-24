@@ -25,6 +25,7 @@ import {
   CONTACT_TYPE_LABEL, isCustomerSide, policyFor, policyRow, type AskRole, type ContactType, type Decision, type PolicyRowId,
 } from "@/lib/reviewer/policy"
 import { customerOwnsSite, customerSideOf, endpointContactType, endpointSite } from "./contacts"
+import type { Effect } from "./effects"
 import type { CitedRecord, OrderReview, ReviewFinding } from "./reviews"
 
 export type ProposalKind = "call" | "operator_question" | "customer_contact" | "change"
@@ -67,6 +68,11 @@ export type ProposalDraft = {
   decision: Decision
   /** For a change proposal: what approving writes to the order. */
   change: string | null
+  /**
+   * For a change proposal: the effect event approving writes (ticket 09). Absent:
+   * the change is committed as an attributed claim by whoever said it (see `changeEffect`).
+   */
+  effect?: Effect | null
   /** Where the proposal came from, e.g. "reviewer" or a call id. */
   source: string
   proposedAt: string
@@ -191,7 +197,7 @@ export function draftFromFinding(bundle: Bundle, finding: ReviewFinding, propose
 /** A change the agent wants to make: needs an operator's yes (policy row order-change). */
 export function changeDraft(bundle: Bundle, input: {
   title: string; change: string; why: string; source: string; contact?: { name: string; type: ContactType; role: AskRole; recordId?: string | null }
-  evidence?: CitedRecord[]; whoPays?: string
+  evidence?: CitedRecord[]; whoPays?: string; effect?: Effect | null
 }, proposedAt: string): ProposalDraft {
   const type = input.contact?.type ?? "operator"
   const row = policyFor(type, "change")
@@ -204,7 +210,21 @@ export function changeDraft(bundle: Bundle, input: {
     kind: "change", findingId: null, title: input.title, action: `Change the order: ${input.change}`, script: input.change, why: input.why,
     evidence: input.evidence ?? [], contact, whoPays: input.whoPays ?? `${bundle.customer.id} ${bundle.customer.name} pays for the order.`,
     policyRow: row.id, decision: row.decision, change: input.change, source: input.source, proposedAt,
+    ...(input.effect ? { effect: input.effect } : {}),
   }
+}
+
+/**
+ * The effect event approving a change writes: its own `effect`, else the change as
+ * an attributed claim by whoever said it (the customer side, a site or driver on a
+ * call, the operator).
+ */
+export function changeEffect(proposal: Pick<ProposalDraft, "change" | "title" | "effect" | "contact">): Effect {
+  if (proposal.effect) return proposal.effect
+  const claim = proposal.change ?? proposal.title
+  if (isCustomerSide(proposal.contact.type)) return { type: "customer_answer_recorded", from: `${proposal.contact.name} (${proposal.contact.typeLabel.toLowerCase()})`, question: proposal.title, answer: claim }
+  if (proposal.contact.type === "operator") return { type: "operator_answer_recorded", question: proposal.title, answer: claim }
+  return { type: "call_result_recorded", with: `${proposal.contact.name} (${proposal.contact.typeLabel.toLowerCase()})`, claim }
 }
 
 function onApproveText(draft: ProposalDraft): string {
@@ -274,7 +294,11 @@ export function proposalsFor(bundle: Bundle, review: OrderReview, stored: Stored
     const list = byProposal.get(event.proposalId) ?? []
     list.push(event)
     byProposal.set(event.proposalId, list)
-    if (!drafts.has(event.proposalId) && event.data?.draft) drafts.set(event.proposalId, event.data.draft)
+    const kept = event.data?.draft
+    if (!kept) continue
+    const fromReview = drafts.get(event.proposalId)
+    // A later review (after an effect event) raises the same finding: it was still proposed when first stored.
+    drafts.set(event.proposalId, fromReview ? { ...fromReview, proposedAt: kept.proposedAt } : kept)
   }
   const proposals = [...drafts.values()].map((draft) => {
     const events = byProposal.get(draft.id) ?? []

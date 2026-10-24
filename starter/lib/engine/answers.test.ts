@@ -107,7 +107,7 @@ eachStore("CD-420089: the operator question about the ops-shift note waits in Ne
   assert.deepEqual(answered.history.map((event) => [event.by, event.kind]), [["agent", "proposed"], ["policy", "approved"], ["operator", "answered"]])
   assert.doesNotMatch(order.reason, /Question for you/)
   const caseFile = caseFileOf(gateway.calls.slice(calls))
-  assert.match(caseFile, /recorded_answer/)
+  assert.match(caseFile, /OPERATOR_ANSWER_RECORDED/, "committed at once as an effect event (ticket 09)")
   assert.match(caseFile, /Rebook the train from Helsinki/)
   await assert.rejects(engine.apply({ type: "answerQuestion", proposalId: question.id, answer: "Again." }), /cannot be answered/)
 }, withModel)

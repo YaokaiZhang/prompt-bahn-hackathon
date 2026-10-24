@@ -16,8 +16,9 @@ import { compareUrgency, GROUPS, verdictFor, type Group, type RuleResult, type V
 import { briefingAsOf, digestFacts, digestTimes, digestTitle, pushId, sendPush, type Briefing, type DigestItem, type PushInput } from "./briefing"
 import { writeProse, type ProseOptions } from "./digest-prose"
 import { becameDue, digestDueItems, dueAsOf, nextCheckItems, nextDueAfter, type DueItem } from "./due"
+import { applyEffects, checkEffect, effectId, effectText, type Effect, type EffectEvent, type EffectInput, type EffectWrite } from "./effects"
 import {
-  answersFor, changeDraft, instructionsFor, proposalsFor, type OrderProposals, type Proposal, type StoredProposalEvent, type Unreachable,
+  answersFor, changeDraft, changeEffect, instructionsFor, proposalsFor, type OrderProposals, type Proposal, type StoredProposalEvent, type Unreachable,
 } from "./proposals"
 import { createReviewLayer, reviewTotals, type OrderReview, type ReviewInputs, type ReviewOptions, type ReviewTotals } from "./reviews"
 import { buildFleet, evaluateRules, type Evaluation } from "./rules"
@@ -50,7 +51,14 @@ export type Command =
    * Proposing the same change twice is a no-op.
    */
   | { type: "proposeChange"; orderId: string; title: string; change: string; why: string; source: string
-      contact?: { name: string; type: ContactType; role: AskRole; recordId?: string | null } }
+      contact?: { name: string; type: ContactType; role: AskRole; recordId?: string | null }
+      /** The effect event approving it writes (contact confirmed, window changed...); absent: an attributed claim by `contact`. */
+      effect?: Effect }
+  /**
+   * Writes one effect event now, without a proposal: a call result (ticket 10), or any
+   * other committed change whose approval already happened. The order is re-reviewed.
+   */
+  | { type: "recordEffect"; effect: EffectWrite }
   /**
    * The operator records the customer's answer on an approved customer-side proposal
    * (after making the contact): the proposal becomes answered, the answer goes to the
@@ -82,7 +90,21 @@ export type OrderState = {
   proposals: Proposal[]
   /** Findings the agent cannot act on: no contact on record (couldn't check). */
   unreachable: Unreachable[]
+  /** Committed changes on top of the snapshot (ticket 09), oldest first. */
+  effects: EffectEvent[]
+  /** What happened on the order, oldest first: findings proposed, approvals, answers, effect events. */
+  history: HistoryEntry[]
 } & Verdict
+
+/** One line of an order's history. `kind` is a proposal event kind, or "effect" for an effect event. */
+export type HistoryEntry = {
+  at: string
+  by: "agent" | "policy" | "operator"
+  kind: string
+  text: string
+  proposalId: string | null
+  effectId: string | null
+}
 
 export type GroupCounts = Record<Group, number>
 
@@ -92,6 +114,7 @@ export type { FirstAction, Group, Outcome, PlannedAction, RuleId, RuleResult, So
 export type { DueItem, DueKind } from "./due"
 export type { Briefing, BriefingItem, DigestFacts, DigestItem, DigestSlot, PushItem, PushReason, PushInput } from "./briefing"
 export type { DigestProse, ProseSegment } from "./digest-prose"
+export type { Effect, EffectEvent, EffectInput, EffectType, EffectWrite } from "./effects"
 export { becameDue, GROUPS }
 
 /** The Needs action group, most urgent first (urgent, then soonest deadline, then reference). */
@@ -121,8 +144,10 @@ export type Engine = {
   apply(command: Command): Promise<EngineState>
   /** The demo clock as stored, as an ISO string. */
   clock(): Promise<string>
-  /** The bundle the engine reads for one order, or null for an unknown id. */
+  /** The snapshot bundle for one order (never changed), or null for an unknown id. */
   bundle(orderId: string): Bundle | null
+  /** `bundle` (the snapshot, or the same order loaded elsewhere) with the order's effect events applied: what the order view shows. */
+  overlaid(bundle: Bundle): Promise<Bundle>
 }
 
 export type EngineDeps = {
@@ -163,21 +188,22 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
   const rulesAtReview = (bundle: Bundle): RuleResult[] => {
     let rules = rulesAtReviewTime.get(bundle.order.id)
     if (!rules) {
-      rules = evaluateRules(bundle, { now: start, fleet }).rules
+      rules = evaluateRules(bundle, { now: overlay.get(bundle.order.id)?.reviewAt ?? start, fleet }).rules
       rulesAtReviewTime.set(bundle.order.id, rules)
     }
     return rules
   }
 
-  function evaluationsAt(at: string): Map<string, Evaluation> {
-    if (last?.at === at) return last.evaluations
-    const evaluations = new Map(snapshot.bundles.map((bundle) => [bundle.order.id, evaluateRules(bundle, { now: at, fleet })]))
-    last = { at, evaluations }
-    return evaluations
-  }
+  // -- Effect events (ticket 09) -----------------------------------------------
+  // Orders with effect events read an overlaid bundle (the snapshot is never changed).
+  // `sync` re-reads the events from the store on every read, so events written by
+  // another process show up too; an order whose events changed has its rules and
+  // review forgotten and its review time moved to its last event.
+  const overlay = new Map<string, { key: string; bundle: Bundle; reviewAt: string }>()
+  const bundleOf = (orderId: string): Bundle => overlay.get(orderId)?.bundle ?? bundles.get(orderId)!
 
-  function eventsByOrder(events: StoredProposalEvent[]): Map<string, StoredProposalEvent[]> {
-    const out = new Map<string, StoredProposalEvent[]>()
+  function byOrder<T extends { orderId: string }>(events: T[]): Map<string, T[]> {
+    const out = new Map<string, T[]>()
     for (const event of events) {
       const list = out.get(event.orderId) ?? []
       list.push(event)
@@ -186,35 +212,97 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     return out
   }
 
-  /** What the reviewer reads besides the records: rules at the review time, and the operator's instructions. */
-  function reviewInputs(events: Map<string, StoredProposalEvent[]>): ReviewInputs {
+  async function sync(): Promise<Map<string, EffectEvent[]>> {
+    const effects = byOrder(await store.readEffects())
+    for (const orderId of new Set([...overlay.keys(), ...effects.keys()])) {
+      const list = effects.get(orderId) ?? []
+      const key = list.map((event) => event.id).join(",")
+      if ((overlay.get(orderId)?.key ?? "") === key) continue
+      const raw = bundles.get(orderId)
+      if (!raw) continue
+      const reviewAt = list.length ? list.map((event) => event.at).sort().at(-1)! : start
+      if (list.length) overlay.set(orderId, { key, bundle: applyEffects(raw, list), reviewAt })
+      else overlay.delete(orderId)
+      reviews.replace(bundleOf(orderId), reviewAt)
+      rulesAtReviewTime.delete(orderId)
+      last = null
+    }
+    return effects
+  }
+
+  function evaluationsAt(at: string): Map<string, Evaluation> {
+    if (last?.at === at) return last.evaluations
+    const evaluations = new Map(snapshot.bundles.map(({ order }) => [order.id, evaluateRules(bundleOf(order.id), { now: at, fleet })]))
+    last = { at, evaluations }
+    return evaluations
+  }
+
+  const eventsByOrder = (events: StoredProposalEvent[]) => byOrder(events)
+
+  /**
+   * The answers the operator recorded that are not committed yet. Once an answer is
+   * committed as an effect event (the operator's own answer at once; a customer's
+   * answer when its order update is approved) the reviewer reads it as that event's
+   * record instead.
+   */
+  function uncommittedAnswers(stored: StoredProposalEvent[], effects: EffectEvent[]) {
+    const committed = new Set(effects.map((event) => event.source))
+    const changeSource = new Map(stored.filter((event) => event.data?.draft?.kind === "change").map((event) => [event.proposalId, event.data!.draft!.source]))
+    for (const [changeId, source] of changeSource) if (committed.has(changeId)) committed.add(source)
+    return answersFor(stored).filter((answer) => !committed.has(answer.id.replace(/-a$/, "")))
+  }
+
+  /** What the reviewer reads besides the records: rules at the review time, the operator's instructions and uncommitted answers. */
+  function reviewInputs(events: Map<string, StoredProposalEvent[]>, effects: Map<string, EffectEvent[]>): ReviewInputs {
     return {
       rules: rulesAtReview,
       prior: (bundle) => {
         const stored = events.get(bundle.order.id) ?? []
         const instructions = instructionsFor(stored)
-        const answers = answersFor(stored)
+        const answers = uncommittedAnswers(stored, effects.get(bundle.order.id) ?? [])
         if (!instructions.length && !answers.length) return undefined
         return { ...(instructions.length ? { instructions } : {}), ...(answers.length ? { answers } : {}) }
       },
     }
   }
 
+  /** Everything the reviewer reads besides the records, as stored now. */
+  async function currentInputs(): Promise<ReviewInputs> {
+    const effects = await sync()
+    return reviewInputs(eventsByOrder(await store.readProposalEvents()), effects)
+  }
+
+  function historyOf(proposals: Proposal[], effects: EffectEvent[]): HistoryEntry[] {
+    const entries: HistoryEntry[] = [
+      ...proposals.flatMap((proposal) => proposal.history.map((event) => ({
+        at: event.at, by: event.by, kind: event.kind, text: `${proposal.title}: ${event.text}`, proposalId: proposal.id, effectId: null,
+      }))),
+      ...effects.map((event) => ({ at: event.at, by: event.by, kind: "effect", text: event.text, proposalId: null, effectId: event.id })),
+    ]
+    // Stable sort by time: within one moment, proposal events come before the effect they caused.
+    return entries.map((entry, index) => ({ entry, index })).sort((a, b) => a.entry.at.localeCompare(b.entry.at) || a.index - b.index).map(({ entry }) => entry)
+  }
+
   async function ordersAt(at: string): Promise<OrderState[]> {
+    const effects = await sync()
     const evaluations = evaluationsAt(at)
     const events = eventsByOrder(await store.readProposalEvents())
-    const read = await reviews.read(reviewInputs(events))
-    return snapshot.bundles.map((bundle) => {
-      const review = read.get(bundle.order.id)!
-      const work: OrderProposals = proposalsFor(bundle, review, events.get(bundle.order.id) ?? [])
+    const read = await reviews.read(reviewInputs(events, effects))
+    return snapshot.bundles.map(({ order }) => {
+      const bundle = bundleOf(order.id)
+      const review = read.get(order.id)!
+      const work: OrderProposals = proposalsFor(bundle, review, events.get(order.id) ?? [])
+      const committed = effects.get(order.id) ?? []
       return {
-        id: bundle.order.id,
-        reference: bundle.order.reference,
-        status: bundle.order.status,
+        id: order.id,
+        reference: order.reference,
+        status: order.status,
         review,
         proposals: work.proposals,
         unreachable: work.unreachable,
-        ...verdictFor(evaluations.get(bundle.order.id)!, review, work),
+        effects: committed,
+        history: historyOf(work.proposals, committed),
+        ...verdictFor(evaluations.get(order.id)!, review, work),
       }
     })
   }
@@ -258,10 +346,36 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
       : "Approved."
   }
 
-  /** Instructions and answers are part of the order's case file: re-review the order with them. */
+  /** Instructions, answers and effect events are part of the order's case file: re-review the order with them. */
   async function rereview(orderId: string): Promise<void> {
     reviews.forget(orderId)
-    if (reviews.canReview) await reviews.run(reviewInputs(eventsByOrder(await store.readProposalEvents())), [orderId])
+    const inputs = await currentInputs()
+    if (reviews.canReview) await reviews.run(inputs, [orderId])
+  }
+
+  /**
+   * Writes effect events (append-only), checked against the overlaid order. The
+   * caller re-reviews the orders. Returns the events as stored.
+   */
+  async function commitEffects(inputs: EffectInput[]): Promise<EffectEvent[]> {
+    if (!inputs.length) return []
+    await sync()
+    const at = await clock()
+    const existing = (await store.readEffects()).length
+    const events = inputs.map((input, index) => {
+      const bundle = bundles.get(input.orderId)
+      if (!bundle) throw new Error(`Unknown order ${input.orderId}`)
+      checkEffect(bundleOf(input.orderId), input)
+      return { ...input, id: effectId(input, at, existing + index), at, text: effectText(bundleOf(input.orderId), input) } as EffectEvent
+    })
+    await store.appendEffects(events)
+    return events
+  }
+
+  /** The effect event a change proposal's yes writes; null for other kinds. */
+  function effectOfApproval(proposal: Proposal): EffectInput | null {
+    if (proposal.kind !== "change") return null
+    return { ...changeEffect(proposal), orderId: proposal.orderId, by: "operator", source: proposal.id }
   }
 
   function answerText(answer: string): string {
@@ -370,25 +484,31 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
       }
       case "reset": {
         // Instructions and answers were part of those orders' case files: read their reviews afresh.
-        const touched = new Set((await store.readProposalEvents()).map((event) => event.orderId))
+        const touched = new Set([...(await store.readProposalEvents()), ...(await store.readEffects())].map((event) => event.orderId))
         await store.reset()
         for (const orderId of touched) reviews.forget(orderId)
         await deliverBriefing()
         break
       }
       case "review":
-        await reviews.run(reviewInputs(eventsByOrder(await store.readProposalEvents())), command.orderIds)
+        await reviews.run(await currentInputs(), command.orderIds)
         break
-      case "approve": {
-        const proposal = await findProposal(command.proposalId)
-        approvable(proposal)
-        await store.appendProposalEvents([await eventFor(proposal, "approved", approvalText(proposal))])
+      case "approve":
+      case "approveBatch": {
+        const ids = command.type === "approve" ? [command.proposalId] : [...new Set(command.proposalIds)]
+        const proposals = await Promise.all(ids.map(findProposal))
+        proposals.forEach(approvable)
+        // A change's yes commits it: check every effect before anything is written (all or nothing).
+        const effects = proposals.map(effectOfApproval).filter((effect): effect is EffectInput => effect !== null)
+        for (const effect of effects) checkEffect(bundleOf(effect.orderId), effect)
+        await store.appendProposalEvents(await Promise.all(proposals.map((proposal) => eventFor(proposal, "approved", approvalText(proposal)))))
+        await commitEffects(effects)
+        for (const orderId of new Set(effects.map((effect) => effect.orderId))) await rereview(orderId)
         break
       }
-      case "approveBatch": {
-        const proposals = await Promise.all([...new Set(command.proposalIds)].map(findProposal))
-        proposals.forEach(approvable)
-        await store.appendProposalEvents(await Promise.all(proposals.map((proposal) => eventFor(proposal, "approved", approvalText(proposal)))))
+      case "recordEffect": {
+        const [event] = await commitEffects([{ ...command.effect, by: command.effect.by ?? "agent" } as EffectInput])
+        await rereview(event.orderId)
         break
       }
       case "editScript": {
@@ -427,6 +547,8 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
           why: `The operator asked "${proposal.script}" and recorded this answer.`,
           source: proposal.id, evidence: proposal.evidence, whoPays: proposal.whoPays,
           contact: { name, type: proposal.contact.type, role: proposal.contact.role, recordId: proposal.contact.recordId },
+          // The yes commits the answer to the order as the customer side's attributed claim.
+          effect: { type: "customer_answer_recorded", from: `${name} (${proposal.contact.typeLabel.toLowerCase()})`, question: proposal.script, answer },
         }, await clock())
         const from = `${name} (${proposal.contact.typeLabel.toLowerCase()}), recorded by the operator`
         await store.appendProposalEvents([
@@ -442,12 +564,15 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
         if (proposal.kind !== "operator_question") throw new Error(`${proposal.reference}: "${proposal.title}" is not a question to the operator`)
         stillOpen(proposal, "answered")
         await store.appendProposalEvents([await eventFor(proposal, "answered", `Answered: ${answer}`, { answer, question: proposal.script, from: "operator" })])
+        // The operator's own answer needs no further yes: it is committed as an attributed note at once.
+        await commitEffects([{ type: "operator_answer_recorded", question: proposal.script, answer, orderId: proposal.orderId, by: "operator", source: proposal.id }])
         await rereview(proposal.orderId)
         break
       }
       case "proposeChange": {
         const bundle = bundles.get(command.orderId)
         if (!bundle) throw new Error(`Unknown order ${command.orderId}`)
+        if (command.effect) checkEffect(bundleOf(command.orderId), command.effect)
         const draft = changeDraft(bundle, command, await clock())
         if ((await store.readProposalEvents()).some((event) => event.proposalId === draft.id)) break
         await store.appendProposalEvents([{
@@ -467,5 +592,10 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     return state()
   }
 
-  return { state, apply, clock, bundle: (orderId) => bundles.get(orderId) ?? null }
+  async function overlaid(bundle: Bundle): Promise<Bundle> {
+    const effects = (await sync()).get(bundle.order.id) ?? []
+    return applyEffects(bundle, effects)
+  }
+
+  return { state, apply, clock, bundle: (orderId) => bundles.get(orderId) ?? null, overlaid }
 }
