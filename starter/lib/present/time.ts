@@ -15,10 +15,24 @@ function parse(value: string | null | undefined): Date | null {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
+// Building an Intl.DateTimeFormat is slow (milliseconds), and the reviewer formats
+// every record of every order, so formatters are built once per zone and options.
+const formatters = new Map<string, Intl.DateTimeFormat>()
+
+function formatter(options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = JSON.stringify(options)
+  let made = formatters.get(key)
+  if (!made) {
+    made = new Intl.DateTimeFormat(LOCALE, options)
+    formatters.set(key, made)
+  }
+  return made
+}
+
 function safeZone(zone: string | null | undefined): string {
   if (!zone) return "UTC"
   try {
-    new Intl.DateTimeFormat(LOCALE, { timeZone: zone })
+    formatter({ timeZone: zone })
     return zone
   } catch {
     return "UTC"
@@ -26,7 +40,7 @@ function safeZone(zone: string | null | undefined): string {
 }
 
 function parts(date: Date, zone: string, options: Intl.DateTimeFormatOptions): string {
-  return new Intl.DateTimeFormat(LOCALE, { timeZone: zone, hourCycle: "h23", ...options }).format(date)
+  return formatter({ timeZone: zone, hourCycle: "h23", ...options }).format(date)
 }
 
 /** "21 Oct" */
@@ -69,7 +83,7 @@ export function fmtLong(value: string | null | undefined): string {
 }
 
 export function zoneName(date: Date, zone: string): string {
-  const formatted = new Intl.DateTimeFormat(LOCALE, { timeZone: zone, timeZoneName: "short" }).formatToParts(date)
+  const formatted = formatter({ timeZone: zone, timeZoneName: "short" }).formatToParts(date)
   return formatted.find((part) => part.type === "timeZoneName")?.value ?? zone
 }
 

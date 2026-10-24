@@ -313,7 +313,7 @@ function messageView(bundle: Bundle, message: Bundle["messages"][number]): Messa
     id: message.id, author, recipient: dir.resolve(d.recipient_id, d.recipient_type),
     channel, channelLabel: label(channel), at: message.authoredAt, body: message.body,
     internal: str(d.visibility) === "INTERNAL" || channel === "internal_note",
-    language: str(d.language), evidenceCount: refCount(d.evidence_refs),
+    language: str(d.language), evidenceCount: refCount(d.evidence_refs), supersededBy: str(d.superseded_by),
     otherOrder: message.orderId !== bundle.order.id ? orderRef(bundle, message.orderId) : null,
   }
 }

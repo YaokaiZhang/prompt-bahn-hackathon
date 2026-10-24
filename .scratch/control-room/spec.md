@@ -27,7 +27,7 @@ A control room that sorts every order into one of four groups: **Needs action**,
 
 **The reviewer's output:** for each conflict it finds, it cites the records that disagree and the record that names the contact. It then drafts who to ask and what to ask.
 
-**Approval:** an approval policy decides what needs an operator's yes. Routine questions to third-party sites (including sellers), drivers and operators go out on their own. The agent never contacts the customer side: the paying customer, a contact the customer gave us, or a site the customer owns. For those it proposes the action to the operator, with a drafted script, and the operator makes the contact and records the answer. Any change to the order needs a yes.
+**Approval:** an approval policy decides what needs an operator's yes. Routine questions to third-party sites (including sellers), drivers and operators go out on their own. The agent never contacts the customer side: the paying customer, a contact the customer gave us, or a site the customer owns. The one exception is a pickup-readiness call (car ready, papers and keys there, callback if nobody answers) to the order's pickup place or pickup contact, which goes out on its own even when that contact is customer side (ADR 0001 amendment); the paying customer is never called. For everything else on the customer side it proposes the action to the operator, with a drafted script, and the operator makes the contact and records the answer. Any change to the order needs a yes.
 
 **Calls run in three tiers, cheapest first:**
 1. Fixed questions read by a real TTS voice, answered on a keypad.
@@ -95,7 +95,7 @@ The calls go to a mock phone page that a teammate opens as the Site or Driver pe
 ### Operator approval
 41. As an operator, I want a read-only Rules page listing who is contacted, the kind of action, and whether the agent acts alone or needs a yes, so that I understand the agent's authority.
 42. As an operator, I want routine questions to third-party sites (including sellers), drivers and operators to go out without my approval, and to see their results, so that cheap work happens on its own.
-43. As an operator, I want the agent never to contact the customer side itself (the paying customer, a contact the customer gave us, or a site the customer owns), and instead to propose the contact to me with a drafted script, so that customer contact stays with people.
+43. As an operator, I want the agent never to contact the customer side itself (the paying customer, a contact the customer gave us, or a site the customer owns), and instead to propose the contact to me with a drafted script, so that customer contact stays with people. The exception is a pickup-readiness call to the order's pickup place or pickup contact, which the agent makes on its own; it never calls the paying customer.
 43a. As an operator, I want to record the customer's answer on the proposal after I make the contact, so that the agent can continue from it.
 44. As an operator, I want any change coming out of a call (new date, cost, booking, order update) to wait for my yes, so that nothing changes without a person.
 45. As an operator, I want to approve several proposals in one click, with each script visible and each row saying what approving will do (write a change, or hand me a customer contact), so that approval is fast and unsurprising.
@@ -179,7 +179,7 @@ Every model call goes through it, and every call reports its `usage.cost`. Every
 
 | Job | Model | Notes |
 |---|---|---|
-| Reviewer and other reasoning | `anthropic/claude-haiku-5.5` | Effort set per job: medium for the reviewer and call summaries, low for the digest. |
+| Reviewer and other reasoning | `anthropic/claude-haiku-5.5` | Effort set per job: medium for the reviewer and call summaries, low for the digest; the tier-2 per-turn check, which also writes the call summary, runs with reasoning off for latency (see Implementation Notes). |
 | Speech | `openai/gpt-4o-mini-tts` | Tier-1 prompts are generated once and cached. |
 | Tier-2 live voice | An audio-in, audio-out chat model such as `openai/gpt-4o-audio-preview`, streamed | Haiku runs on each turn's transcript to check evidence and policy and to write the structured result. |
 | Tier-2 fallback | An audio-input or transcription model (`openai/whisper-large-v3`) as the ear | Haiku replies, TTS speaks. |
@@ -203,7 +203,8 @@ Every model call goes through it, and every call reports its `usage.cost`. Every
   | contact confirmed | endpoint `contact_status` and `last_confirmed_source` |
   | contact changed | endpoint contact name, handle and role |
   | window changed | the selected pickup slot or delivery promise |
-  | call result recorded | an attributed claim, with the source being the call |
+  | call result recorded | an attributed claim, with the source being the call; it supersedes the records the answered call topics asked about |
+  | ETA reported | the driver's new ETA as a time, with the source being the call; it supersedes the ETA that was current (never the delivery promise) |
   | customer answer recorded | an attributed claim, with the source being the operator's record of the customer |
   | operator answer recorded | an attributed note |
   | cost approved | an expense or cost line |
@@ -257,8 +258,8 @@ Every model call goes through it, and every call reports its `usage.cost`. Every
   | Contact type | How it's recognised | Agent may |
   |---|---|---|
   | Paying customer | `orders.customer_id`; reached through its existing support conversation (customers have no contact fields) | Propose only. The operator contacts them. |
-  | Customer-given contact | endpoint `stated_by` is `CUSTOMER_ORDER_INPUT` (for example Celia Hollowmere on CD-420437) | Propose only |
-  | Customer-owned site | `site.customer_id` equals `orders.customer_id` | Propose only |
+  | Customer-given contact | endpoint `stated_by` is `CUSTOMER_ORDER_INPUT` (for example Celia Hollowmere on CD-420437) | Propose only, except a pickup-readiness call when it is the pickup contact (call on its own) |
+  | Customer-owned site | `site.customer_id` equals `orders.customer_id` | Propose only, except a pickup-readiness call when it is the pickup place (call on its own) |
   | Third-party site or seller's site | any other site or endpoint contact | Call on its own |
   | Driver | assignment `driver_id` | Call on its own |
   | Operator | note or event author role | Ask in the app on its own |
@@ -312,7 +313,7 @@ Every model call goes through it, and every call reports its `usage.cost`. Every
   - **Setup:** built from the real dataset files, with the clock fixed at 2026-10-21T09:00Z, an in-memory store, and a scripted `ModelGateway`. That gateway replays reviewer findings and call turns recorded by the reviewer eval script and committed as fixtures.
   - **Cases to cover:**
     - each demo case lands in the expected group with the expected reason;
-    - CD-420437's question to the customer is a propose-only proposal that cites its policy row, and no call to the customer side is ever started, including to Celia Hollowmere;
+    - CD-420437's question to the customer is a propose-only proposal that cites its policy row, and no call to the customer side is ever started, including to Celia Hollowmere (only pickup-readiness calls to a pickup place or pickup contact may reach the customer side);
     - every rule's first action is taken, and no Needs action order lacks a decision;
     - background calls finish through the simulated person, and only demo or "ring live" calls ring;
     - CD-420516's site call goes out without approval;
@@ -343,7 +344,7 @@ Every model call goes through it, and every call reports its `usage.cost`. Every
 - Editing the seed snapshot.
 - Real authentication.
 - Travel, entirely, in v1: the travel planner, the mock driver travel site, and any travel rule. The planner is a stretch goal with a separate spec if built. Its triggers are CD-420399 and CD-420311.
-- Any agent contact with the customer side.
+- Any agent contact with the customer side, other than a pickup-readiness call to the order's pickup place or pickup contact.
 - The final visual design. The UI design template is still to come, and this spec defines behaviour and content, not styling.
 - Browser Web Push notifications.
 
@@ -357,3 +358,17 @@ Every model call goes through it, and every call reports its `usage.cost`. Every
 - Audio-model latency and tool use over streaming are the main technical risk. The tier-2 fallback pipeline exists for that.
 - The cost meter depends on OpenRouter reporting `usage.cost` on streamed audio responses. Verify this early.
 - The seed-time sweep needs `OPENROUTER_API_KEY`. Without a key, seeding still works and orders show "not reviewed yet" instead of failing.
+
+## Implementation Notes
+
+Deliberate additions and choices made while building, which the stories above do not ask for in so many words:
+
+- **Seed-time sweep is opt-in.** Story 25 sweeps every order at seed time. Because that calls the model on all 100 orders, `npm run db:seed` runs it only with `--review` (or `SEED_REVIEW=1`); otherwise review a few named orders with `npm run review:sweep -- CD-…`.
+- **Tight-ETA check.** A car whose latest ETA is inside the promise but within 10 minutes of its end gets an "on time?" question on its driver line (CD-420437, CD-420710). It is "on request": the operator rings it live; the agent never starts it and it holds no group. This gives story 71 its trigger, since R12 alone (ETA after the promise end) does not fire on CD-420437.
+- **R12 and a reported ETA.** When the late ETA is one the driver reported on a call (`eta_reported`), R12's first action is "show to a person", not another driver call: the driver already said it, and the operator decides what to tell the customer. The same goes for a tracking ETA the driver answered on a call with anything other than "can still deliver on time"; that answer makes R12 pass. R10 likewise reads the driver's word on a call as the latest position.
+- **"Needs person" call line.** After three call attempts with no answer, the line is "needs a person" and the order goes to Needs action.
+- **NEXT rule's first action.** A due next check the pickup site cannot settle becomes a proposal to the operator (story 69): a customer-side contact when the open question is with the customer (CD-420458, CD-420009), else an operator question (CD-420326). Its answer supersedes the thread, so the check stops firing.
+- **Normal after a reviewer pass.** An order whose strong rule asked for a reviewer pass (R3, R7, R13) and whose review found nothing is Normal, and its reason says "The reviewer cleared R7: …" instead of claiming every check passed.
+- **Digest prose guard.** Besides typed digits, the digest rejects counts written as words ("twenty", "both", "a couple"), so every number comes from the rule facts (story 81).
+- **No push for orders urgent at the start.** Urgent pushes go only to (order, reason) pairs that were not urgent at the snapshot time; the 09:00 digest already lists those.
+- **Reasoning effort for calls.** The tier-2 per-turn check runs with reasoning off (`effort: "none"`): with reasoning on, Haiku spent its token budget and took about 7 s per turn, too slow for a live call. It is also the call summary: each turn's check carries the call's cumulative claims and a one-line summary, and the last one is the summary on the order, so there is no separate end-of-call summary call to give medium effort. Tier-1 summaries are template text.

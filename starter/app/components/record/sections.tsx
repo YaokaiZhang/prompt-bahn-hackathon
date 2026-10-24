@@ -7,6 +7,7 @@ import { fmtClock, fmtDateTime, fmtDay, relativeTo } from "@/lib/present/time"
 import { Icon } from "../icons"
 import { Route } from "../route-line"
 import { ActorName, Empty, OrderLink, OrderLinks, Pill, Range, SectionHead, When } from "../ui"
+import { CitedTag, recordAnchor, useCited } from "../review"
 import { OrderFiles } from "./files"
 
 /* ── Route ──────────────────────────────────────────────────────────────── */
@@ -23,14 +24,15 @@ export function RouteSection({ view }: { view: RecordView }) {
 
 export function ConversationsSection({ view }: { view: RecordView }) {
   const { threads, notes } = view
+  const cited = useCited()
   return <section className="sec" id="conversations">
     <SectionHead title="Conversations" count={threads.length} />
     {threads.length === 0 && notes.length === 0 && <Empty>No conversation is linked to this order.</Empty>}
     <div className="rows">
       {threads.map((thread) => <ThreadRow key={thread.id} thread={thread} view={view} />)}
-      {notes.map((note) => <div className="row" key={note.id}>
+      {notes.map((note) => <div className={`row${cited.has(note.id) ? " is-cited" : ""}`} key={note.id} id={recordAnchor(note.id)}>
         <div className="row-main">
-          <div className="row-title">Note from <ActorName actor={note.author} /></div>
+          <div className="row-title">Note from <ActorName actor={note.author} />{cited.has(note.id) && <CitedTag />}</div>
           <div className="row-preview">{note.body}</div>
         </div>
         <div className="row-side"><When at={note.at} withZone={false} /></div>
@@ -40,12 +42,15 @@ export function ConversationsSection({ view }: { view: RecordView }) {
 }
 
 function ThreadRow({ thread, view }: { thread: ThreadView; view: RecordView }) {
-  const [open, setOpen] = useState(false)
+  const cited = useCited()
+  const citesMessage = thread.messages.some((message) => cited.has(message.id))
+  // A thread holding a cited message starts open so the highlighted message is on the page.
+  const [open, setOpen] = useState(citesMessage)
   const last = thread.messages[thread.messages.length - 1]
   const count = thread.messages.length
-  return <article className="row">
+  return <article className={`row${cited.has(thread.id) ? " is-cited" : ""}`} id={recordAnchor(thread.id)}>
     <div className="row-main">
-      <div className="row-title">{thread.categoryLabel} <Pill tone={thread.tone}>{thread.statusLabel}</Pill></div>
+      <div className="row-title">{thread.categoryLabel} <Pill tone={thread.tone}>{thread.statusLabel}</Pill>{(cited.has(thread.id) || citesMessage) && <CitedTag />}</div>
       <div className="row-sub">
         {thread.channelLabel}{thread.counterparty ? <> with <ActorName actor={thread.counterparty} /></> : ""} · {count} {count === 1 ? "message" : "messages"}
         {thread.waitingOn && ` · waiting on ${thread.waitingOn}`}{thread.owner && ` · ${thread.owner}`}
@@ -60,7 +65,8 @@ function ThreadRow({ thread, view }: { thread: ThreadView; view: RecordView }) {
 }
 
 export function ThreadMessages({ thread }: { thread: ThreadView }) {
-  return <div className="messages">{thread.messages.map((message) => <div className={`msg${message.internal ? " internal" : message.author.kind === "operator" || message.author.kind === "agent" ? " from-operator" : ""}`} key={message.id}>
+  const cited = useCited()
+  return <div className="messages">{thread.messages.map((message) => <div className={`msg${message.internal ? " internal" : message.author.kind === "operator" || message.author.kind === "agent" ? " from-operator" : ""}${cited.has(message.id) ? " is-cited" : ""}`} key={message.id} id={recordAnchor(message.id)}>
     <div className="msg-meta">
       <b><ActorName actor={message.author} /></b>
       <span>{message.author.role}</span>
@@ -68,6 +74,8 @@ export function ThreadMessages({ thread }: { thread: ThreadView }) {
       <span>· {message.channelLabel}</span>
       {message.internal && <Pill tone="warn">Internal</Pill>}
       {message.author.kind === "agent" && <Pill tone="accent">Agent</Pill>}
+      {cited.has(message.id) && <CitedTag />}
+      {message.supersededBy && <a className="superseded-tag" href={`#${recordAnchor(message.supersededBy)}`} title={`A committed change (${message.supersededBy}) wrote a newer version of this; kept as history`}>Superseded</a>}
       {message.otherOrder && <Pill>Filed on <OrderLink order={message.otherOrder} /></Pill>}
       <time dateTime={message.at}>{fmtDateTime(message.at)}</time>
     </div>

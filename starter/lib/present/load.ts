@@ -1,5 +1,5 @@
 // Database access for the projections. The routes call these and hand the
-// resulting bundles to the pure builders.
+// resulting bundles to the pure builders in `assemble.ts`.
 
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm"
 import { db } from "@/lib/db"
@@ -7,15 +7,16 @@ import {
   addresses, alerts, conversations, customers, datasetMetadata, drivers, messages, operationalEvents, orderItems, orders,
   relatedRecords, sites, vehicles,
 } from "@/lib/schema"
-import { Directory, snapshotNames } from "./actors"
-import type { Bundle, PlaceRow, RelatedRow, SiteRow } from "./bundle"
+import { snapshotNames } from "./actors"
+import { buildShared, inboxFor, makeBundle, SHARED_COLLECTIONS } from "./assemble"
+import type { Bundle, RelatedRow } from "./bundle"
 import type { Row } from "./types"
+
+export { makeBundle } from "./assemble"
 
 type OrderRow = typeof orders.$inferSelect
 type CustomerRow = typeof customers.$inferSelect
 type ItemRow = { item: typeof orderItems.$inferSelect; vehicle: typeof vehicles.$inferSelect }
-
-const iso = (value: Date | string | null | undefined): string => value instanceof Date ? value.toISOString() : value ? String(value) : ""
 
 export const BOARD_COLLECTIONS = [
   "time_windows", "tracking_observations", "work_assignments", "market_offers", "work_items", "agent_proposals",
@@ -23,109 +24,20 @@ export const BOARD_COLLECTIONS = [
   "market_offer_exposures", "custody_reports",
 ]
 
-const SHARED_COLLECTIONS = ["operators", "agents", "support_inbox_threads"]
-
 export async function loadShared() {
   const [metadata] = await db.select().from(datasetMetadata).limit(1)
-  const [driverRows, customerRows, siteRows, addressRows, shared, endpointRows] = await Promise.all([
+  const [driverRows, customerRows, siteRows, addressRows, related] = await Promise.all([
     db.select().from(drivers),
     db.select().from(customers),
     db.select().from(sites),
     db.select().from(addresses),
-    db.select().from(relatedRecords).where(inArray(relatedRecords.collection, SHARED_COLLECTIONS)),
-    db.select({ id: relatedRecords.id, details: relatedRecords.details }).from(relatedRecords)
-      .where(eq(relatedRecords.collection, "order_endpoint_details")),
+    db.select({ collection: relatedRecords.collection, id: relatedRecords.id, details: relatedRecords.details }).from(relatedRecords)
+      .where(inArray(relatedRecords.collection, [...SHARED_COLLECTIONS, "order_endpoint_details"])),
   ])
-  const places = new Map<string, PlaceRow>(addressRows.map((row) => [row.id, {
-    id: row.id, name: row.name, city: row.city, country: row.country, managedSiteId: row.managedSiteId, details: row.details,
-  }]))
-  const siteMap = new Map<string, SiteRow>(siteRows.map((row) => [row.id, {
-    id: row.id, name: row.name, city: row.city, country: row.country, kind: row.kind, details: row.details,
-  }]))
-  const operators = shared.filter((row) => row.collection === "operators").map((row) => ({ id: row.id, ...row.details }))
-  const agents = shared.filter((row) => row.collection === "agents").map((row) => ({ id: row.id, ...row.details }))
-  const inbox: RelatedRow[] = shared.filter((row) => row.collection === "support_inbox_threads").map((row) => ({ id: row.id, details: row.details }))
-  return {
-    snapshotAt: metadata?.snapshotAt ? metadata.snapshotAt.toISOString() : null,
-    customers: new Map<string, CustomerRow>(customerRows.map((row) => [row.id, row])),
-    places,
-    sites: siteMap,
-    inbox,
-    makeDirectory: (snapshots?: Map<string, string>) => new Directory({
-      drivers: driverRows.map((row) => ({ id: row.id, displayName: row.displayName, homeCity: row.homeCity, homeCountry: row.homeCountry })),
-      operators: operators as Row[],
-      agents: agents as Row[],
-      customers: customerRows.map((row) => ({ id: row.id, name: row.name })),
-      sites: siteRows.map((row) => ({ id: row.id, name: row.name })),
-      endpointDetails: endpointRows.map((row) => ({ id: row.id, ...row.details })),
-      snapshots,
-    }),
-  }
-}
-
-type Shared = Awaited<ReturnType<typeof loadShared>>
-
-function inboxFor(shared: Shared, orderId: string): RelatedRow[] {
-  return shared.inbox.filter((thread) => {
-    const candidates = Array.isArray(thread.details.candidate_order_ids) ? thread.details.candidate_order_ids : []
-    const linked = Array.isArray(thread.details.linked_order_ids) ? thread.details.linked_order_ids : []
-    return candidates.includes(orderId) || linked.includes(orderId)
+  return buildShared({
+    snapshotAt: metadata?.snapshotAt ?? null,
+    drivers: driverRows, customers: customerRows, sites: siteRows, addresses: addressRows, related,
   })
-}
-
-export function makeBundle(input: {
-  shared: Shared
-  dir: Directory
-  order: OrderRow
-  customer: CustomerRow | undefined
-  items: ItemRow[]
-  alerts: (typeof alerts.$inferSelect)[]
-  conversations: (typeof conversations.$inferSelect)[]
-  messages: (typeof messages.$inferSelect)[]
-  events: (typeof operationalEvents.$inferSelect)[]
-  related: Record<string, RelatedRow[] | undefined>
-  bundleOrderRefs: Record<string, string>
-}): Bundle {
-  const { shared, order } = input
-  return {
-    snapshotAt: shared.snapshotAt,
-    order: {
-      id: order.id, reference: order.reference, lane: order.displayLane, status: order.status, routeKind: order.routeKind,
-      createdAt: iso(order.createdAt), updatedAt: iso(order.updatedAt), details: order.details,
-      pickupAddressId: order.pickupAddressId, deliveryAddressId: order.deliveryAddressId,
-      pickupSiteId: order.pickupSiteId, deliverySiteId: order.deliverySiteId,
-    },
-    customer: {
-      id: input.customer?.id ?? order.customerId, name: input.customer?.name ?? "Unknown customer",
-      tier: input.customer?.accountTier ?? null, country: input.customer?.country ?? null,
-    },
-    items: input.items.map(({ item, vehicle }) => ({
-      id: item.id, role: item.role, details: item.details,
-      vehicle: { id: vehicle.id, make: vehicle.make, model: vehicle.model, year: vehicle.modelYear, fuel: vehicle.fuel, registration: vehicle.registration, vin: vehicle.syntheticVin },
-    })),
-    alerts: input.alerts.map((alert) => ({
-      id: alert.id, status: alert.status, severity: alert.severity, signal: alert.signal, summary: alert.summary,
-      triggeredAt: iso(alert.triggeredAt), details: alert.details,
-    })),
-    conversations: input.conversations.map((thread) => ({
-      id: thread.id, orderId: thread.orderId, status: thread.status, category: thread.category, channel: thread.channel,
-      updatedAt: iso(thread.updatedAt), details: thread.details,
-    })),
-    messages: input.messages.map((message) => ({
-      id: message.id, orderId: message.orderId, conversationId: message.conversationId, authorType: message.authorType,
-      body: message.body, authoredAt: iso(message.authoredAt), details: message.details,
-    })),
-    events: input.events.map((event) => ({
-      id: event.id, orderId: event.orderId, command: event.command, targetType: event.targetType, targetId: event.targetId,
-      recordedAt: iso(event.recordedAt), details: event.details,
-    })),
-    related: input.related,
-    places: shared.places,
-    sites: shared.sites,
-    dir: input.dir,
-    inboxThreads: inboxFor(shared, order.id),
-    bundleOrderRefs: input.bundleOrderRefs,
-  }
 }
 
 /** Every order with the records the board reads, in one pass over the database. */

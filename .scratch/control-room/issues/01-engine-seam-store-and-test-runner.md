@@ -4,11 +4,11 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] The engine loads all 100 orders from the snapshot and reports the demo clock at 2026-10-21T09:00Z
-- [ ] The engine works the same against the Postgres store and the in-memory store
-- [ ] Our tables have no foreign keys into the starter's tables, and the starter's seed still runs after they exist
-- [ ] A reset empties our tables and leaves the snapshot untouched
-- [ ] One command runs the test suite; a first test (real dataset, in-memory store, clock fixed at the snapshot) checks that 100 orders load
-- [ ] Typecheck and build still pass
+- [x] The engine loads all 100 orders from the snapshot and reports the demo clock at 2026-10-21T09:00Z
+- [x] The engine works the same against the Postgres store and the in-memory store
+- [x] Our tables have no foreign keys into the starter's tables, and the starter's seed still runs after they exist
+- [x] A reset empties our tables and leaves the snapshot untouched
+- [x] One command runs the test suite; a first test (real dataset, in-memory store, clock fixed at the snapshot) checks that 100 orders load
+- [x] Typecheck and build still pass

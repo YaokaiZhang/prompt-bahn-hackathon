@@ -8,10 +8,14 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "db:push": "drizzle-kit push",
-    "db:seed": "tsx scripts/seed.ts",
+    "db:seed": "NODE_USE_ENV_PROXY=1 tsx scripts/seed.ts",
     "attachments:seed": "tsx scripts/seed-attachments.ts",
     "attachments:smoke": "tsx scripts/smoke-attachments.ts",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "test": "tsx --test --test-concurrency=1 \"lib/**/*.test.ts\"",
+    "review": "tsx scripts/review.ts",
+    "review:eval": "tsx scripts/review-cases.ts",
+    "review:sweep": "NODE_USE_ENV_PROXY=1 tsx scripts/review-sweep.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1155.0",

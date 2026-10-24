@@ -2,13 +2,24 @@
 
 import Link from "next/link"
 import { use, useEffect, useState } from "react"
+import { useClockVersion } from "../../components/demo-clock"
 import { Shell } from "../../components/shell"
+import { callsAreLive } from "../../components/calls"
 import { OrderPane, type Detail } from "../../components/order-detail"
 
 export default function OrderPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const [detail, setDetail] = useState<Detail | null>(null)
   const [error, setError] = useState("")
+  const clockVersion = useClockVersion()
+  // While a call runs (or is about to start), re-read the order every second and a half: live transcript, tier and cost.
+  const [tick, setTick] = useState(0)
+  const live = callsAreLive(detail?.checks?.calls, detail?.checks?.callLines)
+  useEffect(() => {
+    if (!live) return
+    const timer = setInterval(() => setTick((value) => value + 1), 1500)
+    return () => clearInterval(timer)
+  }, [live])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -17,7 +28,7 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
       .then((data) => { setDetail(data); setError("") })
       .catch((cause: unknown) => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Could not load order") })
     return () => controller.abort()
-  }, [id])
+  }, [id, clockVersion, tick])
 
   useEffect(() => {
     if (detail) document.title = `${detail.view.header.reference} · ${detail.view.header.vehicle?.title ?? "Order"} · Control Room`

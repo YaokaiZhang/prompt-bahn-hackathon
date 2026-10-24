@@ -4,12 +4,19 @@
 
 **Blocked by:** 11 (Mock phone page, live tier 1).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] A call moves from tier 1 to tier 2 and the tier shows on the order
-- [ ] Push-to-talk works on the phone page, and the agent answers aloud
-- [ ] Each turn shows in the transcript with Haiku's structured result
-- [ ] The agent never agrees to a change; anything it learns becomes a proposal or a call result
-- [ ] When the audio model is unavailable, the fallback path completes the same call
-- [ ] The CD-420437 driver call ("can you still deliver?") runs at tier 2
-- [ ] Each turn's cost appears on the meter
+- [x] A call moves from tier 1 to tier 2 and the tier shows on the order
+- [x] Push-to-talk works on the phone page, and the agent answers aloud
+- [x] Each turn shows in the transcript with Haiku's structured result
+- [x] The agent never agrees to a change; anything it learns becomes a proposal or a call result
+- [x] When the audio model is unavailable, the fallback path completes the same call
+- [x] The CD-420437 driver call ("can you still deliver?") runs at tier 2
+- [x] Each turn's cost appears on the meter
+
+## Comments
+
+- Models: OpenRouter does not list `openai/gpt-4o-audio-preview`; the audio model is `openai/gpt-audio-mini` (streamed PCM16, wrapped as WAV), `TIER2_AUDIO_MODEL` overrides it and `off` forces the fallback. The ear is `openai/whisper-large-v3` on `/audio/transcriptions` (runs on both paths, for the transcript line). Haiku checks each turn with reasoning off (`effort: "none"`).
+- Streaming is server-side: the reply is streamed from the model and played once complete (first audio ~1.2 s, whole reply ~2-3 s). A real turn takes about 4-10 s end to end (ear and audio model side by side, then the check, then TTS when the reply is replaced).
+- CD-420437's trigger: a tight ETA (latest ETA 10 min or less before the promise end) gives the order a driver line with status `on_request`: the pump never rings it; the operator rings it live ("Ring Thomas Mellervik live"). CD-420710 (0 min) gets the same line.
+- Tier 2 runs on live calls only; a simulated call that escalates still ends as a handover.

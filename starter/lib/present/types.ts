@@ -3,7 +3,81 @@
 // They are reading aids; the raw records remain in the API for anyone who needs
 // the source fields.
 
+import type { Group, PlannedAction, RuleResult, Urgency } from "@/lib/engine/checks"
+import type { OrderReview } from "@/lib/engine/reviews"
+import type { Proposal, Unreachable } from "@/lib/engine/proposals"
+import type { DueItem } from "@/lib/engine/due"
+import type { BriefingItem } from "@/lib/engine/briefing"
+import type { BlockedCall, Call, CallLineView } from "@/lib/engine/calls"
+import type { EffectEvent, HistoryEntry } from "@/lib/engine/engine"
+
 export type Tone = "danger" | "warn" | "accent" | "ok" | "neutral"
+
+/** The engine's verdict on one order, as the queue and the order page read it. */
+export type OrderChecks = {
+  /** The demo clock the rules ran at. */
+  now: string
+  group: Group
+  reason: string
+  rules: RuleResult[]
+  planned: PlannedAction[]
+  urgency: Urgency
+  /** The reviewer's read of the order: findings with cited records, records read, cost (ticket 06). */
+  review: OrderReview
+  /** What the agent wants to do, under the approval policy, with status and history (ticket 07). */
+  proposals: Proposal[]
+  /** Findings with no contact on record: no call, no proposal (couldn't check). */
+  unreachable: Unreachable[]
+  /** The agent's calls on the order, oldest first: transcript, tier, state and cost (ticket 10). */
+  calls: Call[]
+  /** The site and driver lines: what is left to call about, a callback, or nothing. */
+  callLines: CallLineView[]
+  /** Planned calls the agent will not make: the callee is on the customer side. */
+  blockedCalls: BlockedCall[]
+  /** Committed changes laid over the snapshot (ticket 09), oldest first. */
+  effects: EffectEvent[]
+  /** The order's history in sequence: proposals, approvals, answers, effect events. */
+  history: HistoryEntry[]
+}
+
+/** `/api/proposals`: proposals waiting for the operator's yes, across orders, for batch approval. */
+export type ApprovalQueue = { now: string; waiting: Proposal[] }
+
+export type ProposalAction =
+  | { action: "approve"; proposalId: string }
+  | { action: "approveBatch"; proposalIds: string[] }
+  | { action: "editScript"; proposalId: string; script: string }
+  | { action: "dismiss"; proposalId: string; note?: string }
+  | { action: "instruct"; proposalId: string; text: string }
+  | { action: "recordAnswer"; proposalId: string; answer: string }
+  | { action: "answerQuestion"; proposalId: string; answer: string }
+
+export type ClockAction = "advance" | "next" | "reset"
+
+/** The demo clock as `/api/clock` returns it. */
+export type ClockView = {
+  now: string
+  snapshotAt: string
+  /** The earliest time something comes due after `now`; null when nothing is left. */
+  nextDueAt: string | null
+  /** The items that come due at `nextDueAt`. */
+  upcoming: DueItem[]
+  /** How many items the clock has reached. */
+  dueCount: number
+  /** After a move: the items it passed (empty after reset); null on a plain read. */
+  became: DueItem[] | null
+}
+
+/** The Briefing inbox as `/api/briefing` returns it (ticket 13). */
+export type BriefingView = {
+  now: string
+  snapshotAt: string
+  /** Newest first. */
+  items: BriefingItem[]
+  unread: number
+  /** The queue's counts now, to compare with the latest digest. */
+  groupCounts: Record<Group, number>
+}
 
 export type Row = Record<string, unknown>
 
@@ -89,6 +163,8 @@ export type BoardCard = {
   decisive: KeyDate | null
   work: WorkLine[]
   updatedAt: string
+  /** Group, reason and urgency from the engine; set on the home queue, absent on entity pages. */
+  verdict?: { group: Group; reason: string; urgent: boolean; urgency: string | null }
 }
 
 export type Overview = {
@@ -98,6 +174,10 @@ export type Overview = {
   attentionCounts: Record<string, number>
   visible: BoardCard[]
   query: string
+  /** Orders per group across all orders (not only the search matches). */
+  groupCounts: Record<Group, number>
+  /** The demo clock the groups were computed at. */
+  now: string
 }
 
 export type Fact = { label: string; value: string; hint?: string | null; tone?: Tone; mono?: boolean; href?: string | null }
@@ -329,6 +409,8 @@ export type MessageView = {
   internal: boolean
   language: string | null
   evidenceCount: number
+  /** The effect event that wrote a newer version of what this message says (ticket 09); the message is kept as history. */
+  supersededBy?: string | null
   otherOrder: OrderRef | null
 }
 

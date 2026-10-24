@@ -4,10 +4,10 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] With no persona chosen, every page sends the person to the picker
-- [ ] Choosing Operator opens the queue; choosing Site or Driver opens the phone page placeholder
-- [ ] The current persona shows in the shell and can be switched without logging out
-- [ ] Site and Driver cannot reach the operator's pages
-- [ ] The picker and placeholder follow DESIGN.md and the existing shell
+- [x] With no persona chosen, every page sends the person to the picker
+- [x] Choosing Operator opens the queue; choosing Site or Driver opens the phone page placeholder
+- [x] The current persona shows in the shell and can be switched without logging out
+- [x] Site and Driver cannot reach the operator's pages
+- [x] The picker and placeholder follow DESIGN.md and the existing shell

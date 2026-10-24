@@ -1,3 +1,4 @@
+import { appFetch } from "./app-fetch"
 import { readFile } from "node:fs/promises"
 import { join } from "node:path"
 
@@ -6,6 +7,8 @@ type Source = { id: string; order_id?: string; plan_id?: string; active_plan_id?
   link_state?: string; candidate_order_ids?: string[]; linked_order_ids?: string[];
   contact_name?: string | null; contact_handle?: string | null }
 type Related = { id: string; details: Source }
+type SmokeCall = { id: string; state: string; line?: string; callee?: { contactType: string }; tier: number; transcript: { wallAt: string }[]; cost: { totalEur: number; operatorEur: number }
+  outcome?: string | null; handover?: { question: string; nextStep: string; summary: string; closed: unknown } | null }
 type OrderResponse = { order: { id: string }; items: { vehicle: { syntheticVin: string | null } }[];
   related: Record<string, Related[]> }
 
@@ -35,7 +38,7 @@ async function main(): Promise<void> {
   if (!order?.active_plan_id) throw new Error("No order with a plan, points and segments in the source dataset")
 
   const base = process.env.APP_URL ?? "http://localhost:3000"
-  const response = await fetch(`${base}/api/orders/${order.id}`)
+  const response = await appFetch(`${base}/api/orders/${order.id}`)
   if (!response.ok) throw new Error(`Order API returned ${response.status} from ${base}`)
   const body = await response.json() as OrderResponse
   if (body.order.id !== order.id) throw new Error("Order API returned a different order")
@@ -56,13 +59,13 @@ async function main(): Promise<void> {
   if (JSON.stringify(actualVins) !== JSON.stringify(expectedVins)) throw new Error("Order API lost synthetic VINs")
 
   const [missedResponse, custodyResponse, referenceResponse, relayResponse, proposalResponse, travelResponse, bundleResponse] = await Promise.all([
-    fetch(`${base}/api/orders/ord-00194`),
-    fetch(`${base}/api/orders/ord-00004`),
-    fetch(`${base}/api/reference-data`),
-    fetch(`${base}/api/orders/ord-00702`),
-    fetch(`${base}/api/orders/ord-00299`),
-    fetch(`${base}/api/orders/ord-00449`),
-    fetch(`${base}/api/orders/ord-00384`),
+    appFetch(`${base}/api/orders/ord-00194`),
+    appFetch(`${base}/api/orders/ord-00004`),
+    appFetch(`${base}/api/reference-data`),
+    appFetch(`${base}/api/orders/ord-00702`),
+    appFetch(`${base}/api/orders/ord-00299`),
+    appFetch(`${base}/api/orders/ord-00449`),
+    appFetch(`${base}/api/orders/ord-00384`),
   ])
   if (!missedResponse.ok || !custodyResponse.ok || !referenceResponse.ok ||
       !relayResponse.ok || !proposalResponse.ok || !travelResponse.ok || !bundleResponse.ok) {
@@ -97,9 +100,9 @@ async function main(): Promise<void> {
     throw new Error("Second bundle order lost the shared acceptance history")
   }
   const [ownedBoardResponse, ownedDetailResponse, resolvedDetailResponse] = await Promise.all([
-    fetch(`${base}/api/overview?q=CD-420593`),
-    fetch(`${base}/api/orders/ord-00593`),
-    fetch(`${base}/api/orders/ord-00020`),
+    appFetch(`${base}/api/overview?q=CD-420593`),
+    appFetch(`${base}/api/orders/ord-00593`),
+    appFetch(`${base}/api/orders/ord-00020`),
   ])
   if (!ownedBoardResponse.ok || !ownedDetailResponse.ok || !resolvedDetailResponse.ok) {
     throw new Error("Alert lifecycle routes did not load")
@@ -113,10 +116,10 @@ async function main(): Promise<void> {
     throw new Error("Acknowledged or resolved alert evidence disappeared from the starter API")
   }
   const [identityResponse, contactResponse, streetResponse, supportResponse] = await Promise.all([
-    fetch(`${base}/api/orders/ord-00009`),
-    fetch(`${base}/api/orders/ord-00010`),
-    fetch(`${base}/api/orders/ord-00023`),
-    fetch(`${base}/api/orders/ord-00015`),
+    appFetch(`${base}/api/orders/ord-00009`),
+    appFetch(`${base}/api/orders/ord-00010`),
+    appFetch(`${base}/api/orders/ord-00023`),
+    appFetch(`${base}/api/orders/ord-00015`),
   ])
   if ([identityResponse, contactResponse, streetResponse, supportResponse].some((res) => !res.ok)) {
     throw new Error("One of the incomplete-input or support cases did not load")
@@ -143,7 +146,7 @@ async function main(): Promise<void> {
         row.details.owner === "ops-readiness")) {
     throw new Error("Delayed support handoff was lost from the starter API")
   }
-  const inboxResponse = await fetch(`${base}/api/inbox`)
+  const inboxResponse = await appFetch(`${base}/api/inbox`)
   if (!inboxResponse.ok) throw new Error("Unlinked support inbox did not load")
   const inbox = await inboxResponse.json() as {
     threads: { id: string; order_id?: string; link_state: string;
@@ -165,29 +168,172 @@ async function main(): Promise<void> {
     throw new Error("Inbox link uncertainty was lost from the starter API")
   }
   // The board and the order record must agree on whether an order needs a person.
-  const overviewResponse = await fetch(`${base}/api/overview`)
+  // Background calls run in the server while smoke reads (ticket 10): an order whose call moved after this
+  // moment may change group between the queue read and the order read, so those are not compared.
+  const overviewReadAt = Date.now()
+  const overviewResponse = await appFetch(`${base}/api/overview`)
   if (!overviewResponse.ok) throw new Error("Overview did not load")
-  const overview = await overviewResponse.json() as { visible: { id: string; reference: string; attention: unknown[] }[] }
+  const overview = await overviewResponse.json() as {
+    total: number; groupCounts: Record<string, number>; now: string
+    visible: { id: string; reference: string; attention: unknown[]; verdict?: { group: string } }[]
+  }
+  // The shell's demo clock and the queue read the same engine clock (read only: smoke never moves it).
+  const clockResponse = await appFetch(`${base}/api/clock`)
+  if (!clockResponse.ok) throw new Error(`Clock API returned ${clockResponse.status}`)
+  const clock = await clockResponse.json() as { now: string; nextDueAt: string | null }
+  if (clock.now !== overview.now) throw new Error(`The demo clock says ${clock.now} but the queue was computed at ${overview.now}`)
+  const groupTotal = Object.values(overview.groupCounts ?? {}).reduce((sum, count) => sum + count, 0)
+  if (groupTotal !== overview.total || overview.visible.length !== overview.total) {
+    throw new Error(`Group counts add up to ${groupTotal}, not ${overview.total} orders`)
+  }
+  // Ticket 13: the Briefing has a digest for every slot the clock reached, and the latest
+  // digest's counts match the queue when the clock sits at its time. (Reading it delivers
+  // what is due, which never moves the clock.)
+  const briefingResponse = await appFetch(`${base}/api/briefing`)
+  if (!briefingResponse.ok) throw new Error(`Briefing API returned ${briefingResponse.status}`)
+  const briefing = await briefingResponse.json() as { now: string; items: { kind: string; slot?: string; at: string; facts?: { counts: Record<string, number> } }[] }
+  const reached = ["09:00", "12:00", "16:00"].filter((slot) => `${overview.now.slice(0, 10)}T${slot}:00.000Z` <= overview.now)
+  const slots = briefing.items.filter((item) => item.kind === "digest").map((item) => item.slot)
+  if (overview.now.slice(0, 10) === "2026-10-21" && reached.some((slot) => !slots.includes(slot))) {
+    throw new Error(`The Briefing has digests for ${slots.join(", ") || "nothing"}, but the clock reached ${reached.join(", ")}`)
+  }
+  const latest = briefing.items.find((item) => item.kind === "digest")
+  // Background calls (ticket 10) change groups without moving the clock: a digest delivered before
+  // a call moved is checked against the queue only when no call moved since (see below).
+  let digestOff: string[] = []
+  if (latest?.facts && latest.at === overview.now) {
+    digestOff = Object.entries(overview.groupCounts).filter(([group, count]) => latest.facts!.counts[group] !== count).map(([group]) => group)
+    if (!digestOff.length) console.log(`Briefing: the ${latest.slot} digest's counts match the queue.`)
+  } else {
+    console.log(`Briefing: ${slots.length} digests; the clock is not at a digest time, so counts are not compared.`)
+  }
+  let lastCallMove = 0
   const disagreements: string[] = []
+  const groupDisagreements: string[] = []
+  const reviewProblems: string[] = []
+  let reviewed = 0
+  const callProblems: string[] = []
+  let callCount = 0
+  let running = 0
+  let movedByCalls = 0
+  const effectProblems: string[] = []
+  let effectCount = 0
   for (let index = 0; index < overview.visible.length; index += 10) {
     const cards = overview.visible.slice(index, index + 10)
     const views = await Promise.all(cards.map(async (card) => {
-      const detailResponse = await fetch(`${base}/api/orders/${card.id}`)
+      const detailResponse = await appFetch(`${base}/api/orders/${card.id}`)
       if (!detailResponse.ok) throw new Error(`Order API returned ${detailResponse.status} for ${card.id}`)
-      const detail = await detailResponse.json() as { view: { attention: unknown[] } }
-      return detail.view.attention
+      const detail = await detailResponse.json() as { view: { attention: unknown[] }; checks: { group: string; review?: { status: string; recordsRead: number; findings: unknown[] }; calls?: SmokeCall[]
+        effects?: { id: string; type: string; version: number; text: string; by: string }[]; history?: { kind: string; effectId: string | null }[] } | null }
+      return detail
     }))
     cards.forEach((card, position) => {
-      const recordAttention = views[position]
+      const recordAttention = views[position].view.attention
+      const recordGroup = views[position].checks?.group
+      // Ticket 10: every call shows its tier, state, transcript and a cost below the operator's.
+      const calls = views[position].checks?.calls
+      if (!Array.isArray(calls)) callProblems.push(`${card.reference} (no calls list)`)
+      for (const call of calls ?? []) {
+        callCount += 1
+        lastCallMove = Math.max(lastCallMove, Date.parse(call.transcript.at(-1)?.wallAt ?? "") || 0)
+        if (call.state !== "ended") running += 1
+        // ADR 0001 (amended): never the paying customer; the customer side only on the pickup (site) line.
+        const customerSideCall = call.callee?.contactType === "paying_customer"
+          || (["customer_given_contact", "customer_owned_site"].includes(call.callee?.contactType ?? "") && call.line !== "site")
+        if (customerSideCall || ![1, 2, 3].includes(call.tier) || !call.transcript?.length || !(call.cost?.operatorEur > 0) || !(call.cost.totalEur <= call.cost.operatorEur)) {
+          callProblems.push(`${card.reference} ${call.id}`)
+        }
+        // Ticket 14: a handover is tier 3 with its open question, next step and summary; an open one holds Needs action.
+        if (call.outcome === "handover" && (call.tier !== 3 || !call.handover?.question || !call.handover.nextStep || !call.handover.summary)) {
+          callProblems.push(`${card.reference} ${call.id} (handover without tier 3, question, next step or summary)`)
+        }
+        if (call.handover && !call.handover.closed && recordGroup !== "needs_action") callProblems.push(`${card.reference} ${call.id} (open handover outside Needs action)`)
+      }
+      const moved = (calls ?? []).some((call) => call.state !== "ended" || Date.parse(call.transcript.at(-1)?.wallAt ?? "") >= overviewReadAt - 2_000)
+      if (moved) movedByCalls += 1
+      if (!moved && (!card.verdict || card.verdict.group !== recordGroup)) {
+        groupDisagreements.push(`${card.reference} (queue ${card.verdict?.group ?? "none"}, order ${recordGroup ?? "none"})`)
+      }
+      // Ticket 09: every order lists its effect events (each a version >= 2 with who committed it), and each is in its history.
+      const checks = views[position].checks
+      if (checks && (!Array.isArray(checks.effects) || !Array.isArray(checks.history))) effectProblems.push(`${card.reference} (no effects or history list)`)
+      for (const effect of checks?.effects ?? []) {
+        effectCount += 1
+        if (!(effect.version >= 2) || !effect.text || !effect.by || !checks?.history?.some((entry) => entry.effectId === effect.id)) effectProblems.push(`${card.reference} ${effect.id}`)
+      }
+      // Ticket 06: every order says whether the reviewer read it, and how many records.
+      const review = views[position].checks?.review
+      if (!review || !["reviewed", "not_reviewed"].includes(review.status) || !(review.recordsRead > 0)) reviewProblems.push(card.reference)
+      else if (review.status === "reviewed") reviewed += 1
       if ((card.attention.length > 0) !== (recordAttention.length > 0)) {
         disagreements.push(`${card.reference} (board ${card.attention.length}, record ${recordAttention.length})`)
       }
     })
   }
+  if (groupDisagreements.length) {
+    throw new Error(`Queue and order API disagree on the group: ${groupDisagreements.join(", ")}`)
+  }
   if (disagreements.length) {
     throw new Error(`Board and record disagree on "needs a person": ${disagreements.join(", ")}`)
   }
-  console.log(`Verified ${order.id}: ${orderPlans.length} plans, ${(body.related.transport_points ?? []).length} points, ${(body.related.transport_segments ?? []).length} segments. Board and record agree on "needs a person" for ${overview.visible.length} orders.`)
+  if (reviewProblems.length) {
+    throw new Error(`Order API has no reviewer status or records-read count for: ${reviewProblems.join(", ")}`)
+  }
+  console.log(`Reviewer: ${reviewed} of ${overview.visible.length} orders reviewed; the rest read "not reviewed yet".`)
+  if (effectProblems.length) throw new Error(`Effect events without a version, text, committer or history entry: ${effectProblems.join(", ")}`)
+  console.log(`Effect events: ${effectCount} committed change(s) across the orders, each with a version and a history entry.`)
+  if (callProblems.length) throw new Error(`Calls without a calls list, tier, transcript or a cost below the operator's, or to a customer-side contact outside a pickup-readiness call: ${callProblems.join(", ")}`)
+  if (digestOff.length) {
+    const delivered = Date.parse((latest as { deliveredAt?: string } | undefined)?.deliveredAt ?? "")
+    if (!(lastCallMove > delivered)) throw new Error(`The ${latest?.slot} digest's counts differ from the queue for ${digestOff.join(", ")}`)
+    console.log(`Briefing: the ${latest?.slot} digest's counts differ for ${digestOff.join(", ")}, but calls moved orders after it was delivered.`)
+  }
+  console.log(`Calls: ${callCount} on record, ${running} running; ${movedByCalls} orders with call activity during the read were not compared for group.`)
+  // Ticket 07: every proposal waiting for a yes shows its evidence, contact type, who pays,
+  // policy row and what approving will do; the Rules page renders. Read-only: nothing is approved.
+  const approvalsResponse = await appFetch(`${base}/api/proposals`)
+  if (!approvalsResponse.ok) throw new Error(`Proposals API returned ${approvalsResponse.status}`)
+  const approvals = await approvalsResponse.json() as { waiting: { reference: string; kind?: string; policyRow?: string; whoPays?: string; onApprove?: string | null; contact?: { type?: string; handle?: string | null }; evidence?: unknown[] }[] }
+  const incomplete = approvals.waiting.filter((row) => !row.policyRow || !row.whoPays || !row.onApprove || !row.contact?.type || (row.kind !== "change" && !row.evidence?.length))
+  if (incomplete.length) throw new Error(`Proposals missing evidence, contact type, who pays, policy row or approval text: ${incomplete.map((row) => row.reference).join(", ")}`)
+  // Ticket 08 (ADR 0001): a customer-side proposal is propose-only and gives the agent no channel.
+  const customerSide = new Set(["paying_customer", "customer_given_contact", "customer_owned_site"])
+  const leaking = approvals.waiting.filter((row) => row.kind !== "change" && customerSide.has(row.contact?.type ?? "")
+    && (row.kind !== "customer_contact" || row.contact?.handle || row.policyRow !== "customer-side"))
+  if (leaking.length) throw new Error(`Customer-side proposals the agent could act on: ${leaking.map((row) => row.reference).join(", ")}`)
+  const rulesPage = await appFetch(`${base}/rules`)
+  const rulesText = rulesPage.ok ? await rulesPage.text() : ""
+  if (!rulesText.includes("customer-side") || !rulesText.includes("pickup-readiness")) throw new Error(`Rules page did not render the policy (${rulesPage.status})`)
+  console.log(`Proposals: ${approvals.waiting.length} waiting for a yes, each with its policy row; the Rules page lists the policy.`)
+  // Spec story 14: the starter's lane board stays on its own route, cards in lane order without the engine's verdict.
+  const boardPage = await appFetch(`${base}/board`)
+  if (!boardPage.ok) throw new Error(`The lane board did not render (${boardPage.status})`)
+  const boardCards = await (await appFetch(`${base}/api/overview?view=board`)).json() as { visible: { verdict?: unknown }[]; total: number }
+  if (boardCards.visible.length !== boardCards.total || boardCards.visible.some((card) => card.verdict)) throw new Error("The lane board's cards are not the starter's view")
+  console.log("Lane board: /board renders the starter's lanes for reference.")
+  // Ticket 11: each persona's phone holds at most one live call of its own line; the rest queue. Read-only.
+  for (const persona of ["site", "driver"] as const) {
+    const phoneResponse = await fetch(`${base}/api/phone`, { headers: { cookie: `persona=${persona}` } })
+    if (!phoneResponse.ok) throw new Error(`Phone API for ${persona} returned ${phoneResponse.status}`)
+    const phone = await phoneResponse.json() as { persona: string; current: { line: string; answerer: string; state: string } | null; queued: { line: string }[] }
+    if (phone.persona !== persona) throw new Error(`The ${persona} phone answered as ${phone.persona}`)
+    const strays = [phone.current, ...phone.queued].filter((call) => call && call.line !== persona)
+    if (strays.length) throw new Error(`The ${persona} phone holds calls for another line`)
+    if (phone.current && (phone.current.answerer !== "live" || phone.current.state === "ended")) throw new Error(`The ${persona} phone holds a call that is not live`)
+    console.log(`Phone (${persona}): ${phone.current ? `1 live call (${phone.current.state})` : "idle"}, ${phone.queued.length} queued.`)
+  }
+  // Ticket 12: the push-to-talk route is reachable by the Driver persona and refuses a turn without a recording (no model call).
+  const voice = await fetch(`${base}/api/phone/voice`, { method: "POST", headers: { cookie: "persona=driver", "content-type": "application/json" }, body: JSON.stringify({ callId: "none" }) })
+  if (voice.status !== 400) throw new Error(`The tier-2 voice route answered ${voice.status} to a turn without a recording (expected 400)`)
+  // Ticket 12: CD-420437's driver can be rung live about the tight ETA (on request, or already called).
+  const order437 = overview.visible.find((card: { reference: string }) => card.reference === "CD-420437") as { id: string } | undefined
+  if (order437) {
+    const detail437 = await (await appFetch(`${base}/api/orders/${order437.id}`)).json() as { checks: { callLines?: { line: string; status: string }[]; calls?: unknown[] } | null }
+    const driverLine = detail437.checks?.callLines?.find((line) => line.line === "driver")
+    if (!driverLine) throw new Error("CD-420437 has no driver line to ring about its tight ETA")
+    console.log(`Tier 2: CD-420437's driver line is ${driverLine.status}; ${detail437.checks?.calls?.length ?? 0} call(s) on record.`)
+  }
+  console.log(`Verified ${order.id}: ${orderPlans.length} plans, ${(body.related.transport_points ?? []).length} points, ${(body.related.transport_segments ?? []).length} segments. Board and record agree on "needs a person" and on the group for ${overview.visible.length} orders (${Object.entries(overview.groupCounts).map(([group, count]) => `${group} ${count}`).join(", ")}).`)
 }
 
 main().catch((error: unknown) => {

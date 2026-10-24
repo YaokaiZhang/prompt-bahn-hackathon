@@ -1,0 +1,174 @@
+{
+  "ranAt": "2026-10-24T16:57:53.451Z",
+  "now": "2026-10-21T09:00:00.000Z",
+  "cases": [
+    {
+      "reference": "CD-420516",
+      "status": "reviewed",
+      "findings": 2,
+      "cost": 0.003476025,
+      "checks": [
+        {
+          "name": "records",
+          "pass": true,
+          "detail": "msg-x96d66b17e32a5df4, msg-x5d8006558b9e7cc6, ep-xf77895617a67a311"
+        },
+        {
+          "name": "contact",
+          "pass": true,
+          "detail": "site via site-001"
+        },
+        {
+          "name": "approval",
+          "pass": true,
+          "detail": "site-routine"
+        }
+      ],
+      "points": 3,
+      "max": 3
+    },
+    {
+      "reference": "CD-420437",
+      "status": "reviewed",
+      "findings": 1,
+      "cost": 0.00337241,
+      "checks": [
+        {
+          "name": "records",
+          "pass": true,
+          "detail": "ep-x61821adf903f2d7d, msg-x0049fe6fc2fd0b0e, msg-xf61ef17129348509, win-x3ce81a48192137db, step-x004cde25392dcb5b, work-x6c27e55269d19e01"
+        },
+        {
+          "name": "contact",
+          "pass": true,
+          "detail": "customer via cus-025"
+        },
+        {
+          "name": "approval",
+          "pass": true,
+          "detail": "customer-side"
+        }
+      ],
+      "points": 3,
+      "max": 3
+    },
+    {
+      "reference": "CD-420089",
+      "status": "reviewed",
+      "findings": 1,
+      "cost": 0.00403812,
+      "checks": [
+        {
+          "name": "records",
+          "pass": true,
+          "detail": "asg-xa8246d35bc877646, res-xac6651462ee0355a, travel-x9f257e384701f386, step-x88ed7ca82db890c5"
+        },
+        {
+          "name": "contact",
+          "pass": true,
+          "detail": "operator via note-x30f784d8cd92ba78"
+        },
+        {
+          "name": "approval",
+          "pass": true,
+          "detail": "operator-question"
+        }
+      ],
+      "points": 3,
+      "max": 3
+    },
+    {
+      "reference": "CD-420399",
+      "status": "reviewed",
+      "findings": 2,
+      "cost": 0.00486552,
+      "checks": [
+        {
+          "name": "records",
+          "pass": true,
+          "detail": "expense-x9d676667cdd4f893, msg-x3bdbe64dcd0bd46e, asg-x8cb23e805f9b3043"
+        },
+        {
+          "name": "contact",
+          "pass": true,
+          "detail": "driver via asg-x8cb23e805f9b3043"
+        },
+        {
+          "name": "approval",
+          "pass": true,
+          "detail": "driver-routine"
+        }
+      ],
+      "points": 3,
+      "max": 3
+    },
+    {
+      "reference": "CD-420458",
+      "status": "reviewed",
+      "findings": 0,
+      "cost": 0.00144861,
+      "checks": [
+        {
+          "name": "no re-asking",
+          "pass": true,
+          "detail": "0 question(s)"
+        }
+      ],
+      "points": 1,
+      "max": 1
+    },
+    {
+      "reference": "CD-420656",
+      "status": "reviewed",
+      "findings": 1,
+      "cost": 0.00566983,
+      "checks": [
+        {
+          "name": "records",
+          "pass": true,
+          "detail": "msg-x30a84e718591defa, msg-x488144ab691ee379, win-x1bc8edb0f9c54604, step-x7f0873d21787299e, ep-x377904e24cf3732d"
+        },
+        {
+          "name": "contact",
+          "pass": true,
+          "detail": "site via ep-x377904e24cf3732d"
+        },
+        {
+          "name": "approval",
+          "pass": true,
+          "detail": "site-routine"
+        }
+      ],
+      "points": 3,
+      "max": 3
+    },
+    {
+      "reference": "CD-420311",
+      "status": "reviewed",
+      "findings": 1,
+      "cost": 0.00518802,
+      "checks": [
+        {
+          "name": "records",
+          "pass": true,
+          "detail": "asg-x7fd46f1afa73cdef, step-xddbc81fff41286ba, step-x53a8e2a2dca044a8, travel-xf2bdef20786d3ba8, travel-x3f015a8b98732f3f"
+        },
+        {
+          "name": "contact",
+          "pass": true,
+          "detail": "driver via asg-x7fd46f1afa73cdef"
+        },
+        {
+          "name": "approval",
+          "pass": true,
+          "detail": "driver-routine"
+        }
+      ],
+      "points": 3,
+      "max": 3
+    }
+  ],
+  "points": 19,
+  "max": 19,
+  "cost": 0.028058534999999996
+}

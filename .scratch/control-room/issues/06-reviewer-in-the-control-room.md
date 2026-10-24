@@ -4,12 +4,17 @@
 
 **Blocked by:** 03 (Rule checks and the four groups), 05 (Reviewer core and eval).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Orders with unreadable records are reviewed, and the rest are covered by the seed sweep
-- [ ] A Normal order shows how many records the reviewer read and that it found no conflict
-- [ ] An order with a finding moves to Needs action
-- [ ] Each finding shows its cited records highlighted on the order page
-- [ ] Without an API key the app runs and orders show "not reviewed yet"
-- [ ] The reviewer's model cost is recorded per order
-- [ ] Engine tests run the layers with the scripted gateway
+- [x] Orders with unreadable records are reviewed, and the rest are covered by the seed sweep
+- [x] A Normal order shows how many records the reviewer read and that it found no conflict
+- [x] An order with a finding moves to Needs action
+- [x] Each finding shows its cited records highlighted on the order page
+- [x] Without an API key the app runs and orders show "not reviewed yet"
+- [x] The reviewer's model cost is recorded per order
+- [x] Engine tests run the layers with the scripted gateway
+
+## Comments
+
+- The full seed sweep over all 100 orders has not been run against the real model yet (the orchestrator capped it). Run `npm run review:sweep` (or `npm run db:seed -- --review`; the seed sweep is opt-in since the final review fixes) to do it. A capped real run on 3 orders worked through the proxy, at about $0.002 to $0.005 per order.
+- Reasons a review failed ("model call failed", "skipped after 3 failures") live only in the engine's memory for that process. A fresh process shows such orders as a plain "not reviewed yet".
