@@ -23,6 +23,7 @@ import { createReviewLayer, reviewTotals, type OrderReview, type ReviewInputs, t
 import { buildFleet, evaluateRules, type Evaluation } from "./rules"
 import type { EngineStore } from "./store"
 import { createCallRunner, type CallOptions } from "./call-runner"
+import type { PhonePersona, PhoneView } from "./phone"
 import { callbackItems, orderCalls, utcTime, type BlockedCall, type Call, type CalleeInput, type CallLine, type CallLineView, type OrderCalls } from "./calls"
 
 /** The snapshot as the engine reads it: one bundle per order. */
@@ -113,6 +114,7 @@ export type {
   Answerer, BlockedCall, Call, CallCallee, CallCost, CalleeInput, CallLine, CallLineView, CallOutcome, CallState, CostRates, Expecting, LineStatus, Tier, TranscriptLine,
 } from "./calls"
 export type { CallOptions } from "./call-runner"
+export type { PhonePersona, PhoneView, QueuedCall } from "./phone"
 export type { Briefing, BriefingItem, DigestFacts, DigestItem, DigestSlot, PushItem, PushReason, PushInput } from "./briefing"
 export type { DigestProse, ProseSegment } from "./digest-prose"
 export { becameDue, GROUPS }
@@ -146,6 +148,8 @@ export type Engine = {
   clock(): Promise<string>
   /** The bundle the engine reads for one order, or null for an unknown id. */
   bundle(orderId: string): Bundle | null
+  /** A persona's mock phone (ticket 11): the live call on it and the queue behind it. */
+  phone(persona: PhonePersona): Promise<PhoneView>
 }
 
 export type EngineDeps = {
@@ -558,5 +562,5 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     return state()
   }
 
-  return { state, apply, clock, bundle: (orderId) => bundles.get(orderId) ?? null }
+  return { state, apply, clock, bundle: (orderId) => bundles.get(orderId) ?? null, phone: (persona) => callRunner.phone(persona) }
 }
