@@ -91,7 +91,7 @@ export type ProposalSignal = {
  * to Needs action. `carried`: call proposals a running call or callback speaks for.
  */
 export type CallSignal = {
-  lines: { status: "to_call" | "calling" | "callback" | "callback_due" | "needs_person" | "done"; text: string }[]
+  lines: { status: "to_call" | "calling" | "callback" | "callback_due" | "needs_person" | "done" | "on_request"; text: string }[]
   carried: Set<string>
 }
 

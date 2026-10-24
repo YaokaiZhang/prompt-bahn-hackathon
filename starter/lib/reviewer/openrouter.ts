@@ -59,7 +59,8 @@ export function createOpenRouterGateway(options: OpenRouterOptions): ModelGatewa
         usage: { include: true },
       }
       if (request.tools?.length) body.tools = request.tools
-      if (request.effort) body.reasoning = { effort: request.effort }
+      if (request.effort === "none") body.reasoning = { enabled: false }
+      else if (request.effort) body.reasoning = { effort: request.effort }
       if (request.maxTokens) body.max_tokens = request.maxTokens
 
       let response: Response

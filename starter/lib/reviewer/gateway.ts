@@ -26,7 +26,8 @@ export type JsonSchema = { type: string; [key: string]: unknown }
 
 export type ToolSpec = { type: "function"; function: { name: string; description: string; parameters: JsonSchema } }
 
-export type Effort = "minimal" | "low" | "medium" | "high"
+/** "none" turns reasoning off (short structured jobs such as the tier-2 turn check). */
+export type Effort = "none" | "minimal" | "low" | "medium" | "high"
 
 export type ChatRequest = {
   /** What the call is for, e.g. "reviewer". Not sent to the provider; used for logs and replay. */

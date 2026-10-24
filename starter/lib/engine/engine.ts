@@ -25,6 +25,7 @@ import { buildFleet, evaluateRules, type Evaluation } from "./rules"
 import type { EngineStore } from "./store"
 import { createCallRunner, type CallOptions } from "./call-runner"
 import type { PhonePersona, PhoneView } from "./phone"
+import type { AudioClip } from "./voice-agent"
 import { callbackItems, orderCalls, utcTime, type BlockedCall, type Call, type CalleeInput, type CallLine, type CallLineView, type OrderCalls } from "./calls"
 
 /** The snapshot as the engine reads it: one bundle per order. */
@@ -86,6 +87,11 @@ export type Command =
   | { type: "startCall"; orderId: string; line: CallLine; live?: boolean }
   /** The callee's move on a call: answer, decline, let it ring out, or a keypad digit (live phones send these). */
   | { type: "callEvent"; callId: string; input: CalleeInput }
+  /**
+   * A tier-2 turn on a live call (ticket 12): the callee's push-to-talk recording. The
+   * voice agent transcribes it, answers aloud and the checker records the turn's result.
+   */
+  | { type: "voiceTurn"; callId: string; audio: AudioClip }
 
 /**
  * One order as the engine reads it at `now`. `group`, `reason`, `rules` (every
@@ -133,10 +139,11 @@ export type { Proposal, ProposalEvent, ProposalKind, ProposalStatus, Unreachable
 export type { FirstAction, Group, Outcome, PlannedAction, RuleId, RuleResult, SourceRef, Urgency } from "./checks"
 export type { DueItem, DueKind } from "./due"
 export type {
-  Answerer, BlockedCall, Call, CallCallee, CallCost, CalleeInput, CallLine, CallLineView, CallOutcome, CallState, CostRates, Expecting, LineStatus, Tier, TranscriptLine,
+  Answerer, BlockedCall, Call, CallCallee, Handover, CallCost, CalleeInput, CallLine, CallLineView, CallOutcome, CallState, CostRates, Expecting, LineStatus, Tier, TranscriptLine,
 } from "./calls"
 export type { CallOptions } from "./call-runner"
 export type { PhonePersona, PhoneView, QueuedCall } from "./phone"
+export type { AudioClip, TurnCheck, TurnPath, VoiceAgent } from "./voice-agent"
 export type { Briefing, BriefingItem, DigestFacts, DigestItem, DigestSlot, PushItem, PushReason, PushInput } from "./briefing"
 export type { DigestProse, ProseSegment } from "./digest-prose"
 export type { Effect, EffectEvent, EffectInput, EffectSpec, EffectType, EffectWrite, Versioning } from "./effects"
@@ -709,6 +716,9 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
         break
       case "callEvent":
         await callRunner.input(command.callId, command.input)
+        break
+      case "voiceTurn":
+        await callRunner.voice(command.callId, command.audio)
         break
       case "deliverBriefing":
         await deliverBriefing()
