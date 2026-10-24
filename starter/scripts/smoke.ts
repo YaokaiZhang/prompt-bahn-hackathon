@@ -218,6 +218,16 @@ async function main(): Promise<void> {
     throw new Error(`Order API has no reviewer status or records-read count for: ${reviewProblems.join(", ")}`)
   }
   console.log(`Reviewer: ${reviewed} of ${overview.visible.length} orders reviewed; the rest read "not reviewed yet".`)
+  // Ticket 07: every proposal waiting for a yes shows its evidence, contact type, who pays,
+  // policy row and what approving will do; the Rules page renders. Read-only: nothing is approved.
+  const approvalsResponse = await appFetch(`${base}/api/proposals`)
+  if (!approvalsResponse.ok) throw new Error(`Proposals API returned ${approvalsResponse.status}`)
+  const approvals = await approvalsResponse.json() as { waiting: { reference: string; kind?: string; policyRow?: string; whoPays?: string; onApprove?: string | null; contact?: { type?: string }; evidence?: unknown[] }[] }
+  const incomplete = approvals.waiting.filter((row) => !row.policyRow || !row.whoPays || !row.onApprove || !row.contact?.type || (row.kind !== "change" && !row.evidence?.length))
+  if (incomplete.length) throw new Error(`Proposals missing evidence, contact type, who pays, policy row or approval text: ${incomplete.map((row) => row.reference).join(", ")}`)
+  const rulesPage = await appFetch(`${base}/rules`)
+  if (!rulesPage.ok || !(await rulesPage.text()).includes("customer-side")) throw new Error(`Rules page did not render the policy (${rulesPage.status})`)
+  console.log(`Proposals: ${approvals.waiting.length} waiting for a yes, each with its policy row; the Rules page lists the policy.`)
   console.log(`Verified ${order.id}: ${orderPlans.length} plans, ${(body.related.transport_points ?? []).length} points, ${(body.related.transport_segments ?? []).length} segments. Board and record agree on "needs a person" and on the group for ${overview.visible.length} orders (${Object.entries(overview.groupCounts).map(([group, count]) => `${group} ${count}`).join(", ")}).`)
 }
 

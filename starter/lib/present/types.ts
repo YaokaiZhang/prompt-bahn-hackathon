@@ -5,6 +5,7 @@
 
 import type { Group, PlannedAction, RuleResult, Urgency } from "@/lib/engine/checks"
 import type { OrderReview } from "@/lib/engine/reviews"
+import type { Proposal, Unreachable } from "@/lib/engine/proposals"
 import type { DueItem } from "@/lib/engine/due"
 
 export type Tone = "danger" | "warn" | "accent" | "ok" | "neutral"
@@ -20,7 +21,21 @@ export type OrderChecks = {
   urgency: Urgency
   /** The reviewer's read of the order: findings with cited records, records read, cost (ticket 06). */
   review: OrderReview
+  /** What the agent wants to do, under the approval policy, with status and history (ticket 07). */
+  proposals: Proposal[]
+  /** Findings with no contact on record: no call, no proposal (couldn't check). */
+  unreachable: Unreachable[]
 }
+
+/** `/api/proposals`: proposals waiting for the operator's yes, across orders, for batch approval. */
+export type ApprovalQueue = { now: string; waiting: Proposal[] }
+
+export type ProposalAction =
+  | { action: "approve"; proposalId: string }
+  | { action: "approveBatch"; proposalIds: string[] }
+  | { action: "editScript"; proposalId: string; script: string }
+  | { action: "dismiss"; proposalId: string; note?: string }
+  | { action: "instruct"; proposalId: string; text: string }
 
 export type ClockAction = "advance" | "next" | "reset"
 

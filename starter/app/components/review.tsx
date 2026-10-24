@@ -81,7 +81,7 @@ export function Highlighted({ text, quote }: { text: string; quote: string }) {
   return <>{parts}</>
 }
 
-function CitedRow({ cited, orderId, samePage }: { cited: CitedRecord; orderId: string; samePage: boolean }) {
+export function CitedRow({ cited, orderId, samePage }: { cited: CitedRecord; orderId: string; samePage: boolean }) {
   const value = cited.value && cited.value.length <= 600 ? cited.value : null
   return <li className={`cited cited-${cited.role}`}>
     <div className="cited-head">
@@ -124,7 +124,9 @@ export function reviewLine(review: OrderReview): string {
   return `Reviewer read ${review.recordsRead} records, ${found}`
 }
 
-export function ReviewBlock({ orderId, review, compact = false }: { orderId: string; review: OrderReview; compact?: boolean }) {
+/** `shown`: findings already shown as proposals (with their evidence); the rest are listed here. */
+export function ReviewBlock({ orderId, review, compact = false, shown = new Set() }: { orderId: string; review: OrderReview; compact?: boolean; shown?: ReadonlySet<string> }) {
+  const rest = review.findings.filter((finding) => !shown.has(finding.id))
   const reviewed = review.status === "reviewed"
   const why = review.trigger === "records" ? `Goes to the reviewer: ${review.triggers.join(", ")}.` : "No free-text records; covered by the seed sweep."
   return <div className="checks-block review" id="review">
@@ -140,8 +142,9 @@ export function ReviewBlock({ orderId, review, compact = false }: { orderId: str
         </div>
       </div>
     </div>
-    {!compact && review.findings.map((finding) => <FindingCard key={finding.id} finding={finding} orderId={orderId} samePage />)}
-    {compact && review.findings.length > 0 && <ul className="checks-list">{review.findings.map((finding) => <li className="check" key={finding.id}>
+    {!compact && rest.length > 0 && <p className="check-detail review-unreachable">{rest.length === 1 ? "This finding has" : "These findings have"} no proposal: no contact is on record to call, so {rest.length === 1 ? "it is" : "they are"} listed as couldn&apos;t check.</p>}
+    {!compact && rest.map((finding) => <FindingCard key={finding.id} finding={finding} orderId={orderId} samePage />)}
+    {compact && rest.length > 0 && <ul className="checks-list">{rest.map((finding) => <li className="check" key={finding.id}>
       <Icon name="alert" className="tone-danger" />
       <div><div className="check-title">{finding.title}</div><div className="check-detail">Ask {finding.ask.name}: {finding.question}</div></div>
     </li>)}</ul>}

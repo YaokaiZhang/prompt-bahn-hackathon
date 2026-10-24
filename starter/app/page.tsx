@@ -3,10 +3,11 @@
 import Link from "next/link"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { Group } from "@/lib/engine/checks"
-import type { OrderChecks, Overview, RecordView } from "@/lib/present/types"
+import type { ApprovalQueue, OrderChecks, Overview, RecordView } from "@/lib/present/types"
 import { OrderCard } from "./components/card"
 import { ChecksPanel, GROUP_LABEL } from "./components/checks"
 import { Icon } from "./components/icons"
+import { BatchApproval } from "./components/proposals"
 import { Route, RouteSummary } from "./components/route-line"
 import { useClockVersion } from "./components/demo-clock"
 import { Shell } from "./components/shell"
@@ -31,6 +32,18 @@ export default function Home() {
   const [preview, setPreview] = useState<Preview | null>(null)
   const listRef = useRef<HTMLOListElement>(null)
   const clockVersion = useClockVersion()
+  // Proposals waiting for a yes, across orders, for batch approval (ticket 07).
+  const [approvals, setApprovals] = useState<ApprovalQueue | null>(null)
+  const [batch, setBatch] = useState(false)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch("/api/proposals", { signal: controller.signal })
+      .then((response) => response.ok ? response.json() as Promise<ApprovalQueue> : null)
+      .then((data) => { if (data) setApprovals(data) })
+      .catch(() => {})
+    return () => controller.abort()
+  }, [clockVersion])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -94,13 +107,19 @@ export default function Home() {
   const elsewhere = search ? GROUP_ORDER.filter((group) => group !== filter && matchesIn(group) > 0) : []
   const shown = preview && preview.id === currentId ? preview : null
 
-  return <Shell section="orders" fixed snapshotAt={overview?.snapshotAt ?? null}><main className="home">
+  return <Shell section="orders" fixed snapshotAt={overview?.snapshotAt ?? null}><main className={`home${batch ? " batching" : ""}`}>
     <section className="queue" aria-label="Order queue">
       <header className="queue-head">
         <h1 className="display">{title}</h1>
         <p className="queue-sub">{overview && counts
           ? <><b>{counts.needs_action}</b> of <b>{overview.total}</b> orders need action · <b>{counts.in_progress}</b> with agent work · <b>{counts.normal}</b> checked normal</>
           : "Loading the snapshot"}</p>
+        {approvals && approvals.waiting.length > 0 && <div className="queue-batch">
+          <button type="button" className={`btn btn-s ${batch ? "btn-tertiary" : "btn-primary"}`} aria-pressed={batch} onClick={() => setBatch((value) => !value)}>
+            {batch ? "Close batch approval" : "Approve in batch"}
+          </button>
+          <span><b>{approvals.waiting.length}</b> {approvals.waiting.length === 1 ? "proposal waits" : "proposals wait"} for your yes</span>
+        </div>}
       </header>
       <div className="queue-tools">
         <label className="field">
@@ -125,11 +144,12 @@ export default function Home() {
       </div>
     </section>
 
-    <section className="preview" aria-label="Selected order" aria-live="polite">
-      {!current && <div className="preview-empty"><b>{overview ? "Nothing selected" : "Loading"}</b>{overview && <span>Choose an order from the queue.</span>}</div>}
-      {current && !shown && <div className="preview-inner"><div className="photo" /><p className="queue-note">Loading {current.reference}…</p></div>}
-      {shown && "error" in shown && <div className="preview-empty"><b>{shown.error}</b><Link className="btn btn-tertiary btn-s" href={`/orders/${shown.id}`}>Try the order page</Link></div>}
-      {shown && "view" in shown && <OrderPreview key={shown.id} view={shown.view} checks={shown.checks} position={index + 1} total={queue.length} onNext={() => step(1)} />}
+    <section className="preview" aria-label={batch ? "Batch approval" : "Selected order"} aria-live="polite">
+      {batch && approvals && <BatchApproval queue={approvals} onClose={() => setBatch(false)} />}
+      {!batch && !current && <div className="preview-empty"><b>{overview ? "Nothing selected" : "Loading"}</b>{overview && <span>Choose an order from the queue.</span>}</div>}
+      {!batch && current && !shown && <div className="preview-inner"><div className="photo" /><p className="queue-note">Loading {current.reference}…</p></div>}
+      {!batch && shown && "error" in shown && <div className="preview-empty"><b>{shown.error}</b><Link className="btn btn-tertiary btn-s" href={`/orders/${shown.id}`}>Try the order page</Link></div>}
+      {!batch && shown && "view" in shown && <OrderPreview key={shown.id} view={shown.view} checks={shown.checks} position={index + 1} total={queue.length} onNext={() => step(1)} />}
     </section>
   </main></Shell>
 }

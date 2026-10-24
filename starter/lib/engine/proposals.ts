@@ -143,8 +143,13 @@ function driverHandle(bundle: Bundle, recordId: string, quote: string): string |
   return str(assignments.find((row) => row.details.order_id === bundle.order.id)?.details.driver_id)
 }
 
+/** The contact's name, with the handle when the name does not already carry it. */
+function who(contact: ProposalContact): string {
+  return contact.handle && !contact.name.includes(contact.handle) ? `${contact.name} (${contact.handle})` : contact.name
+}
+
 function actionText(kind: ProposalKind, contact: ProposalContact): string {
-  if (kind === "call") return `Call ${contact.name}${contact.handle ? ` (${contact.handle})` : ""} and ask the question below.`
+  if (kind === "call") return `Call ${who(contact)} and ask the question below.`
   if (kind === "operator_question") return "Ask you the question below in the app."
   if (kind === "customer_contact") return `Hand you the contact with ${contact.name}: you make it with the script below and record the answer.`
   return "Change the order."
@@ -194,7 +199,7 @@ function onApproveText(draft: ProposalDraft): string {
   if (draft.kind === "customer_contact") return `Hands you the contact: you reach ${draft.contact.name} yourself with this script, then record the answer here. The agent does not contact them.`
   if (draft.kind === "change") return `Writes the change to the order: ${draft.change}`
   if (draft.kind === "operator_question") return "Puts the question to you in the app."
-  return `The agent calls ${draft.contact.name}${draft.contact.handle ? ` (${draft.contact.handle})` : ""} with this script.`
+  return `The agent calls ${who(draft.contact)} with this script.`
 }
 
 function waitingOn(kind: ProposalKind, status: ProposalStatus): Proposal["waitingOn"] {
