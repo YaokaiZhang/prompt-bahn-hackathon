@@ -235,7 +235,12 @@ Example routine questions: "Is the car ready?", "Are the papers there?", "What d
 
 ## 9. Summaries and urgency (sketch 5)
 
-- **Briefing page:** in-app, styled like an email, with a copyable or mailto version. Nothing is really sent.
+- **Delivery:** in-app only. A **Briefing inbox** styled like email, plus a toast and a badge in the control room. Nothing is really sent.
+- **When:**
+  - a scheduled digest at fixed demo-clock times (09:00, 12:00, 16:00);
+  - an **immediate urgent push** when an order becomes urgent or a tier-3 handover arrives, at most once per order per urgency reason.
+
+  Every digest and push is stored in the Briefing inbox.
 - **Counts:** from the rule engine only. They cover Needs action by reason, In progress, Normal, Done, and couldn't-check gaps.
 - **Urgent reminder** at the top. An order is urgent when any of these holds:
   - an action is due within 2 h of the demo clock;
@@ -243,6 +248,25 @@ Example routine questions: "Is the car ready?", "Are the papers there?", "What d
   - pickup is within 24 h with no confirmed contact or release.
 
   On the snapshot this covers CD-420437, CD-420516 and CD-420458.
+
+### 9.1 How a digest is generated
+
+The LLM writes the prose. It never owns a number or an order reference.
+
+1. **Facts first, with no LLM.** The server builds a `digest_facts` object:
+   - counts per group and reason;
+   - urgent orders with their reasons and deadlines;
+   - what changed since the last digest (new Needs action, resolved, calls done or failed, callbacks due);
+   - each order's cached one-line reviewer finding.
+2. **Editorial LLM pass.** Haiku 5.5 at low effort receives only `digest_facts`: no tools and no raw records. It:
+   - orders the urgent items by what to do first;
+   - groups similar cases (for example "3 site calls waiting for the 10:00 checks");
+   - writes a 2–3 sentence opener;
+   - adds one "suggested first move" line.
+3. **Placeholders, not numbers.** The model writes tokens such as `{{count.needs_action}}` and `{{order:CD-420437}}`. The server fills in the real values and links. Any digit the model typed itself causes rejection.
+4. **Fixed counts block.** The counts table at the top always comes from a template. The LLM text surrounds it and never replaces it.
+5. **Fallback.** If the LLM fails, takes longer than about 5 s, or fails validation, the digest is sent with the template text only. A summary is never late or wrong because of the model.
+6. **Cost and caching.** About 2k tokens per digest, cached by a hash of `digest_facts`. **Urgent pushes are template-only, with no LLM, so they are instant.**
 
 ## 10. User journeys and acceptance criteria
 
