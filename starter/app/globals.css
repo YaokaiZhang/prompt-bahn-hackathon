@@ -194,6 +194,51 @@ ul, ol { padding: 0; list-style: none; }
 .phone-icon { display: grid; place-items: center; width: 72px; height: 72px; margin-bottom: 8px; border-radius: 50%; background: var(--birch); color: var(--muted); }
 .phone-idle b { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
 .phone-idle p { color: var(--muted); }
+.phone-last { margin-top: 6px; font-size: 14px; }
+.phone-wait { color: var(--muted); }
+
+/* ── Mock phone: ringing, keypad, ended (ticket 11) ─────────────────────── */
+.phone-switch { display: inline-flex; gap: 2px; margin-top: 20px; padding: 4px; border-radius: var(--r-pill); background: var(--sand-50); }
+.phone-switch button { height: 40px; padding: 0 18px; border: 0; border-radius: var(--r-pill); background: transparent; font-size: 15px; font-weight: 600; color: var(--brown); transition: background-color 0.18s var(--ease), color 0.18s var(--ease); }
+.phone-switch button:hover { color: var(--ink); }
+.phone-switch button[aria-pressed="true"] { background: var(--birch); color: var(--ink); box-shadow: 0 1px 3px rgba(18, 17, 14, 0.1); }
+.phone-ringing { background: var(--teal-bg); }
+.phone-screen { display: grid; justify-items: center; gap: 16px; width: 100%; text-align: center; }
+.phone-status { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--teal-ink); }
+.phone-ring-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--teal); animation: phone-ring 1.2s var(--ease) infinite; }
+@keyframes phone-ring { 0% { box-shadow: 0 0 0 0 rgba(67, 175, 193, 0.55); } 100% { box-shadow: 0 0 0 12px rgba(67, 175, 193, 0); } }
+.phone-caller { display: grid; justify-items: center; gap: 4px; }
+.phone-avatar { display: grid; place-items: center; width: 80px; height: 80px; margin-bottom: 8px; border-radius: 50%; background: var(--birch); color: var(--ink); }
+.phone-from { font-size: 24px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.18; }
+.phone-ref { font-size: 16px; font-weight: 700; color: var(--ink); }
+.phone-to { font-size: 14px; color: var(--muted); }
+.phone-reason { max-width: 34ch; font-size: 15px; color: var(--body); }
+.phone-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; max-width: 320px; margin-top: 8px; }
+.phone-actions .btn { width: 100%; }
+.phone-hint { font-size: 13.5px; color: var(--muted); }
+.phone-in-call { align-self: start; justify-items: stretch; text-align: left; }
+.phone-call-head { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--muted); }
+.phone-call-head b { color: var(--ink); }
+.phone-timer { font-weight: 600; color: var(--ink); }
+.phone-call-pills { display: flex; gap: 6px; }
+.phone-prompt { min-height: 4.4em; padding: 16px 18px; border-radius: var(--r-md); background: var(--birch); font-size: 17px; line-height: 1.4; color: var(--ink); }
+.phone-options { display: grid; gap: 6px; list-style: none; padding: 0; font-size: 15px; color: var(--body); }
+.phone-options li { display: flex; align-items: center; gap: 10px; }
+.phone-options kbd { display: inline-grid; place-items: center; min-width: 26px; height: 26px; border-radius: var(--r-pill); background: var(--birch); box-shadow: inset 0 0 0 1px var(--sand-200); font: inherit; font-size: 13px; font-weight: 700; color: var(--ink); }
+.phone-keypad { display: grid; grid-template-columns: repeat(3, 72px); justify-content: center; gap: 12px 22px; margin-top: 6px; }
+.phone-keypad button { width: 72px; height: 72px; border: 0; border-radius: 50%; background: var(--birch); font-size: 26px; font-weight: 600; color: var(--ink); transition: background-color 0.18s var(--ease), color 0.18s var(--ease); }
+@media (hover: hover) { .phone-keypad button:hover:not(:disabled) { background: var(--sand-100); } }
+.phone-keypad button:active:not(:disabled) { background: var(--sand-200); }
+.phone-keypad button[aria-pressed="true"] { background: var(--ink); color: var(--birch); }
+.phone-keypad button:disabled:not([aria-pressed="true"]) { color: var(--sand-300); cursor: default; }
+.phone-outcome { display: inline-flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; color: var(--ink); }
+.phone-error { margin-top: 12px; padding: 10px 14px; border-radius: var(--r-sm); background: var(--red-bg); font-size: 14px; color: var(--red-ink); }
+.phone-queue { margin-top: 20px; padding: 16px 18px; border-radius: var(--r-md); background: var(--sand-50); }
+.phone-queue h2 { font-size: 16px; font-weight: 700; }
+.phone-queue ul { display: grid; gap: 8px; margin: 10px 0; padding: 0; list-style: none; }
+.phone-queue li { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; font-size: 14.5px; }
+.phone-queue li .icon { margin-top: 2px; }
+.phone-queue-why, .phone-queue p { font-size: 13.5px; color: var(--muted); }
 
 /* ── Orders home: queue and preview ─────────────────────────────────────── */
 .home { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(380px, 460px) minmax(0, 1fr); gap: 20px; padding: 8px var(--gutter) 24px; }
@@ -775,7 +820,10 @@ details.more > :not(summary) { margin-top: 10px; }
   .picker-head p { font-size: 16px; }
   .picker-option { grid-template-columns: auto minmax(0, 1fr); gap: 14px; padding: 16px 18px 16px 14px; }
   .picker-go { display: none; }
-  .phone { min-height: 400px; }
+  .phone { min-height: 400px; padding: 24px 18px; margin-top: 20px; }
+  .phone-keypad { grid-template-columns: repeat(3, 64px); gap: 10px 20px; }
+  .phone-keypad button { width: 64px; height: 64px; font-size: 24px; }
+  .phone-prompt { font-size: 16px; }
   .qcard[aria-current="true"] { background: var(--sand-50); color: var(--ink); }
   .qcard[aria-current="true"] .qcard-meta, .qcard[aria-current="true"] .qcard-stage, .qcard[aria-current="true"] .qcard-date { color: var(--muted); }
   .qcard[aria-current="true"] .qcard-why.tone-danger { color: var(--red-ink); }
@@ -845,6 +893,8 @@ details.more > :not(summary) { margin-top: 10px; }
 .call-play-stop { width: 8px; height: 8px; background: currentColor; border-radius: 1px; }
 .call-waiting { display: flex; align-items: flex-start; gap: 10px; margin-top: 8px; font-size: 14.5px; color: var(--body); max-width: 72ch; }
 .call-waiting .icon { flex: none; margin-top: 2px; }
+.call-ring-live { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 10px; font-size: 13.5px; color: var(--muted); }
+.call-ring-error { flex-basis: 100%; color: var(--red-ink); }
 @media (max-width: 900px) {
   .call { padding: 14px; }
   .call-head { grid-template-columns: 20px minmax(0, 1fr); }

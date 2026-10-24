@@ -24,6 +24,7 @@ import { createReviewLayer, reviewTotals, type OrderReview, type ReviewInputs, t
 import { buildFleet, evaluateRules, type Evaluation } from "./rules"
 import type { EngineStore } from "./store"
 import { createCallRunner, type CallOptions } from "./call-runner"
+import type { PhonePersona, PhoneView } from "./phone"
 import { callbackItems, orderCalls, utcTime, type BlockedCall, type Call, type CalleeInput, type CallLine, type CallLineView, type OrderCalls } from "./calls"
 
 /** The snapshot as the engine reads it: one bundle per order. */
@@ -135,6 +136,7 @@ export type {
   Answerer, BlockedCall, Call, CallCallee, CallCost, CalleeInput, CallLine, CallLineView, CallOutcome, CallState, CostRates, Expecting, LineStatus, Tier, TranscriptLine,
 } from "./calls"
 export type { CallOptions } from "./call-runner"
+export type { PhonePersona, PhoneView, QueuedCall } from "./phone"
 export type { Briefing, BriefingItem, DigestFacts, DigestItem, DigestSlot, PushItem, PushReason, PushInput } from "./briefing"
 export type { DigestProse, ProseSegment } from "./digest-prose"
 export type { Effect, EffectEvent, EffectInput, EffectSpec, EffectType, EffectWrite, Versioning } from "./effects"
@@ -173,6 +175,8 @@ export type Engine = {
   overlaid(bundle: Bundle): Promise<Bundle>
   /** `overlaid` for many bundles at once (one store read): what the board shows. */
   overlaidAll(bundles: Bundle[]): Promise<Bundle[]>
+  /** A persona's mock phone (ticket 11): the live call on it and the queue behind it. */
+  phone(persona: PhonePersona): Promise<PhoneView>
 }
 
 export type EngineDeps = {
@@ -726,5 +730,6 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
   return {
     state, apply, clock, bundle: (orderId) => bundles.get(orderId) ?? null,
     overlaid: async (bundle) => (await overlaidAll([bundle]))[0], overlaidAll,
+    phone: (persona) => callRunner.phone(persona),
   }
 }

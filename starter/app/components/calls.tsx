@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from "react"
 import type { BlockedCall, Call, CallLineView, CallState } from "@/lib/engine/calls"
 import type { Tone } from "@/lib/present/types"
+import { CLOCK_EVENT } from "./demo-clock"
 import { Icon } from "./icons"
 import { More, Pill } from "./ui"
 
@@ -105,15 +106,39 @@ function CallCard({ call }: { call: Call }) {
       </div>
     </div>
     <p className="call-reason">{call.reason}</p>
+    {live && call.answerer === "live" && call.state === "ringing" && <p className="call-reason tone-accent">Ringing on the {PHONE_NAME[call.line]} page (Phone, {call.line === "site" ? "Site" : "Driver"} persona). It waits there while another live call is on that phone.</p>}
     {call.summary && <p className="call-summary">{call.summary}{call.callbackAt && call.outcome === "callback" ? ` Callback at ${demoTime(call.callbackAt)}.` : ""}</p>}
     <CostMeter call={call} />
     {live ? <Transcript call={call} /> : <More label={`Transcript (${call.transcript.length} lines)`}><Transcript call={call} /></More>}
   </article>
 }
 
+const PHONE_NAME: Record<CallLineView["line"], string> = { site: "Site phone", driver: "Driver phone" }
+
+/** Lines the operator can ring live now: something left to ask, or a callback waiting (ticket 11). */
+const ringable = (line: CallLineView) => !!line.callee && (line.status === "to_call" || line.status === "callback" || line.status === "callback_due")
+
+/** "Ring live": starts the line's call now, ringing on the Site or Driver phone page instead of the simulated person. */
+function RingLive({ orderId, line }: { orderId: string; line: CallLineView }) {
+  const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null })
+  const ring = async () => {
+    setState({ busy: true, error: null })
+    const response = await fetch("/api/calls", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "ringLive", orderId, line: line.line }) })
+    const data = await response.json().catch(() => null) as { error?: string } | null
+    setState({ busy: false, error: response.ok ? null : data?.error ?? "The call did not start" })
+    if (response.ok) window.dispatchEvent(new Event(CLOCK_EVENT))
+  }
+  const name = line.callee?.name ? line.callee.name.split(",")[0] : line.callee?.handle
+  return <div className="call-ring-live">
+    <button type="button" className="btn btn-tertiary btn-s" onClick={ring} disabled={state.busy}><Icon name="phone" />{state.busy ? "Ringing…" : `Ring ${name} live`}</button>
+    <span>{line.status === "callback" ? "Calls back now, " : ""}on the {PHONE_NAME[line.line]} page instead of the simulated person.</span>
+    {state.error && <span className="call-ring-error" role="alert">{state.error}</span>}
+  </div>
+}
+
 /** The order's calls and call lines; `compact` (queue preview) shows one line per line. */
-export function CallsBlock({ calls = [], lines = [], blocked = [], compact = false }: { calls?: Call[]; lines?: CallLineView[]; blocked?: BlockedCall[]; compact?: boolean }) {
-  if (!calls.length && !blocked.length && !lines.some((line) => line.status === "callback" || line.status === "callback_due")) return null
+export function CallsBlock({ orderId, calls = [], lines = [], blocked = [], compact = false }: { orderId?: string; calls?: Call[]; lines?: CallLineView[]; blocked?: BlockedCall[]; compact?: boolean }) {
+  if (!calls.length && !blocked.length && !lines.some(ringable)) return null
   const waiting = lines.filter((line) => (line.status === "callback" || line.status === "callback_due") && line.text)
   if (compact) {
     return <div className="checks-block"><h3>Calls</h3><ul className="checks-list">
@@ -128,6 +153,7 @@ export function CallsBlock({ calls = [], lines = [], blocked = [], compact = fal
   return <div className="checks-block" id="calls">
     <h3>Calls</h3>
     {waiting.map((line) => <p className="call-waiting" key={line.line}><Icon name="waiting" className="tone-accent" />{line.text}</p>)}
+    {orderId && lines.filter(ringable).map((line) => <RingLive key={`ring-${line.line}`} orderId={orderId} line={line} />)}
     {blocked.map((row, i) => <p className="call-waiting" key={`b${i}`}><Icon name="note" className="tone-neutral" />{row.text}</p>)}
     {ordered.slice(0, 1).map((call) => <CallCard key={call.id} call={call} />)}
     {ordered.length > 1 && <More label={`Earlier calls (${ordered.length - 1})`}>{ordered.slice(1).map((call) => <CallCard key={call.id} call={call} />)}</More>}
