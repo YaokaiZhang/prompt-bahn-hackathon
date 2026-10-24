@@ -9,22 +9,73 @@ import "dotenv/config"
 import { after, test } from "node:test"
 import { drizzle } from "drizzle-orm/postgres-js"
 import postgres from "postgres"
+import type { ReviewCache } from "@/lib/reviewer/cache"
+import { loadFixtures, SCENARIO_FIXTURE_DIR } from "@/lib/reviewer/fixtures"
+import { GatewayError, NO_USAGE, type ChatRequest, type ModelGateway } from "@/lib/reviewer/gateway"
+import { createScriptedGateway } from "@/lib/reviewer/scripted"
+import { testReviewSource } from "@/lib/reviewer/testing"
 import { createEngine, type Engine, type Snapshot } from "./engine"
 import { createMemoryStore } from "./memory"
 import { createPostgresStore, type Database } from "./postgres"
-import { snapshotFromFiles } from "./snapshot"
 import type { EngineStore } from "./store"
 
-let snapshot: Promise<Snapshot> | null = null
-
 /** The real dataset, read once per test process. */
-export function testSnapshot(): Promise<Snapshot> {
-  snapshot ??= snapshotFromFiles()
-  return snapshot
+export async function testSnapshot(): Promise<Snapshot> {
+  return (await testReviewSource()).snapshot
 }
 
-export async function testEngine(options: { store?: EngineStore } = {}): Promise<Engine> {
-  return createEngine({ snapshot: await testSnapshot(), store: options.store ?? createMemoryStore() })
+export type TestEngineOptions = {
+  store?: EngineStore
+  /** The reviewer's model: absent means no key ("not reviewed yet"). Use `testGateway()`. */
+  gateway?: ModelGateway | null
+  reviewCache?: ReviewCache
+}
+
+export async function testEngine(options: TestEngineOptions = {}): Promise<Engine> {
+  const source = await testReviewSource()
+  return createEngine({
+    snapshot: source.snapshot,
+    store: options.store ?? createMemoryStore(),
+    reviews: { gateway: options.gateway ?? null, cache: options.reviewCache, inboxMessages: source.inboxMessages },
+  })
+}
+
+export type CountingGateway = ModelGateway & { readonly calls: ChatRequest[] }
+
+/**
+ * The scripted reviewer for engine tests: the permanent hand-written scenarios
+ * (CD-420089, 399, 437, 458, 516) and "nothing to ask" for every other order.
+ */
+export async function testGateway(): Promise<CountingGateway> {
+  const scripted = createScriptedGateway(await loadFixtures(SCENARIO_FIXTURE_DIR))
+  const known = new Set((await loadFixtures(SCENARIO_FIXTURE_DIR)).map((fixture) => fixture.reference))
+  const calls: ChatRequest[] = []
+  return {
+    calls,
+    async chat(request) {
+      calls.push(request)
+      if (known.has(request.subject)) return scripted.chat(request)
+      const args = JSON.stringify({ summary: `Nothing to ask on ${request.subject}.`, findings: [] })
+      return {
+        model: "scripted",
+        finishReason: "tool_calls",
+        usage: { ...NO_USAGE, promptTokens: 9000, completionTokens: 40, cost: 0.002 },
+        message: { role: "assistant", content: null, tool_calls: [{ id: `call_${request.subject}`, type: "function", function: { name: "submit_findings", arguments: args } }] },
+      }
+    },
+  }
+}
+
+/** A model that is unreachable: every call fails, as behind a blocking proxy. */
+export function failingGateway(message: string): CountingGateway {
+  const calls: ChatRequest[] = []
+  return {
+    calls,
+    async chat(request) {
+      calls.push(request)
+      throw new GatewayError(`OpenRouter request failed: ${message}`)
+    },
+  }
 }
 
 let database: { db: Database; close: () => Promise<void> } | null = null

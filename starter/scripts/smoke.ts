@@ -183,12 +183,14 @@ async function main(): Promise<void> {
   }
   const disagreements: string[] = []
   const groupDisagreements: string[] = []
+  const reviewProblems: string[] = []
+  let reviewed = 0
   for (let index = 0; index < overview.visible.length; index += 10) {
     const cards = overview.visible.slice(index, index + 10)
     const views = await Promise.all(cards.map(async (card) => {
       const detailResponse = await appFetch(`${base}/api/orders/${card.id}`)
       if (!detailResponse.ok) throw new Error(`Order API returned ${detailResponse.status} for ${card.id}`)
-      const detail = await detailResponse.json() as { view: { attention: unknown[] }; checks: { group: string } | null }
+      const detail = await detailResponse.json() as { view: { attention: unknown[] }; checks: { group: string; review?: { status: string; recordsRead: number; findings: unknown[] } } | null }
       return detail
     }))
     cards.forEach((card, position) => {
@@ -197,6 +199,10 @@ async function main(): Promise<void> {
       if (!card.verdict || card.verdict.group !== recordGroup) {
         groupDisagreements.push(`${card.reference} (queue ${card.verdict?.group ?? "none"}, order ${recordGroup ?? "none"})`)
       }
+      // Ticket 06: every order says whether the reviewer read it, and how many records.
+      const review = views[position].checks?.review
+      if (!review || !["reviewed", "not_reviewed"].includes(review.status) || !(review.recordsRead > 0)) reviewProblems.push(card.reference)
+      else if (review.status === "reviewed") reviewed += 1
       if ((card.attention.length > 0) !== (recordAttention.length > 0)) {
         disagreements.push(`${card.reference} (board ${card.attention.length}, record ${recordAttention.length})`)
       }
@@ -208,6 +214,10 @@ async function main(): Promise<void> {
   if (disagreements.length) {
     throw new Error(`Board and record disagree on "needs a person": ${disagreements.join(", ")}`)
   }
+  if (reviewProblems.length) {
+    throw new Error(`Order API has no reviewer status or records-read count for: ${reviewProblems.join(", ")}`)
+  }
+  console.log(`Reviewer: ${reviewed} of ${overview.visible.length} orders reviewed; the rest read "not reviewed yet".`)
   console.log(`Verified ${order.id}: ${orderPlans.length} plans, ${(body.related.transport_points ?? []).length} points, ${(body.related.transport_segments ?? []).length} segments. Board and record agree on "needs a person" and on the group for ${overview.visible.length} orders (${Object.entries(overview.groupCounts).map(([group, count]) => `${group} ${count}`).join(", ")}).`)
 }
 

@@ -3,6 +3,7 @@
 import type { FirstAction, Group, PlannedAction, RuleResult, SourceRef } from "@/lib/engine/checks"
 import type { OrderChecks, Tone } from "@/lib/present/types"
 import { Icon } from "./icons"
+import { ReviewBlock } from "./review"
 import { More, Pill } from "./ui"
 
 export const GROUP_LABEL: Record<Group, string> = {
@@ -91,6 +92,7 @@ export function ChecksPanel({ orderId, checks, compact = false }: { orderId: str
         </div>
       </li>)}</ul>
     </div>}
+    {checks.review && <ReviewBlock orderId={orderId} review={checks.review} compact={compact} />}
     {failed.length > 0 && <div className="checks-block"><h3>Didn&apos;t pass</h3>{list(failed)}</div>}
     {unknown.length > 0 && <div className="checks-block"><h3>Couldn&apos;t check</h3>{list(unknown)}</div>}
     {passed.length > 0 && (compact
