@@ -23,12 +23,19 @@ export function OrderFiles({ orderId }: { orderId: string }) {
   }, [orderId])
   if (failed) return <p className="empty">Sample files are unavailable. Check that the local object store is running and seeded.</p>
   if (!files?.length) return null
-  return <div className="files-strip">{files.map((file) => <a key={file.id} href={file.url} target="_blank" rel="noopener noreferrer" className="file" title={file.evidence_note ?? undefined}>
+  return <div className="files">{files.map((file) => <a key={file.id} href={file.url} target="_blank" rel="noopener noreferrer" className="file" title={file.evidence_note ?? undefined}>
     <span className="file-thumb">{file.content_type === "image/jpeg"
-      // eslint-disable-next-line @next/next/no-img-element -- signed local object-store URL
-      ? <img src={file.url} alt={file.evidence_note ?? `${label(file.kind)} case photo`} />
+      ? <Thumb src={file.url} alt={file.evidence_note ?? `${label(file.kind)} case photo`} />
       : <Icon name="file" size={22} />}</span>
     <b>{label(file.kind)}</b>
     <small>{file.content_type === "application/pdf" ? "PDF" : "Photo"} · {label(file.status).toLowerCase()}</small>
   </a>)}</div>
+}
+
+/** A case photo, or a plain tile when the signed link has expired or the store is down. */
+function Thumb({ src, alt }: { src: string; alt: string }) {
+  const [failed, setFailed] = useState(false)
+  if (failed) return <span className="file-missing"><Icon name="photo" size={22} />Photo unavailable</span>
+  // eslint-disable-next-line @next/next/no-img-element -- signed local object-store URL
+  return <img src={src} alt={alt} onError={() => setFailed(true)} />
 }

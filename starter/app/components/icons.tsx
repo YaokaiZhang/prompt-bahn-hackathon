@@ -1,6 +1,6 @@
 import type { SVGProps } from "react"
 
-// A small stroke icon set at text size. Icons mark a kind of record; words carry the meaning.
+// One stroke icon set at text size, drawn for the Control Room. Icons mark a kind of record; words carry the meaning.
 const PATHS: Record<string, string> = {
   alert: "M8 2.5 14.2 13.5H1.8L8 2.5Z M8 6.5v3.2 M8 11.6v.1",
   work: "M3 3.5h10v9H3z M5.5 8l1.8 1.8L10.8 6",
@@ -30,6 +30,7 @@ const PATHS: Record<string, string> = {
   bot: "M4 6h8v7H4z M8 3.2V6 M6.4 9.4h.1 M9.6 9.4h.1 M2 9v2 M14 9v2",
   people: "M6 7.6a2.4 2.4 0 1 0 0-4.8 2.4 2.4 0 0 0 0 4.8Z M1.8 13.2c.4-2.4 2.1-3.6 4.2-3.6s3.8 1.2 4.2 3.6 M10.4 7.4a2 2 0 1 0 0-4 M11.6 9.8c1.5.3 2.4 1.4 2.7 3.2",
   building: "M3 13.5V3.5h7v10 M10 7.5h3v6 M5.2 6h.1 M7.6 6h.1 M5.2 8.6h.1 M7.6 8.6h.1 M5.2 11.2h.1 M7.6 11.2h.1 M1.8 13.5h12.4",
+  close: "M4 4l8 8 M12 4l-8 8",
   inbox: "M2.5 9.2 4 3.5h8l1.5 5.7v3.3h-11z M2.5 9.2h3.3l.8 1.6h2.8l.8-1.6h3.3",
 }
 
@@ -39,7 +40,7 @@ export function Icon({ name, size = 16, className, ...rest }: { name: IconName |
   const d = PATHS[name] ?? PATHS.note
   return <svg
     viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" focusable="false"
-    fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+    fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
     className={`icon${className ? ` ${className}` : ""}`} {...rest}
   ><path d={d} /></svg>
 }

@@ -1,9 +1,10 @@
 "use client"
 
 import type { RecordView } from "@/lib/present/types"
-import { RecordHero, Tiles } from "./record/header"
+import { KeyDates, RecordHero } from "./record/header"
 import { RecordsPanel } from "./record/records"
-import { ActivitySection, AttentionPanel, ConversationsSection, DecisionsSection, EvidenceSection, RouteStrip } from "./record/sections"
+import { ActivitySection, ConversationsSection, DecisionsSection, EvidenceSection, RouteSection } from "./record/sections"
+import { OpenItems } from "./ui"
 
 export type Detail = { order: { id: string; reference: string }; view: RecordView }
 
@@ -11,9 +12,9 @@ export function OrderPane({ detail }: { detail: Detail }) {
   const { view } = detail
   return <>
     <RecordHero view={view} />
-    <AttentionPanel view={view} />
-    <Tiles tiles={view.tiles} />
-    <RouteStrip view={view} />
+    <div className={view.attention.length ? "panel" : "panel-quiet"} id="attention"><OpenItems view={view} /></div>
+    <KeyDates tiles={view.tiles} />
+    <RouteSection view={view} />
     <ConversationsSection view={view} />
     <EvidenceSection view={view} />
     <DecisionsSection view={view} />

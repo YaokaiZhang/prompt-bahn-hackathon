@@ -1,0 +1,55 @@
+<!doctype html><html><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet"><style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1440px;height:900px;overflow:hidden}
+body{background:#fffef7;color:#12110e;font:400 15px/1.45 Figtree,system-ui,sans-serif;font-feature-settings:"tnum"}
+.top{height:72px;display:flex;align-items:center;gap:28px;padding:0 32px}
+.logo{display:flex;align-items:center;gap:8px;font:800 22px/1 Archivo,sans-serif;font-stretch:125%;letter-spacing:-.02em}
+.logo i{width:22px;height:22px;border-radius:6px;background:#12110e;display:inline-block}
+.nav{display:flex;gap:4px;background:#f1eee6;border-radius:999px;padding:4px}
+.nav a{height:40px;padding:0 18px;border-radius:999px;display:flex;align-items:center;font-weight:600;font-size:15px;color:#2a2721}
+.nav a.on{background:#fffef7;color:#12110e;box-shadow:0 1px 2px rgba(18,17,14,.08)}
+.clock{margin-left:auto;font-size:14px;color:#5a5346}
+.btn{height:44px;padding:0 20px;border-radius:999px;background:#12110e;color:#fffef7;font-weight:600;display:flex;align-items:center}
+.h1{font:900 56px/1 Archivo,sans-serif;font-stretch:125%;text-transform:uppercase;letter-spacing:-.01em}
+.muted{color:#726958}
+.pill{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 11px;border-radius:999px;font-size:13px;font-weight:600;background:#f1eee6;color:#2a2721;white-space:nowrap}
+.pill.red{background:#ffe8ec;color:#a13342}.pill.org{background:#ffece3;color:#a14623}.pill.teal{background:#dcf4f7;color:#205058}.pill.grn{background:#daf4e9;color:#1d6b4b}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+.o{background:#fd6a31}.r{background:#fd4a61}.t{background:#43afc1}.g{background:#29af77}.k{background:#12110e}.s{background:#b7afa0}
+
+.wrap{display:grid;grid-template-columns:460px 1fr;gap:20px;padding:12px 32px 0;height:828px}
+.q{display:flex;flex-direction:column;min-height:0}
+.h1{font-size:44px}
+.counts{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0}
+.qi{background:#f1eee6;border-radius:18px;padding:14px 16px;margin-bottom:8px}
+.qi.on{background:#12110e;color:#fffef7}.qi.on .m{color:#ccc6ba}.qi.on .w{color:#ffa27e}
+.qi b{font-size:16px}.m{font-size:13px;color:#726958;margin-top:2px}.w{font-size:14px;font-weight:600;color:#a14623;margin-top:6px}.w.r{color:#a13342}
+.pv{background:#f1eee6;border-radius:24px;padding:28px 32px;overflow:hidden}
+.pvh{display:flex;gap:28px;align-items:flex-start}
+.carimg{width:360px;height:190px;border-radius:16px;background:#e2ded4}
+.tt{font:900 40px/1.02 Archivo;font-stretch:125%;text-transform:uppercase}
+.st{margin-top:14px;font-size:22px;font-weight:600;color:#a13342;line-height:1.25;max-width:30ch}
+.rt{display:grid;grid-template-columns:1fr 120px 1fr;gap:12px;align-items:center;margin-top:26px}
+.stopc{background:#fffef7;border-radius:16px;padding:16px 18px}.stopc small{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:#5a5346}.stopc b{display:block;font-size:17px;margin-top:4px}
+.ln{height:3px;background:#12110e;border-radius:2px;position:relative}
+.items{margin-top:22px;background:#fffef7;border-radius:16px;padding:6px 18px}
+.it{display:grid;grid-template-columns:1fr 160px;gap:16px;padding:12px 0;border-top:1px solid #f1eee6}.it:first-child{border-top:0}
+.it b{font-size:15px}.it p{font-size:14px;color:#5a5346}
+.acts{display:flex;gap:10px;margin-top:20px}.btn2{height:44px;padding:0 20px;border-radius:999px;background:#e2ded4;font-weight:600;display:flex;align-items:center}
+</style></head><body>
+<div class="top"><div class="logo"><i></i>bahn</div><div class="nav"><a class="on">Orders</a><a>Inbox</a><a>Customers</a><a>Drivers</a><a>Places</a></div><div class="clock">Snapshot · Tue 21 Oct, 09:00 UTC</div></div>
+<div class="wrap"><div class="q"><div class="h1">Needs a person</div>
+<div class="counts"><span class="pill red">43 need a person</span><span class="pill">New 12</span><span class="pill">Ready 12</span><span class="pill">Finding 11</span><span class="pill">Assigned 18</span><span class="pill teal">Moving 24</span><span class="pill grn">Delivered 21</span></div>
+<div class="qi on"><b>Bentley Flying Spur</b><div class="m">CD-420437 · Calverona Auto · Berlin → Munich</div><div class="w">Delivery access risk · +3 more</div></div>
+<div class="qi"><b>Toyota Corolla</b><div class="m">CD-420702 · Calverin Car Centre · Oulu → Espoo</div><div class="w r">Delivery promise unachievable</div></div>
+<div class="qi"><b>BMW M4</b><div class="m">CD-420593 · Pellavaro Auto · Helsinki → Turku</div><div class="w r">Incident: empty pickup · +4 more</div></div>
+<div class="qi"><b>Bentley Continental GT</b><div class="m">CD-420322 · Marvellin Motorhandel · Munich → Hamburg</div><div class="w">Incident: vehicle warning · +4 more</div></div>
+<div class="qi"><b>Volvo V60</b><div class="m">CD-420516 · Auvelloria Motor Collection · Helsinki</div><div class="w">Site access unconfirmed · +4 more</div></div>
+</div>
+<div class="pv"><div class="pvh"><div class="carimg"></div><div><span class="pill teal"><i class="dot t"></i>Moving · CD-420437</span><div class="tt" style="margin-top:14px">Bentley<br>Flying Spur</div><div class="st">Promise 11:00–16:00 at risk; ETA has slipped to 15:58.</div></div></div>
+<div class="rt"><div class="stopc"><small><i class="dot o"></i>Pickup · done</small><b>Calverona Berlin yard</b><span class="muted">Berlin, DE · 20 Oct 08:10</span></div><div class="ln"></div><div class="stopc"><small><i class="dot r"></i>Delivery</small><b>Calverona Auto Munich</b><span class="muted">Munich, DE · today 11:00–16:00</span></div></div>
+<div class="items"><div class="it"><div><b>Who may sign at delivery is unclear</b><p>Contact "until early afternoon" vs correction "until 18:00, can't confirm who signs".</p></div><span class="muted">customer messages · 2</span></div>
+<div class="it"><div><b>Follow-up task overdue</b><p>Work item opened 20 Oct 16:20, due 21 Oct 08:00.</p></div><span class="muted">work item</span></div>
+<div class="it"><div><b>ETA after the promise end</b><p>Driver app: Thomas Mellervik, ETA 15:58 CEST.</p></div><span class="muted">tracking · 08:42</span></div></div>
+<div class="acts"><div class="btn">Open order</div><div class="btn2">Next in queue</div></div></div></div>
+</body></html>

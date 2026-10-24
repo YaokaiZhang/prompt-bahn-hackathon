@@ -732,7 +732,7 @@ function buildStory(bundle: Bundle, keyDates: KeyDate[], assignments: Assignment
   // The lane sentence already says a moving car has no position; do not say it twice.
   if (open.kind === "check" && story.detail?.includes("No driver-app position")) return story
   const tone: Tone = strongestTone(attention.map((item) => item.tone)) === "danger" ? "danger" : story.tone
-  const exception = `Open: ${open.title}.`
+  const exception = /^open\b/i.test(open.title) ? `${open.title}.` : `Open: ${open.title}.`
   return { ...story, tone, detail: story.detail ? `${story.detail} ${exception}` : exception }
 }
 

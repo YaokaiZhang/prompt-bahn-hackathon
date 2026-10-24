@@ -32,12 +32,12 @@ export function RecordsPanel({ view, orderId }: { view: RecordView; orderId: str
     { id: "events", icon: "waiting", title: "All events", sub: "the recorded history by day, with what each event changed", count: view.historyTotal, body: <HistoryDays view={view} /> },
   ]
   return <section className="records" id="records">
-    <div className="sec-head"><h2>Everything on this order</h2><span className="note">Folded away. Open what you need; the <a href={`/api/orders/${orderId}`} target="_blank" rel="noopener noreferrer">order API</a> has every field.</span></div>
+    <div className="sec-head"><h2>Everything on this order</h2><span className="note">Open what you need. The <a href={`/api/orders/${orderId}`} target="_blank" rel="noopener noreferrer">order API</a> has every field.</span></div>
     {entries.map((entry) => <details className="rec" key={entry.id} id={entry.id}>
       <summary>
         <Icon name={entry.icon} size={15} />
         <span><span className="rec-title">{entry.title}</span><span className="rec-sub">{entry.sub}</span></span>
-        <span className="rec-count num">{entry.count != null && entry.count > 0 ? entry.count : ""}</span>
+        <span className="rec-count">{entry.count != null && entry.count > 0 ? entry.count : ""}</span>
         <Icon name="chevron" size={13} className="chev" />
       </summary>
       <div className="rec-body">{entry.body}</div>

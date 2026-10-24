@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState } from "react"
 import { fmtDateTime, fmtDay } from "@/lib/present/time"
 import type { InboxThreadView, InboxView } from "@/lib/present/types"
-import { AppFrame } from "../components/app-frame"
+import { Shell } from "../components/shell"
 import { Icon } from "../components/icons"
-import { ActorName, Chip, OrderLinks, When } from "../components/ui"
+import { ActorName, OrderLinks, Pill, When } from "../components/ui"
 
 export default function InboxPage() {
   const [view, setView] = useState<InboxView | null>(null)
@@ -36,22 +36,22 @@ export default function InboxPage() {
     window.history.replaceState(null, "", `#${id}`)
   }
 
-  return <AppFrame section="inbox" snapshotAt={view?.snapshotAt ?? null}><main className={`mailbox${showList ? "" : " reading"}`}>
+  return <Shell section="inbox" fixed snapshotAt={view?.snapshotAt ?? null}><main className={`mailbox${showList ? "" : " reading"}`}>
     <section className="mail-list" aria-label="Support inbox threads">
       <header className="mail-list-head">
-        <h1>Support inbox</h1>
-        <p>{view ? `${view.open} of ${view.threads.length} open` : "Loading"} · arrived before an order link was certain</p>
+        <h1 className="display">Support inbox</h1>
+        <p>{view ? `${view.open} of ${view.threads.length} open` : "Loading"} · messages that arrived before an order link was certain</p>
       </header>
-      {error && <p className="board-error" role="alert">{error}.</p>}
+      {error && <p className="queue-error" role="alert">{error}.</p>}
       <ul className="mail-rows">{view?.threads.map((item) => {
         const last = item.messages[item.messages.length - 1]
         return <li key={item.id}>
-          <button type="button" className={`mail-row${item.id === selected ? " active" : ""}`} onClick={() => choose(item.id)} aria-current={item.id === selected ? "true" : undefined}>
+          <button type="button" className="mail-row" onClick={() => choose(item.id)} aria-current={item.id === selected ? "true" : undefined}>
             <span className="mail-row-top">
               <span className="mail-row-who">{item.counterparty?.name ?? "Unknown sender"}</span>
               <span className="mail-row-when">{fmtDay(item.updatedAt)}</span>
             </span>
-            <span className="mail-row-subject">{item.categoryLabel}<Chip tone={item.linkTone}>{item.linkStateLabel}</Chip></span>
+            <span className="mail-row-subject">{item.categoryLabel}<Pill tone={item.linkTone}>{item.linkStateLabel}</Pill></span>
             {last && <span className="mail-row-preview">{last.body}</span>}
           </button>
         </li>
@@ -62,17 +62,17 @@ export default function InboxPage() {
       {view && !thread && <p className="empty">Choose a thread.</p>}
       {thread && <Thread thread={thread} onBack={() => setShowList(true)} />}
     </section>
-  </main></AppFrame>
+  </main></Shell>
 }
 
 function Thread({ thread, onBack }: { thread: InboxThreadView; onBack: () => void }) {
   return <article>
-    <button type="button" className="mail-back" onClick={onBack}><Icon name="chevron" size={13} style={{ transform: "rotate(180deg)" }} /> All threads</button>
+    <button type="button" className="mail-back btn btn-tertiary btn-s" onClick={onBack}><Icon name="chevron" size={13} style={{ transform: "rotate(180deg)" }} /> All threads</button>
     <header className="mail-head">
       <h2>{thread.categoryLabel}</h2>
-      <div className="chips">
-        <Chip tone={thread.linkTone}>{thread.linkStateLabel}</Chip>
-        <Chip tone={thread.tone}>{thread.statusLabel}</Chip>
+      <div className="hero-pills">
+        <Pill tone={thread.linkTone}>{thread.linkStateLabel}</Pill>
+        <Pill tone={thread.tone}>{thread.statusLabel}</Pill>
       </div>
       <dl className="mail-facts">
         <div><dt>From</dt><dd>{thread.counterparty ? <><ActorName actor={thread.counterparty} /> <span className="muted">({thread.counterparty.role})</span></> : "Unknown"}</dd></div>
@@ -87,7 +87,7 @@ function Thread({ thread, onBack }: { thread: InboxThreadView; onBack: () => voi
       {thread.candidateBasis && <p className="mail-basis"><b>Basis.</b> {thread.candidateBasis}</p>}
     </header>
     <div className="messages mail-messages">{thread.messages.map((message) => <div className={`msg${message.internal ? " internal" : message.author.kind === "operator" ? " from-operator" : ""}`} key={message.id}>
-      <div className="msg-meta"><b><ActorName actor={message.author} /></b><span className="role">{message.author.role}</span><span>to {message.recipient.name}</span><span>· {message.channelLabel}</span>{message.internal && <span className="msg-tag internal">Internal</span>}<time dateTime={message.at}>{fmtDateTime(message.at)}</time></div>
+      <div className="msg-meta"><b><ActorName actor={message.author} /></b><span>{message.author.role}</span><span>to {message.recipient.name}</span><span>· {message.channelLabel}</span>{message.internal && <Pill tone="warn">Internal</Pill>}<time dateTime={message.at}>{fmtDateTime(message.at)}</time></div>
       <p className="msg-body">{message.body}</p>
     </div>)}</div>
     {thread.messages.length === 0 && <p className="empty">No messages filed under this thread.</p>}

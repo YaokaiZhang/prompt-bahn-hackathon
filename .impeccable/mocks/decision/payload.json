@@ -1,0 +1,46 @@
+{
+  "title": "Orders home: choose the layout",
+  "question": "The Bahn world is fixed (birch ground, asphalt ink, sand panels, pill controls, wide uppercase display). Pick how the Orders home is organised.",
+  "options": [
+    {
+      "id": "stage-rail",
+      "kind": "assigned",
+      "kicker": "THE ROLL",
+      "label": "Stage rail",
+      "lineage": "Bahn's route line, orange pickup pin to red delivery pin",
+      "thesis": "The order lifecycle drawn as one route line; pick a stop to see its orders.",
+      "palette": ["#fffef7", "#12110e", "#f1eee6", "#fd6a31", "#fd4a61"],
+      "materials": ["route line with pins", "wide uppercase counts", "pill controls"],
+      "viewport": "Top bar with pill nav. A full-width rail of seven stages with big counts, then a dense list of the chosen stage, rows needing a person first.",
+      "risk": "Only one stage is visible at a time, so a cross-stage scan takes clicks.",
+      "html": ".impeccable/mocks/decision/stage-rail.html"
+    },
+    {
+      "id": "one-table",
+      "kind": "dealt",
+      "label": "One table",
+      "lineage": "Bahn's sand panels and segmented track",
+      "thesis": "All 100 orders in one sortable table, filtered by stage pills and a 'needs a person' switch.",
+      "palette": ["#fffef7", "#12110e", "#e2ded4", "#fd4a61", "#43afc1"],
+      "materials": ["segmented pill filters", "sand table head", "stage pills"],
+      "viewport": "Top bar, title row with search, a segmented stage filter, then a full-width table: car, reference, customer, route, stage, decisive date, why it needs a person.",
+      "risk": "The densest option; at projector distance rows read small.",
+      "html": ".impeccable/mocks/decision/one-table.html"
+    },
+    {
+      "id": "queue-preview",
+      "kind": "dealt",
+      "label": "Queue and preview",
+      "lineage": "Bahn's large rounded cards over a birch ground",
+      "thesis": "A ranked queue of what needs a person on the left; the selected order opens beside it.",
+      "palette": ["#fffef7", "#12110e", "#f1eee6", "#fd6a31", "#29af77"],
+      "materials": ["rounded 24px panels", "car illustration", "route pins"],
+      "viewport": "Top bar, stage counts as pills, a queue column of orders needing a person, and a large preview panel with the car, route and open items.",
+      "risk": "Quiet orders are out of sight; reaching them means switching the queue filter.",
+      "html": ".impeccable/mocks/decision/queue-preview.html"
+    }
+  ],
+  "reroll": true,
+  "steer": true,
+  "buildPath": { "value": "code", "toggle": false }
+}

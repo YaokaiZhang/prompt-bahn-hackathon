@@ -1,0 +1,56 @@
+<!doctype html><html><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet"><style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1440px;height:900px;overflow:hidden}
+body{background:#fffef7;color:#12110e;font:400 15px/1.45 Figtree,system-ui,sans-serif;font-feature-settings:"tnum"}
+.top{height:72px;display:flex;align-items:center;gap:28px;padding:0 32px}
+.logo{display:flex;align-items:center;gap:8px;font:800 22px/1 Archivo,sans-serif;font-stretch:125%;letter-spacing:-.02em}
+.logo i{width:22px;height:22px;border-radius:6px;background:#12110e;display:inline-block}
+.nav{display:flex;gap:4px;background:#f1eee6;border-radius:999px;padding:4px}
+.nav a{height:40px;padding:0 18px;border-radius:999px;display:flex;align-items:center;font-weight:600;font-size:15px;color:#2a2721}
+.nav a.on{background:#fffef7;color:#12110e;box-shadow:0 1px 2px rgba(18,17,14,.08)}
+.clock{margin-left:auto;font-size:14px;color:#5a5346}
+.btn{height:44px;padding:0 20px;border-radius:999px;background:#12110e;color:#fffef7;font-weight:600;display:flex;align-items:center}
+.h1{font:900 56px/1 Archivo,sans-serif;font-stretch:125%;text-transform:uppercase;letter-spacing:-.01em}
+.muted{color:#726958}
+.pill{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 11px;border-radius:999px;font-size:13px;font-weight:600;background:#f1eee6;color:#2a2721;white-space:nowrap}
+.pill.red{background:#ffe8ec;color:#a13342}.pill.org{background:#ffece3;color:#a14623}.pill.teal{background:#dcf4f7;color:#205058}.pill.grn{background:#daf4e9;color:#1d6b4b}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+.o{background:#fd6a31}.r{background:#fd4a61}.t{background:#43afc1}.g{background:#29af77}.k{background:#12110e}.s{background:#b7afa0}
+
+.head{display:flex;align-items:flex-end;justify-content:space-between;padding:20px 32px 0}
+.sub{margin-top:10px;font-size:17px;color:#2a2721}.sub b{font-weight:700}
+.search{width:360px;height:48px;border-radius:999px;background:#f1eee6;display:flex;align-items:center;padding:0 20px;color:#726958}
+.rail{margin:28px 32px 0;position:relative;display:grid;grid-template-columns:repeat(7,1fr)}
+.rail:before{content:"";position:absolute;left:4%;right:4%;top:23px;height:4px;border-radius:2px;background:#e2ded4}
+.stop{position:relative;padding:0 8px;text-align:left}
+.pin{width:50px;height:50px;border-radius:50%;background:#fffef7;border:4px solid #e2ded4;display:flex;align-items:center;justify-content:center;font:800 18px/1 Archivo;font-stretch:112%}
+.stop.on .pin{background:#12110e;border-color:#12110e;color:#fffef7}
+.stop:first-child .pin{border-color:#fd6a31}.stop:nth-child(6) .pin{border-color:#fd4a61}
+.n{margin-top:12px;font:900 40px/1 Archivo;font-stretch:125%}
+.lab{margin-top:4px;font-weight:600;font-size:15px}.need{margin-top:2px;font-size:13px;color:#a14623;font-weight:600}
+.list{margin:26px 32px 0;background:#f1eee6;border-radius:24px;padding:8px 8px 0;height:470px;overflow:hidden}
+.lh{display:flex;align-items:center;gap:12px;padding:12px 16px 14px;font-weight:700;font-size:17px}
+.row{display:grid;grid-template-columns:240px 150px 1fr 200px 330px;gap:16px;align-items:center;background:#fffef7;border-radius:16px;padding:14px 18px;margin-bottom:6px}
+.car{font-weight:700;font-size:16px}.ref{font-size:13px;color:#726958}
+.route{display:flex;align-items:center;gap:8px;font-size:14px}.route span.l{flex:1;max-width:40px;height:2px;background:#ccc6ba}
+.why{font-size:14px;color:#a13342;font-weight:600}.why.o{color:#a14623;background:none}
+</style></head><body>
+<div class="top"><div class="logo"><i></i>bahn</div><div class="nav"><a class="on">Orders</a><a>Inbox</a><a>Customers</a><a>Drivers</a><a>Places</a></div><div class="clock">Snapshot · Tue 21 Oct, 09:00 UTC</div><div class="btn">Search orders</div></div>
+<div class="head"><div><div class="h1">Orders</div><div class="sub"><b>100</b> orders · <b>24</b> moving · <b>43</b> need a person</div></div><div class="search">Reference, car, plate, customer or city</div></div>
+<div class="rail">
+<div class="stop"><div class="pin">1</div><div class="n">12</div><div class="lab">New orders</div><div class="need">5 need a person</div></div>
+<div class="stop"><div class="pin">2</div><div class="n">12</div><div class="lab">Ready to post</div><div class="need">4 need a person</div></div>
+<div class="stop"><div class="pin">3</div><div class="n">11</div><div class="lab">Finding a driver</div><div class="need">2 need a person</div></div>
+<div class="stop on"><div class="pin">4</div><div class="n">18</div><div class="lab">Driver assigned</div><div class="need">16 need a person</div></div>
+<div class="stop"><div class="pin">5</div><div class="n">24</div><div class="lab">Moving</div><div class="need">8 need a person</div></div>
+<div class="stop"><div class="pin">6</div><div class="n">21</div><div class="lab">Delivered</div><div class="need">8 need a person</div></div>
+<div class="stop"><div class="pin">7</div><div class="n">2</div><div class="lab">Cancelled</div><div class="need muted">nothing open</div></div>
+</div>
+<div class="list"><div class="lh">Driver assigned <span class="pill org">16 need a person</span><span class="muted" style="font-weight:500;font-size:14px;margin-left:auto">Sorted by pickup slot</span></div>
+<div class="row"><div><div class="car">BMW M4</div><div class="ref">CD-420593 · Pellavaro Auto</div></div><div><span class="pill">Yara Sivellin</span></div><div class="route"><i class="dot o"></i>Helsinki<span class="l"></span><i class="dot r"></i>Turku</div><div><b>Tue 09:00–11:00</b><div class="ref">pickup slot · passed</div></div><div class="why">Incident: empty pickup · +4 more</div></div>
+<div class="row"><div><div class="car">Toyota Corolla</div><div class="ref">CD-420449 · Vandellora Biler</div></div><div><span class="pill">Carl Birkelane</span></div><div class="route"><i class="dot o"></i>Hamburg<span class="l"></span><i class="dot r"></i>Odense</div><div><b>Wed 10:00–12:00</b><div class="ref">pickup slot</div></div><div class="why o">Driver availability risk · +5 more</div></div>
+<div class="row"><div><div class="car">Ferrari 296 GTB</div><div class="ref">CD-420399 · Merovik Premiumfahrzeuge</div></div><div><span class="pill">Freya Marvellen</span></div><div class="route"><i class="dot o"></i>Leipzig<span class="l"></span><i class="dot r"></i>Cologne</div><div><b>Wed 11:00–13:00</b><div class="ref">pickup slot</div></div><div class="why o">Driver start check · +5 more</div></div>
+<div class="row"><div><div class="car">Audi Q8 e-tron</div><div class="ref">CD-420154 · Auvelloria Motor Collection</div></div><div><span class="pill">Jonas Haverforde</span></div><div class="route"><i class="dot o"></i>Marseille<span class="l"></span><i class="dot r"></i>Lahti</div><div><b>Wed 10:00–12:00</b><div class="ref">pickup slot</div></div><div class="why o">Approved proposal not executed · +3 more</div></div>
+<div class="row"><div><div class="car">Porsche 911 Carrera</div><div class="ref">CD-420992 · Vellendor Fahrzeughandel</div></div><div><span class="pill">Cole Mervalen</span></div><div class="route"><i class="dot o"></i>Frankfurt<span class="l"></span><i class="dot r"></i>Munich</div><div><b>Wed 09:00–11:00</b><div class="ref">pickup slot</div></div><div class="why o">Open thread: driver travel · +1 more</div></div>
+<div class="row"><div><div class="car">Mercedes-Benz S-Class</div><div class="ref">CD-420656 · Orvellane Automobiles</div></div><div><span class="pill">Anika Fjellaro</span></div><div class="route"><i class="dot o"></i>Marseille<span class="l"></span><i class="dot r"></i>Lyon</div><div><b>Thu 09:00–11:00</b><div class="ref">pickup slot</div></div><div class="why o">Open thread: schedule and ETA</div></div>
+</div></body></html>

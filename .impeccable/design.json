@@ -1,0 +1,671 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-24T15:43:48+00:00",
+  "title": "Design System: Control Room",
+  "extensions": {
+    "colorMeta": {
+      "birch": {
+        "role": "neutral",
+        "displayName": "Birch",
+        "tonalRamp": [
+          "#12110e",
+          "#2a2721",
+          "#5a5346",
+          "#8a7f6b",
+          "#b7afa0",
+          "#e2ded4",
+          "#f1eee6",
+          "#fffef7"
+        ]
+      },
+      "sand-50": {
+        "role": "neutral",
+        "displayName": "Sand 50",
+        "tonalRamp": [
+          "#12110e",
+          "#2a2721",
+          "#5a5346",
+          "#8a7f6b",
+          "#b7afa0",
+          "#e2ded4",
+          "#f1eee6",
+          "#fffef7"
+        ]
+      },
+      "sand-100": {
+        "role": "neutral",
+        "displayName": "Sand 100",
+        "tonalRamp": [
+          "#12110e",
+          "#2a2721",
+          "#5a5346",
+          "#8a7f6b",
+          "#b7afa0",
+          "#e2ded4",
+          "#f1eee6",
+          "#fffef7"
+        ]
+      },
+      "sand-200": {
+        "role": "neutral",
+        "displayName": "Sand 200",
+        "tonalRamp": [
+          "#12110e",
+          "#2a2721",
+          "#5a5346",
+          "#8a7f6b",
+          "#b7afa0",
+          "#e2ded4",
+          "#f1eee6",
+          "#fffef7"
+        ]
+      },
+      "sand-300": {
+        "role": "neutral",
+        "displayName": "Sand 300",
+        "tonalRamp": [
+          "#12110e",
+          "#2a2721",
+          "#5a5346",
+          "#8a7f6b",
+          "#b7afa0",
+          "#e2ded4",
+          "#f1eee6",
+          "#fffef7"
+        ]
+      },
+      "grey-500": {
+        "role": "neutral",
+        "displayName": "Stone",
+        "tonalRamp": [
+          "#12110e",
+          "#2a2721",
+          "#5a5346",
+          "#8a7f6b",
+          "#b7afa0",
+          "#e2ded4",
+          "#f1eee6",
+          "#fffef7"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Umber",
+        "tonalRamp": [
+          "#12110e",
+          "#2a2721",
+          "#5a5346",
+          "#8a7f6b",
+          "#b7afa0",
+          "#e2ded4",
+          "#f1eee6",
+          "#fffef7"
+        ]
+      },
+      "brown": {
+        "role": "neutral",
+        "displayName": "Brown",
+        "tonalRamp": [
+          "#12110e",
+          "#2a2721",
+          "#5a5346",
+          "#8a7f6b",
+          "#b7afa0",
+          "#e2ded4",
+          "#f1eee6",
+          "#fffef7"
+        ]
+      },
+      "body": {
+        "role": "neutral",
+        "displayName": "Body",
+        "tonalRamp": [
+          "#12110e",
+          "#2a2721",
+          "#5a5346",
+          "#8a7f6b",
+          "#b7afa0",
+          "#e2ded4",
+          "#f1eee6",
+          "#fffef7"
+        ]
+      },
+      "ink": {
+        "role": "primary",
+        "displayName": "Asphalt Ink",
+        "tonalRamp": [
+          "#12110e",
+          "#2a2721",
+          "#5a5346",
+          "#8a7f6b",
+          "#b7afa0",
+          "#e2ded4",
+          "#f1eee6",
+          "#fffef7"
+        ]
+      },
+      "asphalt-panel": {
+        "role": "primary",
+        "displayName": "Asphalt Panel",
+        "canonical": "rgba(30, 28, 23, 0.96)",
+        "tonalRamp": [
+          "#12110e",
+          "#2a2721",
+          "#5a5346",
+          "#8a7f6b",
+          "#b7afa0",
+          "#e2ded4",
+          "#f1eee6",
+          "#fffef7"
+        ]
+      },
+      "orange": {
+        "role": "secondary",
+        "displayName": "Pickup Orange",
+        "canonical": "#fd6a31",
+        "oklch": "oklch(70.0% 0.192 40)",
+        "tonalRamp": [
+          "#210000",
+          "#431000",
+          "#702200",
+          "#9f3502",
+          "#d04d13",
+          "#fd6a31",
+          "#fcae94",
+          "#ffe9e2"
+        ],
+        "shades": {
+          "ink": "#a14623",
+          "wash": "#ffece3",
+          "onDark": "#ffa27e"
+        }
+      },
+      "red": {
+        "role": "secondary",
+        "displayName": "Delivery Red",
+        "canonical": "#fd4a61",
+        "oklch": "oklch(67.0% 0.214 18)",
+        "tonalRamp": [
+          "#220002",
+          "#490210",
+          "#790921",
+          "#ac1534",
+          "#e0294a",
+          "#fa6672",
+          "#ffa9ab",
+          "#ffe8e8"
+        ],
+        "shades": {
+          "ink": "#a13342",
+          "wash": "#ffe8ec",
+          "onDark": "#ff8e9d"
+        }
+      },
+      "teal": {
+        "role": "tertiary",
+        "displayName": "Live Teal",
+        "canonical": "#43afc1",
+        "oklch": "oklch(70.0% 0.100 210)",
+        "tonalRamp": [
+          "#000f13",
+          "#002a31",
+          "#084852",
+          "#136976",
+          "#0d8d9e",
+          "#43afc1",
+          "#6dd6e8",
+          "#cef7ff"
+        ],
+        "shades": {
+          "ink": "#205058",
+          "wash": "#dcf4f7",
+          "onDark": "#85cdd9"
+        }
+      },
+      "green": {
+        "role": "tertiary",
+        "displayName": "Delivered Green",
+        "canonical": "#29af77",
+        "oklch": "oklch(67.1% 0.140 160)",
+        "tonalRamp": [
+          "#001005",
+          "#002d19",
+          "#004d30",
+          "#007048",
+          "#149462",
+          "#37b880",
+          "#65e0a5",
+          "#c5fede"
+        ],
+        "shades": {
+          "ink": "#1b6c4a",
+          "wash": "#daf4e9",
+          "onDark": "#76cda9"
+        }
+      },
+      "orange-ink": {
+        "role": "secondary",
+        "displayName": "Rust",
+        "tonalRamp": [
+          "#210000",
+          "#431000",
+          "#702200",
+          "#9f3502",
+          "#d04d13",
+          "#fd6a31",
+          "#fcae94",
+          "#ffe9e2"
+        ]
+      },
+      "orange-bg": {
+        "role": "secondary",
+        "displayName": "Peach Wash",
+        "tonalRamp": [
+          "#210000",
+          "#431000",
+          "#702200",
+          "#9f3502",
+          "#d04d13",
+          "#fd6a31",
+          "#fcae94",
+          "#ffe9e2"
+        ]
+      },
+      "orange-on-dark": {
+        "role": "secondary",
+        "displayName": "Pickup Orange on-dark tint",
+        "tonalRamp": [
+          "#210000",
+          "#431000",
+          "#702200",
+          "#9f3502",
+          "#d04d13",
+          "#fd6a31",
+          "#fcae94",
+          "#ffe9e2"
+        ]
+      },
+      "red-ink": {
+        "role": "secondary",
+        "displayName": "Brick",
+        "tonalRamp": [
+          "#220002",
+          "#490210",
+          "#790921",
+          "#ac1534",
+          "#e0294a",
+          "#fa6672",
+          "#ffa9ab",
+          "#ffe8e8"
+        ]
+      },
+      "red-bg": {
+        "role": "secondary",
+        "displayName": "Blush Wash",
+        "tonalRamp": [
+          "#220002",
+          "#490210",
+          "#790921",
+          "#ac1534",
+          "#e0294a",
+          "#fa6672",
+          "#ffa9ab",
+          "#ffe8e8"
+        ]
+      },
+      "red-on-dark": {
+        "role": "secondary",
+        "displayName": "Delivery Red on-dark tint",
+        "tonalRamp": [
+          "#220002",
+          "#490210",
+          "#790921",
+          "#ac1534",
+          "#e0294a",
+          "#fa6672",
+          "#ffa9ab",
+          "#ffe8e8"
+        ]
+      },
+      "teal-ink": {
+        "role": "tertiary",
+        "displayName": "Deep Teal",
+        "tonalRamp": [
+          "#000f13",
+          "#002a31",
+          "#084852",
+          "#136976",
+          "#0d8d9e",
+          "#43afc1",
+          "#6dd6e8",
+          "#cef7ff"
+        ]
+      },
+      "teal-bg": {
+        "role": "tertiary",
+        "displayName": "Glacier Wash",
+        "tonalRamp": [
+          "#000f13",
+          "#002a31",
+          "#084852",
+          "#136976",
+          "#0d8d9e",
+          "#43afc1",
+          "#6dd6e8",
+          "#cef7ff"
+        ]
+      },
+      "teal-on-dark": {
+        "role": "tertiary",
+        "displayName": "Live Teal on-dark tint",
+        "tonalRamp": [
+          "#000f13",
+          "#002a31",
+          "#084852",
+          "#136976",
+          "#0d8d9e",
+          "#43afc1",
+          "#6dd6e8",
+          "#cef7ff"
+        ]
+      },
+      "green-ink": {
+        "role": "tertiary",
+        "displayName": "Pine",
+        "tonalRamp": [
+          "#001005",
+          "#002d19",
+          "#004d30",
+          "#007048",
+          "#149462",
+          "#37b880",
+          "#65e0a5",
+          "#c5fede"
+        ]
+      },
+      "green-bg": {
+        "role": "tertiary",
+        "displayName": "Mint Wash",
+        "tonalRamp": [
+          "#001005",
+          "#002d19",
+          "#004d30",
+          "#007048",
+          "#149462",
+          "#37b880",
+          "#65e0a5",
+          "#c5fede"
+        ]
+      },
+      "green-on-dark": {
+        "role": "tertiary",
+        "displayName": "Delivered Green on-dark tint",
+        "tonalRamp": [
+          "#001005",
+          "#002d19",
+          "#004d30",
+          "#007048",
+          "#149462",
+          "#37b880",
+          "#65e0a5",
+          "#c5fede"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display-hero": {
+        "displayName": "Display Hero",
+        "purpose": "The car name on the order page."
+      },
+      "display": {
+        "displayName": "Display",
+        "purpose": "Page titles; the preview car name uses the same cut at clamp(34px, 3.4vw, 48px)."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "The order's story headline and the inbox message subject."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Section heads."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Default working text, tabular figures."
+      },
+      "body-strong": {
+        "displayName": "Body Strong",
+        "purpose": "Car names in queue cards, stop and step names."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Pills, filters, stop roles, small field labels."
+      },
+      "button": {
+        "displayName": "Button",
+        "purpose": "Button labels."
+      }
+    },
+    "shadows": [
+      {
+        "name": "current-tab-lift",
+        "value": "0 1px 3px rgba(18, 17, 14, 0.1)",
+        "purpose": "The current nav item raised out of its sand track."
+      },
+      {
+        "name": "sticky-action-edge",
+        "value": "0 -10px 16px -12px rgba(18, 17, 14, 0.18)",
+        "purpose": "Top edge of the preview's sticky action bar, showing content scrolls beneath."
+      },
+      {
+        "name": "inset-hairline",
+        "value": "inset 0 0 0 1px #e2ded4",
+        "purpose": "Drawn edge for open folded records, operator messages, keycaps; #ccc6ba on field hover."
+      },
+      {
+        "name": "focus-inset",
+        "value": "inset 0 0 0 2px #12110e",
+        "purpose": "Field focus ring."
+      },
+      {
+        "name": "pin-halo",
+        "value": "0 0 0 3px #fffef7, 0 0 0 4px currentColor",
+        "purpose": "Route pins: birch gap, ring in the pin colour."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease",
+        "value": "cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "House easing for every transition and animation."
+      },
+      {
+        "name": "state-change",
+        "value": "0.18s",
+        "purpose": "Background and colour transitions on controls; 0.2s on queue cards."
+      },
+      {
+        "name": "preview-rise",
+        "value": "0.28s, opacity 0.4 to 1, translateY 6px to 0",
+        "purpose": "Preview content entering on each selection."
+      },
+      {
+        "name": "route-fill",
+        "value": "0.7s width 0 to progress",
+        "purpose": "Route progress fill, once per render."
+      },
+      {
+        "name": "skeleton-shimmer",
+        "value": "1.4s linear infinite",
+        "purpose": "Loading queue cards."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "animation and transition none",
+        "purpose": "Honoured globally under prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact-height",
+        "value": "max-height: 760px and min-width: 901px"
+      },
+      {
+        "name": "narrow-desktop",
+        "value": "1180px"
+      },
+      {
+        "name": "mobile",
+        "value": "900px"
+      }
+    ],
+    "focus": {
+      "value": "3px solid #8a7f6b, offset 2px",
+      "purpose": "Global focus-visible ring."
+    },
+    "fontLoading": {
+      "display": "Archivo via next/font with the wdth axis, rendered with font-stretch 125%",
+      "body": "Figtree via next/font",
+      "source": "starter/app/layout.tsx"
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Asphalt pill for the one main action, such as Open order.",
+      "html": "<button class=\"ds-btn-primary\">Open order</button>",
+      "css": ":root{--birch:#fffef7;--sand-50:#f1eee6;--sand-100:#e2ded4;--sand-200:#ccc6ba;--grey-500:#8a7f6b;--muted:#685f4f;--brown:#5a5346;--body:#2a2721;--ink:#12110e;--ease:cubic-bezier(0.22,1,0.36,1)}.ds-btn-primary{font-family:Figtree,'Duplet Open',system-ui,sans-serif;font-feature-settings:'tnum';display:inline-flex;align-items:center;gap:8px;height:48px;padding:0 22px;border:0;border-radius:999px;background:var(--ink,#12110e);color:var(--birch,#fffef7);font-size:16px;font-weight:600;cursor:pointer;transition:background-color .18s cubic-bezier(0.22,1,0.36,1)}.ds-btn-primary:hover{background:var(--body,#2a2721)}.ds-btn-primary:focus-visible{outline:3px solid var(--grey-500,#8a7f6b);outline-offset:2px}"
+    },
+    {
+      "name": "Tertiary Button",
+      "kind": "button",
+      "refersTo": "button-tertiary",
+      "description": "Sand pill for secondary actions.",
+      "html": "<button class=\"ds-btn-tertiary\">Next order</button>",
+      "css": ":root{--birch:#fffef7;--sand-50:#f1eee6;--sand-100:#e2ded4;--sand-200:#ccc6ba;--grey-500:#8a7f6b;--muted:#685f4f;--brown:#5a5346;--body:#2a2721;--ink:#12110e;--ease:cubic-bezier(0.22,1,0.36,1)}.ds-btn-tertiary{font-family:Figtree,'Duplet Open',system-ui,sans-serif;font-feature-settings:'tnum';display:inline-flex;align-items:center;height:48px;padding:0 22px;border:0;border-radius:999px;background:var(--sand-100,#e2ded4);color:var(--ink,#12110e);font-size:16px;font-weight:600;cursor:pointer;transition:background-color .18s cubic-bezier(0.22,1,0.36,1)}.ds-btn-tertiary:hover{background:var(--sand-200,#ccc6ba)}.ds-btn-tertiary:focus-visible{outline:3px solid var(--grey-500,#8a7f6b);outline-offset:2px}.ds-btn-tertiary:disabled{background:var(--sand-50,#f1eee6);color:var(--grey-500,#8a7f6b);cursor:default}"
+    },
+    {
+      "name": "Search Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Pill search field on sand that turns birch with an ink ring on focus.",
+      "html": "<label class=\"ds-field\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" aria-hidden=\"true\"><circle cx=\"7\" cy=\"7\" r=\"4.5\"/><path d=\"m10.5 10.5 3 3\"/></svg><input placeholder=\"Search orders, cars, customers\"></label>",
+      "css": ":root{--birch:#fffef7;--sand-50:#f1eee6;--sand-100:#e2ded4;--sand-200:#ccc6ba;--grey-500:#8a7f6b;--muted:#685f4f;--brown:#5a5346;--body:#2a2721;--ink:#12110e;--ease:cubic-bezier(0.22,1,0.36,1)}.ds-field{font-family:Figtree,'Duplet Open',system-ui,sans-serif;font-feature-settings:'tnum';display:flex;align-items:center;gap:10px;height:48px;padding:0 18px;border-radius:999px;background:var(--sand-50,#f1eee6);color:var(--muted,#685f4f);transition:background-color .18s cubic-bezier(0.22,1,0.36,1),box-shadow .18s cubic-bezier(0.22,1,0.36,1)}.ds-field:hover{background:var(--birch,#fffef7);box-shadow:inset 0 0 0 1px var(--sand-200,#ccc6ba)}.ds-field:focus-within{background:var(--birch,#fffef7);box-shadow:inset 0 0 0 2px var(--ink,#12110e);color:var(--ink,#12110e)}.ds-field input{width:100%;border:0;outline:0;background:transparent;font:inherit;font-size:15px;color:var(--ink,#12110e)}.ds-field input::placeholder{color:var(--muted,#685f4f)}"
+    },
+    {
+      "name": "Pill Navigation",
+      "kind": "nav",
+      "refersTo": "nav-track",
+      "description": "Pill links in a sand track; the current page is a lifted birch pill.",
+      "html": "<nav class=\"ds-nav\"><a href=\"#\" aria-current=\"page\">Orders</a><a href=\"#\">Inbox</a><a href=\"#\">Customers</a><a href=\"#\">Drivers</a><a href=\"#\">Places</a></nav>",
+      "css": ":root{--birch:#fffef7;--sand-50:#f1eee6;--sand-100:#e2ded4;--sand-200:#ccc6ba;--grey-500:#8a7f6b;--muted:#685f4f;--brown:#5a5346;--body:#2a2721;--ink:#12110e;--ease:cubic-bezier(0.22,1,0.36,1)}.ds-nav{font-family:Figtree,'Duplet Open',system-ui,sans-serif;font-feature-settings:'tnum';display:inline-flex;gap:2px;padding:4px;border-radius:999px;background:var(--sand-50,#f1eee6)}.ds-nav a{display:flex;align-items:center;height:40px;padding:0 18px;border-radius:999px;font-size:15px;font-weight:600;color:var(--brown,#5a5346);text-decoration:none;transition:background-color .18s cubic-bezier(0.22,1,0.36,1),color .18s cubic-bezier(0.22,1,0.36,1)}.ds-nav a:hover{background:var(--sand-100,#e2ded4);color:var(--ink,#12110e)}.ds-nav a:focus-visible{outline:3px solid var(--grey-500,#8a7f6b);outline-offset:2px}.ds-nav a[aria-current=page]{background:var(--birch,#fffef7);color:var(--ink,#12110e);box-shadow:0 1px 3px rgba(18,17,14,.1)}"
+    },
+    {
+      "name": "Stage Filters",
+      "kind": "chip",
+      "refersTo": "filter",
+      "description": "Stage filters with counts; pressed inverts to asphalt, Needs action rests in red wash.",
+      "html": "<div class=\"ds-filters\"><button class=\"ds-filter\" aria-pressed=\"true\">Needs action <em>7</em></button><button class=\"ds-filter ds-need\" aria-pressed=\"false\">Needs action <em>7</em></button><button class=\"ds-filter\" aria-pressed=\"false\"><i class=\"ds-dot\" style=\"background:#43afc1\"></i>Moving <em>12</em></button><button class=\"ds-filter\" aria-pressed=\"false\"><i class=\"ds-dot\" style=\"background:#29af77\"></i>Delivered <em>31</em></button></div>",
+      "css": ":root{--birch:#fffef7;--sand-50:#f1eee6;--sand-100:#e2ded4;--sand-200:#ccc6ba;--grey-500:#8a7f6b;--muted:#685f4f;--brown:#5a5346;--body:#2a2721;--ink:#12110e;--ease:cubic-bezier(0.22,1,0.36,1)}.ds-filters{font-family:Figtree,'Duplet Open',system-ui,sans-serif;font-feature-settings:'tnum';display:flex;flex-wrap:wrap;gap:4px}.ds-filter{font:inherit;display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px;border:0;border-radius:999px;background:var(--sand-50,#f1eee6);font-size:14px;font-weight:600;color:var(--brown,#5a5346);cursor:pointer;transition:background-color .18s cubic-bezier(0.22,1,0.36,1),color .18s cubic-bezier(0.22,1,0.36,1)}.ds-filter:hover{background:var(--sand-100,#e2ded4);color:var(--ink,#12110e)}.ds-filter:focus-visible{outline:3px solid var(--grey-500,#8a7f6b);outline-offset:2px}.ds-filter em{font-style:normal;font-weight:500;color:var(--muted,#685f4f)}.ds-filter[aria-pressed=true]{background:var(--ink,#12110e);color:var(--birch,#fffef7)}.ds-filter[aria-pressed=true] em{color:var(--sand-200,#ccc6ba)}.ds-filter.ds-need[aria-pressed=false],.ds-filter.ds-need[aria-pressed=false] em{background:#ffe8ec;color:#a13342}.ds-dot{width:8px;height:8px;border-radius:50%}"
+    },
+    {
+      "name": "Status Pills",
+      "kind": "chip",
+      "refersTo": "pill",
+      "description": "Small pills; tones use the signal wash with the signal ink.",
+      "html": "<div class=\"ds-pills\"><span class=\"ds-pill\"><i class=\"ds-dot\" style=\"background:#43afc1\"></i>Moving</span><span class=\"ds-pill ds-danger\">Delivery at risk</span><span class=\"ds-pill ds-warn\">Open claim</span><span class=\"ds-pill ds-ok\">Contact confirmed</span></div>",
+      "css": ":root{--birch:#fffef7;--sand-50:#f1eee6;--sand-100:#e2ded4;--sand-200:#ccc6ba;--grey-500:#8a7f6b;--muted:#685f4f;--brown:#5a5346;--body:#2a2721;--ink:#12110e;--ease:cubic-bezier(0.22,1,0.36,1)}.ds-pills{font-family:Figtree,'Duplet Open',system-ui,sans-serif;font-feature-settings:'tnum';display:flex;flex-wrap:wrap;gap:8px}.ds-pill{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 11px;border-radius:999px;font-size:13px;font-weight:600;line-height:1;background:var(--sand-50,#f1eee6);color:var(--body,#2a2721)}.ds-danger{background:#ffe8ec;color:#a13342}.ds-warn{background:#ffece3;color:#a14623}.ds-ok{background:#daf4e9;color:#1b6c4a}.ds-dot{width:8px;height:8px;border-radius:50%}"
+    },
+    {
+      "name": "Queue Card",
+      "kind": "card",
+      "refersTo": "queue-card",
+      "description": "One order in the queue; the selected card inverts to asphalt.",
+      "html": "<div class=\"ds-queue\"><a class=\"ds-qcard\" href=\"#\" aria-current=\"true\"><span class=\"ds-top\"><b>Volkswagen ID.4</b><span class=\"ds-stage\"><i style=\"background:#fffef7\"></i>Booked</span></span><span class=\"ds-meta\">BX-24117 · Nordwind Leasing</span><span class=\"ds-meta\">Hamburg → Lyon · pickup Tue 08:00–10:00</span><span class=\"ds-why ds-why-danger\">Driver not confirmed</span></a><a class=\"ds-qcard\" href=\"#\"><span class=\"ds-top\"><b>Škoda Enyaq</b><span class=\"ds-stage\"><i style=\"background:#43afc1\"></i>Moving</span></span><span class=\"ds-meta\">BX-24102 · Fahrwerk GmbH</span><span class=\"ds-meta\">Munich → Milan · delivery Wed 14:00</span><span class=\"ds-why ds-why-warn\">ETA after the delivery window</span></a></div>",
+      "css": ":root{--birch:#fffef7;--sand-50:#f1eee6;--sand-100:#e2ded4;--sand-200:#ccc6ba;--grey-500:#8a7f6b;--muted:#685f4f;--brown:#5a5346;--body:#2a2721;--ink:#12110e;--ease:cubic-bezier(0.22,1,0.36,1)}.ds-queue{font-family:Figtree,'Duplet Open',system-ui,sans-serif;font-feature-settings:'tnum';display:grid;gap:8px;max-width:440px}.ds-qcard{display:grid;gap:3px;padding:14px 18px 15px;border-radius:18px;background:var(--sand-50,#f1eee6);color:var(--ink,#12110e);text-decoration:none;transition:background-color .2s cubic-bezier(0.22,1,0.36,1),color .2s cubic-bezier(0.22,1,0.36,1)}.ds-qcard:hover{background:var(--sand-100,#e2ded4)}.ds-qcard:focus-visible{outline:3px solid var(--grey-500,#8a7f6b);outline-offset:2px}.ds-top{display:flex;align-items:baseline;gap:10px}.ds-top b{flex:1;font-size:16px;font-weight:700}.ds-stage{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:600;color:var(--muted,#685f4f)}.ds-stage i{width:8px;height:8px;border-radius:50%;background:#12110e}.ds-meta{font-size:14px;color:var(--muted,#685f4f)}.ds-why{margin-top:5px;font-size:14px;font-weight:600}.ds-why-danger{color:#a13342}.ds-why-warn{color:#a14623}.ds-qcard[aria-current=true]{background:var(--ink,#12110e);color:var(--birch,#fffef7)}.ds-qcard[aria-current=true] .ds-meta,.ds-qcard[aria-current=true] .ds-stage{color:var(--sand-200,#ccc6ba)}.ds-qcard[aria-current=true] .ds-why-danger{color:#ff8e9d}.ds-qcard[aria-current=true] .ds-why-warn{color:#ffa27e}"
+    },
+    {
+      "name": "Route Summary",
+      "kind": "custom",
+      "refersTo": "inset-block",
+      "description": "The route in one birch pill: orange pickup pin, teal progress, red delivery pin.",
+      "html": "<div class=\"ds-route\"><span class=\"ds-end\"><i class=\"ds-pin\" style=\"background:#fd6a31;color:#fd6a31\"></i>Hamburg</span><span class=\"ds-line\" style=\"--progress:58%\"></span><span class=\"ds-end\"><i class=\"ds-pin\" style=\"background:#fd4a61;color:#fd4a61\"></i>Lyon</span><span class=\"ds-km\">1,104 km</span></div>",
+      "css": ":root{--birch:#fffef7;--sand-50:#f1eee6;--sand-100:#e2ded4;--sand-200:#ccc6ba;--grey-500:#8a7f6b;--muted:#685f4f;--brown:#5a5346;--body:#2a2721;--ink:#12110e;--ease:cubic-bezier(0.22,1,0.36,1)}.ds-route{font-family:Figtree,'Duplet Open',system-ui,sans-serif;font-feature-settings:'tnum';display:flex;align-items:center;gap:12px;padding:12px 18px;border-radius:999px;background:var(--birch,#fffef7);font-size:15px;font-weight:600;color:var(--ink,#12110e);box-shadow:inset 0 0 0 1px var(--sand-100,#e2ded4)}.ds-end{display:inline-flex;align-items:center;gap:10px;white-space:nowrap}.ds-pin{width:12px;height:12px;border-radius:50%;box-shadow:0 0 0 3px #fffef7,0 0 0 4px currentColor}.ds-line{position:relative;flex:1;min-width:40px;height:4px;border-radius:2px;background:var(--sand-200,#ccc6ba)}.ds-line::after{content:'';position:absolute;inset:0 auto 0 0;width:var(--progress,0%);border-radius:2px;background:#43afc1;animation:ds-fill .7s cubic-bezier(0.22,1,0.36,1) both}@keyframes ds-fill{from{width:0}}.ds-km{font-weight:500;color:var(--muted,#685f4f);white-space:nowrap}@media (prefers-reduced-motion:reduce){.ds-line::after{animation:none}}"
+    },
+    {
+      "name": "Order Hero Panel",
+      "kind": "card",
+      "refersTo": "hero-card",
+      "description": "The dark Asphalt Panel with the car name in wide caps, overlapping the foot of the car image.",
+      "html": "<div class=\"ds-hero\"><div class=\"ds-hero-card\"><div class=\"ds-hero-pills\"><span>Booked</span><span class=\"ds-on-danger\">Delivery at risk</span></div><h1>Volkswagen ID.4</h1><p>BX-24117 · Nordwind Leasing · <b>1,104 km</b></p></div></div>",
+      "css": ":root{--birch:#fffef7;--sand-50:#f1eee6;--sand-100:#e2ded4;--sand-200:#ccc6ba;--grey-500:#8a7f6b;--muted:#685f4f;--brown:#5a5346;--body:#2a2721;--ink:#12110e;--ease:cubic-bezier(0.22,1,0.36,1)}.ds-hero{font-family:Figtree,'Duplet Open',system-ui,sans-serif;padding-top:60px;border-radius:24px;background:#e2ded4}.ds-hero-card{margin:0 20px;padding:28px 32px 30px;border-radius:24px;background:rgba(30,28,23,.96);color:#fffef7}.ds-hero-pills{display:flex;gap:8px}.ds-hero-pills span{display:inline-flex;align-items:center;height:26px;padding:0 11px;border-radius:999px;font-size:13px;font-weight:600;background:rgba(255,254,247,.12)}.ds-hero-pills .ds-on-danger{background:#ff8e9d;color:#12110e}.ds-hero-card h1{margin:16px 0 0;font-family:Archivo,'Owners Wide',system-ui,sans-serif;font-stretch:125%;font-variation-settings:'wdth' 125;font-weight:900;text-transform:uppercase;letter-spacing:-.01em;line-height:.98;font-size:clamp(40px,5vw,64px)}.ds-hero-card p{margin:16px 0 0;font-size:14.5px;color:#ccc6ba}.ds-hero-card b{font-weight:600;color:#fffef7}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Bahn Yard Office",
+    "overview": "The Control Room lives inside Bahn's own visual world: the bahn.com vehicle transport page is the binding reference, so the system is warm birch paper, asphalt ink and sand-toned panels, with every control shaped as a pill. It reads as a calm operations desk, not a dashboard. Surfaces are flat tonal layers of sand on birch; there are almost no lines and almost no shadows, and hierarchy comes from tone, size and weight.\n\nType carries the brand. One wide, heavy, uppercase display cut names the page and the car, and nothing else. Everything an operator reads to decide (reasons, dates, routes, counts) is set in a friendly humanist sans with tabular figures, at sizes that stay legible on a daylight laptop and on a projector. Colour is semantic and rare: orange and red belong to the route's two ends and to risk; teal means live work; green means delivered. The ground stays quiet so those signals can be found at a glance.\n\nDensity is medium. Lists are stacks of rounded sand cards separated by small gaps, the selected item inverts to asphalt, and detail opens in a large sand panel beside the list, not in a modal.\n\nThe tokens are defined as custom properties in `starter/app/globals.css`, the fonts load through next/font in `starter/app/layout.tsx`, and the signature pieces live in `starter/app/components/shell.tsx`, `starter/app/components/card.tsx`, `starter/app/components/route-line.tsx` and `starter/app/components/record/header.tsx`.",
+    "keyCharacteristics": [
+      "Birch ground, sand panels, asphalt ink; depth by tone, not shadow.",
+      "Pill geometry for every control, 24px radius for large panels.",
+      "Wide 900-weight uppercase display for page titles and car names only.",
+      "Figtree with tabular figures for all working text.",
+      "Orange pickup, red delivery and critical, teal live, green delivered.",
+      "Selection is inversion to asphalt."
+    ],
+    "rules": [
+      {
+        "name": "The Signals Mean Something Rule",
+        "body": "Orange, red, teal and green appear only where they encode pickup, delivery or critical, risk, live work, or done. They are never decoration, and a hue never swaps roles.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ink Is The Accent Rule",
+        "body": "The action colour is asphalt, not a brand hue. Primary buttons, the pressed filter and the selected card are all ink on birch inverted.",
+        "section": "colors"
+      },
+      {
+        "name": "The Wash-For-Fill Rule",
+        "body": "Signal hues fill a surface only through their wash (`*-bg`) with their ink shade as text; the saturated 500 shade is reserved for dots, pins and progress.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Names Rule",
+        "body": "The wide display cut is used for exactly two things: the page title and the car's name. Section heads, numbers, buttons and labels are Figtree.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "Tabular figures are on at the root; times, counts and distances must align in every list.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tone Not Shadow Rule",
+        "body": "A surface is separated from its parent by a step in the sand ramp. Do not add drop shadows to cards or panels.",
+        "section": "elevation"
+      },
+      {
+        "name": "The One Dark Panel Rule",
+        "body": "Asphalt Panel is the only dark surface besides the selected-card inversion; it appears once per order page, overlapping the foot of the 3:1 car image by 96px (40px on small screens).",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** build every control as a 999px pill: asphalt primary, Sand 100 tertiary, Sand 50 fields and tracks.",
+      "**Do** separate surfaces by stepping the sand ramp (birch, Sand 50, Sand 100) rather than with borders or shadows.",
+      "**Do** mark selection by inverting to asphalt with birch text and the on-dark signal tints.",
+      "**Do** keep orange for pickup and risk, red for delivery and critical, teal for live work, green for delivered.",
+      "**Do** set times, counts and distances in Figtree with tabular figures.",
+      "**Do** use the 3px Stone focus ring on every interactive element and honour reduced motion by removing animation."
+    ],
+    "donts": [
+      "**Don't** use the wide Archivo display for anything but page titles and car names.",
+      "**Don't** fill a surface with a saturated signal hue; use its wash with its ink shade as text.",
+      "**Don't** drop-shadow cards or panels; shadows are limited to the current-tab lift, the sticky action edge, inset hairlines and pin halos.",
+      "**Don't** introduce a second dark surface beyond the selected-card inversion and the order page's Asphalt Panel.",
+      "**Don't** use square or lightly rounded controls; buttons, fields, filters and pills are always full pills.",
+      "**Don't** present the car illustration as a photo of the car; it always carries its \"Model illustration\" note."
+    ]
+  }
+}

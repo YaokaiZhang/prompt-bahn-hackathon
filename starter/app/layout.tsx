@@ -1,26 +1,21 @@
 import type { Metadata, Viewport } from "next"
+import { Archivo, Figtree } from "next/font/google"
 import "./globals.css"
 
+// Open stand-ins for Bahn's licensed faces, self-hosted by Next: Archivo with its width axis for Owners Wide, Figtree for Duplet Open.
+const archivo = Archivo({ subsets: ["latin", "latin-ext"], axes: ["wdth"], variable: "--font-archivo", display: "swap" })
+const figtree = Figtree({ subsets: ["latin", "latin-ext"], variable: "--font-figtree", display: "swap" })
+
 export const metadata: Metadata = {
-  title: "Car Delivery Control Room starter",
-  description: "A fictional operations dataset and a simple read-only starting point.",
+  title: "Control Room · Bahn",
+  description: "Where Bahn operators and agents work together to get every car delivered. Fictional data.",
 }
 
 export const viewport: Viewport = { themeColor: "#fffef7", width: "device-width", initialScale: 1 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <head>
-        {/* Brand fallback faces: Unbounded for titles, Poppins for reading, Reddit Mono for identifiers.
-            Loaded from Google Fonts; without a network the stack falls back to Arial. */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=Reddit+Mono:wght@400;500&family=Unbounded:wght@500;600;700&display=swap"
-        />
-      </head>
+    <html lang="en" className={`${archivo.variable} ${figtree.variable}`}>
       <body>{children}</body>
     </html>
   )

@@ -2,99 +2,21 @@
 
 import Link from "next/link"
 import { useState } from "react"
-import type { AttentionItem, JourneyGroup, JourneyLeg, JourneyStep, ProposalView, RecordView, ThreadView } from "@/lib/present/types"
+import type { JourneyLeg, JourneyStep, ProposalView, RecordView, ThreadView } from "@/lib/present/types"
 import { fmtClock, fmtDateTime, fmtDay, relativeTo } from "@/lib/present/time"
 import { Icon } from "../icons"
-import { ActorName, Chip, Empty, OrderLink, OrderLinks, Range, SectionHead, When } from "../ui"
+import { Route } from "../route-line"
+import { ActorName, Empty, OrderLink, OrderLinks, Pill, Range, SectionHead, When } from "../ui"
 import { OrderFiles } from "./files"
 
-const ATTENTION_ICON: Record<AttentionItem["kind"], string> = {
-  alert: "alert", owned_alert: "alert", work: "work", incident: "incident", waiting: "waiting", conversation: "message",
-  proposal: "proposal", claim: "alert", custody: "key", check: "note", inbox: "inbox",
-}
+/* ── Route ──────────────────────────────────────────────────────────────── */
 
-function capitalise(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1)
-}
-
-/* ── Needs a person ─────────────────────────────────────────────────────── */
-
-export function AttentionPanel({ view }: { view: RecordView }) {
-  const items = view.attention
-  if (items.length === 0) return <div className="panel quiet" id="attention">
-    <Icon name="note" />
-    <span>Nothing in the records is waiting on a person. <small>Checked: alerts, incidents, work items, conversations, agent proposals, claims, custody and a moving car's position. Not checked: proofs, documents and endpoint details beyond a booked car's pickup contact and access.</small></span>
-  </div>
-  return <div className="panel" id="attention">
-    <div className="panel-head">Needs a person <span className="num">{items.length}</span></div>
-    <ol className="panel-rows">{items.map((item) => <li className="panel-row" key={`${item.kind}-${item.recordId}`}>
-      <Icon name={ATTENTION_ICON[item.kind]} className={`tone-${item.tone}`} />
-      <div>
-        <div className={`panel-row-title tone-${item.tone}`}>{item.title}</div>
-        {item.detail && <div className="panel-row-detail">{item.detail}</div>}
-      </div>
-      <div className="panel-row-side">{item.owner ?? "No owner"}{item.at && item.atLabel ? <><br />{capitalise(item.atLabel)} <When at={item.at} snapshotAt={view.snapshotAt} relative withZone={false} /></> : null}</div>
-    </li>)}</ol>
-  </div>
-}
-
-/* ── Route strip ────────────────────────────────────────────────────────── */
-
-export function RouteStrip({ view }: { view: RecordView }) {
-  const groups = view.journey.groups
-  if (!groups.length) return null
+export function RouteSection({ view }: { view: RecordView }) {
+  if (!view.journey.groups.length) return null
   return <section className="sec" id="journey">
-    <SectionHead title="Route" note={view.journey.plan && !view.journey.plan.active ? "Draft plan, not activated" : undefined} />
-    {groups.map((group) => <RouteGroup key={group.itemId} group={group} view={view} labelled={groups.length > 1} />)}
+    <SectionHead title="Route" note={view.journey.plan && !view.journey.plan.active ? "Draft plan, not activated" : <a href="#route">Every stop in detail</a>} />
+    <Route view={view} />
   </section>
-}
-
-function RouteGroup({ group, view, labelled }: { group: JourneyGroup; view: RecordView; labelled: boolean }) {
-  const legsFrom = new Map(group.legs.map((leg) => [leg.fromStepId, leg]))
-  return <div className="route-group">
-    {labelled && <p className="route-group-label">{group.roleLabel}: {group.vehicle}</p>}
-    <div className="route">
-      {group.steps.map((step) => {
-        const leg = legsFrom.get(step.id)
-        return <RouteStop key={step.id} step={step} leg={leg ?? null} view={view} />
-      })}
-    </div>
-  </div>
-}
-
-function RouteStop({ step, leg, view }: { step: JourneyStep; leg: JourneyLeg | null; view: RecordView }) {
-  const icon = step.role === "PICKUP" ? "pin" : step.role === "DELIVERY" ? "flag" : "yard"
-  const slot = step.windows.find((window) => window.selected && (window.purpose === "SELECTED_PICKUP_SLOT" || window.purpose === "CUSTOMER_DELIVERY_PROMISE" || window.purpose === "SELECTED_DELIVERY_SLOT"))
-    ?? step.windows.find((window) => window.purpose.startsWith("REQUESTED_")) ?? null
-  const name = step.site ? <Link className="name-link" href={`/sites/${step.site.id}`}>{step.place.name}</Link> : step.place.name
-  return <>
-    <div className={`route-stop${step.recorded ? " done" : ""}`}>
-      <div className="route-role"><Icon name={step.recorded ? "check" : icon} size={13} />{step.roleLabel}</div>
-      <div className="route-name">{name}</div>
-      <div className="route-city">{step.place.city}{step.place.country ? `, ${step.place.country}` : ""}{step.site ? "" : " · no site profile"}</div>
-      {step.recorded
-        ? <div className="route-when tone-ok">{step.recorded.label} <When at={step.recorded.at} /></div>
-        : slot ? <div className="route-when"><span className="route-when-label">{slot.label}</span> <Range start={slot.start} end={slot.end} zone={slot.zone} /></div>
-        : <div className="route-when muted">No slot selected</div>}
-      {(step.contact || step.access) && !step.recorded && <div className="route-state">
-        {step.contact && <Chip tone={step.contact.tone}>Contact {step.contact.statusLabel.toLowerCase()}</Chip>}
-        {step.access && <Chip tone={step.access.tone}>Access {step.access.statusLabel.toLowerCase()}</Chip>}
-      </div>}
-      {step.claims.some((claim) => claim.status === "OPEN") && <div className="route-state"><Chip tone="warn">Open claim</Chip></div>}
-    </div>
-    {leg && <RouteLeg leg={leg} view={view} />}
-  </>
-}
-
-function RouteLeg({ leg, view }: { leg: JourneyLeg; view: RecordView }) {
-  const assignment = leg.assignment
-  const age = leg.tracking?.receivedAt ? relativeTo(leg.tracking.receivedAt, view.snapshotAt) : null
-  return <div className={`route-leg tone-${leg.tone}`}>
-    <span className="route-leg-line"><Icon name="car" size={16} /></span>
-    {leg.distanceKm != null && <b>{leg.distanceKm} km</b>}
-    {assignment ? <span><ActorName actor={assignment.driver} /> · {assignment.statusLabel.toLowerCase()}</span> : <span>No driver yet</span>}
-    {leg.tracking?.eta && <span className="route-leg-eta">ETA {fmtDateTime(leg.tracking.eta, view.header.keyDates.find((date) => date.key === "promise")?.zone ?? null)}{age ? `, ${age.text}` : ""}</span>}
-  </div>
 }
 
 /* ── Conversations ──────────────────────────────────────────────────────── */
@@ -123,7 +45,7 @@ function ThreadRow({ thread, view }: { thread: ThreadView; view: RecordView }) {
   const count = thread.messages.length
   return <article className="row">
     <div className="row-main">
-      <div className="row-title">{thread.categoryLabel} <Chip tone={thread.tone}>{thread.statusLabel}</Chip></div>
+      <div className="row-title">{thread.categoryLabel} <Pill tone={thread.tone}>{thread.statusLabel}</Pill></div>
       <div className="row-sub">
         {thread.channelLabel}{thread.counterparty ? <> with <ActorName actor={thread.counterparty} /></> : ""} · {count} {count === 1 ? "message" : "messages"}
         {thread.waitingOn && ` · waiting on ${thread.waitingOn}`}{thread.owner && ` · ${thread.owner}`}
@@ -131,7 +53,7 @@ function ThreadRow({ thread, view }: { thread: ThreadView; view: RecordView }) {
       </div>
       {last && !open && <div className="row-preview"><b>{last.author.name}:</b> {last.body}</div>}
       {open && <ThreadMessages thread={thread} />}
-      {count > 0 && <button type="button" className="show-more" onClick={() => setOpen((value) => !value)}>{open ? "Hide messages" : `Read ${count === 1 ? "the message" : `all ${count} messages`}`}</button>}
+      {count > 0 && <button type="button" className="btn-link" onClick={() => setOpen((value) => !value)}>{open ? "Hide messages" : `Read ${count === 1 ? "the message" : `all ${count} messages`}`}</button>}
     </div>
     <div className="row-side"><When at={thread.updatedAt} withZone={false} /></div>
   </article>
@@ -141,12 +63,12 @@ export function ThreadMessages({ thread }: { thread: ThreadView }) {
   return <div className="messages">{thread.messages.map((message) => <div className={`msg${message.internal ? " internal" : message.author.kind === "operator" || message.author.kind === "agent" ? " from-operator" : ""}`} key={message.id}>
     <div className="msg-meta">
       <b><ActorName actor={message.author} /></b>
-      <span className="role">{message.author.role}</span>
+      <span>{message.author.role}</span>
       <span>to {message.recipient.name}</span>
       <span>· {message.channelLabel}</span>
-      {message.internal && <span className="msg-tag internal">Internal</span>}
-      {message.author.kind === "agent" && <span className="msg-tag">Agent</span>}
-      {message.otherOrder && <span className="msg-tag">Filed on <OrderLink order={message.otherOrder} /></span>}
+      {message.internal && <Pill tone="warn">Internal</Pill>}
+      {message.author.kind === "agent" && <Pill tone="accent">Agent</Pill>}
+      {message.otherOrder && <Pill>Filed on <OrderLink order={message.otherOrder} /></Pill>}
       <time dateTime={message.at}>{fmtDateTime(message.at)}</time>
     </div>
     <p className="msg-body">{message.body}</p>
@@ -160,11 +82,11 @@ export function EvidenceSection({ view }: { view: RecordView }) {
   const total = proofs.length + documents.length + custody.assets.length
   return <section className="sec" id="evidence">
     <SectionHead title="Evidence" count={total} />
-    {total === 0 && <Empty>No proof or document record yet.</Empty>}
-    {total > 0 && <div className="chips">
-      {proofs.map((proof) => <Chip key={proof.id} tone={proof.tone} dot>{proof.kindLabel} · {proof.statusLabel.toLowerCase()}{proof.fileCount ? ` · ${proof.fileCount} files` : ""}</Chip>)}
-      {documents.map((document) => <Chip key={document.id} tone={document.tone} dot>{document.kindLabel}{document.medium ? ` (${document.medium})` : ""} · {document.statusLabel.toLowerCase()}</Chip>)}
-      {custody.assets.map((asset) => <Chip key={asset.id} tone={asset.nextAction ? "warn" : "neutral"} dot>{asset.kindLabel} · holder {asset.holder}</Chip>)}
+    {total === 0 && <Empty>No proof or document record yet. Any case files on the order are below.</Empty>}
+    {total > 0 && <div className="evidence">
+      {proofs.map((proof) => <Pill key={proof.id} tone={proof.tone} dot>{proof.kindLabel} · {proof.statusLabel.toLowerCase()}{proof.fileCount ? ` · ${proof.fileCount} files` : ""}</Pill>)}
+      {documents.map((document) => <Pill key={document.id} tone={document.tone} dot>{document.kindLabel}{document.medium ? ` (${document.medium})` : ""} · {document.statusLabel.toLowerCase()}</Pill>)}
+      {custody.assets.map((asset) => <Pill key={asset.id} tone={asset.nextAction ? "warn" : "neutral"} dot>{asset.kindLabel} · holder {asset.holder}</Pill>)}
     </div>}
     <OrderFiles orderId={view.header.id} />
   </section>
@@ -184,7 +106,7 @@ export function DecisionsSection({ view }: { view: RecordView }) {
 function ProposalRow({ proposal }: { proposal: ProposalView }) {
   return <article className="row">
     <div className="row-main">
-      <div className="row-title">{proposal.summary} <Chip tone={proposal.tone} dot>{proposal.statusLabel}</Chip></div>
+      <div className="row-title">{proposal.summary} <Pill tone={proposal.tone} dot>{proposal.statusLabel}</Pill></div>
       <div className="row-sub">
         {proposal.agent.name} · {proposal.commandLabel.toLowerCase()}
         {proposal.review && <> · {proposal.review.decisionLabel.toLowerCase()} by {proposal.review.reviewer.name}</>}
@@ -199,7 +121,7 @@ export function ProposalCards({ view }: { view: RecordView }) {
   const { proposals, notifications } = view
   return <div>
     {proposals.map((proposal) => <article className="proposal" key={proposal.id}>
-      <div className="proposal-head"><Chip tone={proposal.tone} dot>{proposal.statusLabel}</Chip><span>{proposal.agent.name} · {proposal.commandLabel.toLowerCase()} · <When at={proposal.createdAt} /></span></div>
+      <div className="proposal-head"><Pill tone={proposal.tone} dot>{proposal.statusLabel}</Pill><span>{proposal.agent.name} · {proposal.commandLabel.toLowerCase()} · <When at={proposal.createdAt} /></span></div>
       <p className="proposal-summary">{proposal.summary}</p>
       {proposal.rationale && <p className="proposal-text">{proposal.rationale}</p>}
       {proposal.review && <dl className="proposal-block">
@@ -235,7 +157,7 @@ export function ActivitySection({ view }: { view: RecordView }) {
       <time dateTime={event.at} title={fmtDateTime(event.at)}>{fmtDay(event.at)} {fmtClock(event.at)}</time>
       <div className="event-text"><b>{event.text}</b>{event.actor && <span className="actor"> · {event.actor}</span>}{event.shared && <span className="actor"> · shared bundle</span>}{all && event.detail && <small>{event.detail}</small>}</div>
     </div>)}</div>
-    {events.length > 6 && <button type="button" className="show-more" onClick={() => setAll((value) => !value)}>{all ? "Show the latest only" : `Show all ${events.length} events`}</button>}
+    {events.length > 6 && <button type="button" className="btn-link" onClick={() => setAll((value) => !value)}>{all ? "Show the latest only" : `Show all ${events.length} events`}</button>}
   </section>
 }
 
@@ -272,7 +194,7 @@ function StepView({ step, live, last }: { step: JourneyStep; live: boolean; last
         <span className="step-kind">{step.place.kindLabel}{step.site ? "" : " · no managed site profile"}</span>
       </div>
       <p className="step-addr">{step.place.addressLine ?? <span className="tone-warn">Street not supplied</span>}{step.place.city ? `, ${step.place.city}` : ""}{step.place.country ? `, ${step.place.country}` : ""}</p>
-      <dl className="step-facts">
+      <dl className="facts-grid">
         {step.windows.map((window) => <div className="fact" key={window.purpose + window.start}>
           <dt>{window.label}</dt>
           <dd><Range start={window.start} end={window.end} zone={window.zone} /><small>{window.sourceLabel}{window.deadline ? ` · outer limit ${fmtDateTime(window.deadline, window.zone)}` : ""}</small></dd>
@@ -294,9 +216,9 @@ function StepView({ step, live, last }: { step: JourneyStep; live: boolean; last
       {step.access?.instruction && <p className="step-instruction"><b>{step.site?.accessNote === step.access.instruction ? "Order instruction, copied from the site profile." : "Order instruction."}</b> {step.access.instruction}</p>}
       {step.site?.accessNote && step.site.accessNote !== step.access?.instruction && <p className="step-instruction"><b>Site procedure.</b> {step.site.accessNote}</p>}
       {step.site?.releaseRule && <p className="step-instruction"><b>Release rule.</b> {step.site.releaseRule}</p>}
-      {step.claims.length > 0 && <div className="step-notes">{step.claims.map((claim) => <p key={claim.id}><Chip tone={claim.tone}>{claim.statusLabel}</Chip> Claim about the {claim.field.toLowerCase()}: {claim.claim}{claim.source ? ` (${claim.source}${claim.confidence ? `, ${claim.confidence}` : ""})` : ""}</p>)}</div>}
+      {step.claims.length > 0 && <div className="step-notes">{step.claims.map((claim) => <p key={claim.id}><Pill tone={claim.tone}>{claim.statusLabel}</Pill> Claim about the {claim.field.toLowerCase()}: {claim.claim}{claim.source ? ` (${claim.source}${claim.confidence ? `, ${claim.confidence}` : ""})` : ""}</p>)}</div>}
       {step.notes.length > 0 && <div className="step-notes">{step.notes.map((note) => <p key={note}>{note}</p>)}</div>}
-      {step.proofs.length > 0 && <div className="step-proofs">{step.proofs.map((proof) => <Chip key={proof.id} tone={proof.tone} dot>{proof.kindLabel} · {proof.statusLabel.toLowerCase()}{proof.fileCount ? ` · ${proof.fileCount} files` : ""}</Chip>)}</div>}
+      {step.proofs.length > 0 && <div className="step-proofs">{step.proofs.map((proof) => <Pill key={proof.id} tone={proof.tone} dot>{proof.kindLabel} · {proof.statusLabel.toLowerCase()}{proof.fileCount ? ` · ${proof.fileCount} files` : ""}</Pill>)}</div>}
     </div>
   </div>
 }
@@ -305,22 +227,22 @@ function LegView({ leg, view }: { leg: JourneyLeg; view: RecordView }) {
   const assignment = leg.assignment
   const tracking = leg.tracking
   const age = tracking?.receivedAt ? relativeTo(tracking.receivedAt, view.snapshotAt) : null
-  return <div className="leg">
-    <span className="leg-marker"><Icon name="car" size={15} /></span>
-    <div className="leg-body">
-      <div className="leg-main">
+  return <div className="legrow">
+    <span className="legrow-marker"><Icon name="car" size={15} /></span>
+    <div className="legrow-body">
+      <div className="legrow-main">
         {leg.distanceKm != null && <span><b>{leg.distanceKm} km</b> planned</span>}
-        <Chip tone={leg.tone}>{leg.statusLabel}</Chip>
+        <Pill tone={leg.tone}>{leg.statusLabel}</Pill>
         {assignment
           ? <span><b><ActorName actor={assignment.driver} /></b>{assignment.driverHome ? `, home base ${assignment.driverHome}` : ""} · {assignment.statusLabel.toLowerCase()}{assignment.fee ? ` · ${assignment.fee}` : ""}</span>
           : <span>No driver booked for this leg</span>}
       </div>
-      {assignment?.positioning && <p className="leg-track">{assignment.positioning}{assignment.priorOrder && <> (<OrderLink order={assignment.priorOrder} />)</>}. A home base or prior duty is not a current location.</p>}
-      {assignment && assignment.steps.length > 0 && <div className="leg-steps">{assignment.steps.map((step) => <span key={step.id}>
+      {assignment?.positioning && <p className="legrow-track">{assignment.positioning}{assignment.priorOrder && <> (<OrderLink order={assignment.priorOrder} />)</>}. A home base or prior duty is not a current location.</p>}
+      {assignment && assignment.steps.length > 0 && <div className="legrow-steps">{assignment.steps.map((step) => <span key={step.id}>
         <Icon name={step.status === "COMPLETED" ? "check" : "chevron"} size={12} className={step.status === "COMPLETED" ? "tone-ok" : undefined} /> {step.title} · <span className={`tone-${step.tone}`}>{step.statusLabel.toLowerCase()}</span>{step.scheduledStart ? ` · ${fmtDateTime(step.scheduledStart)}` : ""}{step.note ? ` · ${step.note}` : ""}
       </span>)}</div>}
-      {tracking && <p className="leg-track">Driver app: <b>ETA {fmtDateTime(tracking.eta)}</b>{tracking.remainingKm != null ? ` · ${tracking.remainingKm} km remaining` : ""}{tracking.progress != null ? ` · ${Math.round(tracking.progress * 100)}% of the leg` : ""} · {tracking.qualityLabel} signal{age ? `, received ${age.text}` : ""}. Unverified; no map position in this packet.</p>}
-      {leg.inference && <p className="leg-track">Monitor inference: {leg.inference.note ?? `ETA ${fmtDateTime(leg.inference.eta)}`}</p>}
+      {tracking && <p className="legrow-track">Driver app: <b>ETA {fmtDateTime(tracking.eta)}</b>{tracking.remainingKm != null ? ` · ${tracking.remainingKm} km remaining` : ""}{tracking.progress != null ? ` · ${Math.round(tracking.progress * 100)}% of the leg` : ""} · {tracking.qualityLabel} signal{age ? `, received ${age.text}` : ""}. Unverified; no map position in this packet.</p>}
+      {leg.inference && <p className="legrow-track">Monitor inference: {leg.inference.note ?? `ETA ${fmtDateTime(leg.inference.eta)}`}</p>}
     </div>
   </div>
 }
@@ -329,11 +251,11 @@ export function EvidenceDetails({ view }: { view: RecordView }) {
   const { proofs, documents, custody, siteVisits } = view
   return <div>
     {proofs.length > 0 && <><p className="sub">Proofs</p><div className="rows">{proofs.map((proof) => <div className="row" key={proof.id}>
-      <div className="row-main"><div className="row-title">{proof.kindLabel} <Chip tone={proof.tone}>{proof.statusLabel}</Chip></div>
+      <div className="row-main"><div className="row-title">{proof.kindLabel} <Pill tone={proof.tone}>{proof.statusLabel}</Pill></div>
         <div className="row-sub">{proof.pointLabel ? `${proof.pointLabel} · ` : ""}{proof.required ? "required" : "optional"}{proof.fileCount ? ` · ${proof.fileCount} files` : " · no files"}{proof.submittedAt ? ` · submitted ${fmtDateTime(proof.submittedAt)}` : " · nothing submitted"}{proof.reviewedAt ? ` · reviewed ${fmtDateTime(proof.reviewedAt)}` : ""}{proof.note ? ` · ${proof.note}` : ""}</div></div>
     </div>)}</div></>}
     {documents.length > 0 && <><p className="sub">Documents</p><div className="rows">{documents.map((document) => <div className="row" key={document.id}>
-      <div className="row-main"><div className="row-title">{document.kindLabel}{document.medium ? ` (${document.medium})` : ""} <Chip tone={document.tone}>{document.statusLabel}</Chip></div>
+      <div className="row-main"><div className="row-title">{document.kindLabel}{document.medium ? ` (${document.medium})` : ""} <Pill tone={document.tone}>{document.statusLabel}</Pill></div>
         <div className="row-sub">{document.required ? "required" : "optional"}{document.signatureScope ? ` · signatures: ${document.signatureScope}` : ""}{document.fileCount ? ` · ${document.fileCount} files` : " · no file"}{document.updatedAt ? ` · updated ${fmtDateTime(document.updatedAt)}` : ""}{document.note ? ` · ${document.note}` : ""}</div></div>
     </div>)}</div></>}
     {custody.assets.length > 0 && <><p className="sub">Keys and papers</p><div className="rows">{custody.assets.map((asset) => <div className="row" key={asset.id}>

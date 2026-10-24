@@ -1,0 +1,51 @@
+<!doctype html><html><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet"><style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1440px;height:900px;overflow:hidden}
+body{background:#fffef7;color:#12110e;font:400 15px/1.45 Figtree,system-ui,sans-serif;font-feature-settings:"tnum"}
+.top{height:72px;display:flex;align-items:center;gap:28px;padding:0 32px}
+.logo{display:flex;align-items:center;gap:8px;font:800 22px/1 Archivo,sans-serif;font-stretch:125%;letter-spacing:-.02em}
+.logo i{width:22px;height:22px;border-radius:6px;background:#12110e;display:inline-block}
+.nav{display:flex;gap:4px;background:#f1eee6;border-radius:999px;padding:4px}
+.nav a{height:40px;padding:0 18px;border-radius:999px;display:flex;align-items:center;font-weight:600;font-size:15px;color:#2a2721}
+.nav a.on{background:#fffef7;color:#12110e;box-shadow:0 1px 2px rgba(18,17,14,.08)}
+.clock{margin-left:auto;font-size:14px;color:#5a5346}
+.btn{height:44px;padding:0 20px;border-radius:999px;background:#12110e;color:#fffef7;font-weight:600;display:flex;align-items:center}
+.h1{font:900 56px/1 Archivo,sans-serif;font-stretch:125%;text-transform:uppercase;letter-spacing:-.01em}
+.muted{color:#726958}
+.pill{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 11px;border-radius:999px;font-size:13px;font-weight:600;background:#f1eee6;color:#2a2721;white-space:nowrap}
+.pill.red{background:#ffe8ec;color:#a13342}.pill.org{background:#ffece3;color:#a14623}.pill.teal{background:#dcf4f7;color:#205058}.pill.grn{background:#daf4e9;color:#1d6b4b}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+.o{background:#fd6a31}.r{background:#fd4a61}.t{background:#43afc1}.g{background:#29af77}.k{background:#12110e}.s{background:#b7afa0}
+
+.head{display:flex;align-items:center;gap:24px;padding:18px 32px 0}
+.h1{font-size:44px}
+.stats{display:flex;gap:28px;margin-left:24px}.stat b{display:block;font:900 30px/1 Archivo;font-stretch:125%}.stat span{font-size:13px;color:#726958}
+.search{margin-left:auto;width:340px;height:48px;border-radius:999px;background:#f1eee6;display:flex;align-items:center;padding:0 20px;color:#726958}
+.bar{display:flex;align-items:center;gap:12px;padding:18px 32px 14px}
+.seg{display:flex;background:#e2ded4;border-radius:999px;padding:4px;gap:2px}
+.seg a{height:38px;padding:0 15px;border-radius:999px;display:flex;align-items:center;gap:7px;font-weight:600;font-size:14px;color:#2a2721}.seg a.on{background:#fffef7;color:#12110e}
+.seg em{font-style:normal;color:#726958;font-weight:500}
+.sw{margin-left:auto;height:46px;padding:0 18px;border-radius:999px;background:#12110e;color:#fffef7;display:flex;align-items:center;gap:8px;font-weight:600}
+.tbl{margin:0 32px;border-radius:20px;overflow:hidden;background:#fffef7;box-shadow:0 0 0 1px #e2ded4}
+.th,.tr{display:grid;grid-template-columns:28px 230px 210px 230px 150px 170px 1fr;gap:14px;align-items:center;padding:0 18px}
+.th{height:42px;background:#f1eee6;font-size:13px;font-weight:700;color:#5a5346}
+.tr{height:56px;border-top:1px solid #f1eee6;font-size:14.5px}
+.tr b{font-weight:700}.tr small{display:block;font-size:12.5px;color:#726958}
+.flag{color:#a13342;font-weight:600}.flag.o{color:#a14623}.ok{color:#726958}
+</style></head><body>
+<div class="top"><div class="logo"><i></i>bahn</div><div class="nav"><a class="on">Orders</a><a>Inbox</a><a>Customers</a><a>Drivers</a><a>Places</a></div><div class="clock">Snapshot · Tue 21 Oct, 09:00 UTC</div></div>
+<div class="head"><div class="h1">Orders</div><div class="stats"><div class="stat"><b>100</b><span>orders</span></div><div class="stat"><b>24</b><span>moving</span></div><div class="stat"><b style="color:#d13f52">43</b><span>need a person</span></div></div><div class="search">Reference, car, plate, customer or city</div></div>
+<div class="bar"><div class="seg"><a class="on">All <em>100</em></a><a>New <em>12</em></a><a>Ready to post <em>12</em></a><a>Finding a driver <em>11</em></a><a>Driver assigned <em>18</em></a><a>Moving <em>24</em></a><a>Delivered <em>21</em></a><a>Cancelled <em>2</em></a></div><div class="sw">Needs a person · 43</div></div>
+<div class="tbl"><div class="th"><span></span><span>Car ↓</span><span>Customer</span><span>Route</span><span>Stage</span><span>Decisive date</span><span>Why it needs a person</span></div>
+<div class="tr"><i class="dot r"></i><div><b>Toyota Corolla</b><small>CD-420702</small></div><div>Calverin Car Centre</div><div>Oulu → Espoo</div><div><span class="pill teal">Moving</span></div><div><b>Tue 11:00</b><small>promise · missed</small></div><div class="flag">Delivery promise unachievable · +1</div></div>
+<div class="tr"><i class="dot r"></i><div><b>Bentley Flying Spur</b><small>CD-420437</small></div><div>Calverona Auto</div><div>Berlin → Munich</div><div><span class="pill teal">Moving</span></div><div><b>Tue 11:00–16:00</b><small>ETA 15:58 CEST</small></div><div class="flag">Delivery access risk · +3</div></div>
+<div class="tr"><i class="dot r"></i><div><b>BMW M4</b><small>CD-420593</small></div><div>Pellavaro Auto</div><div>Helsinki → Turku</div><div><span class="pill">Driver assigned</span></div><div><b>Tue 09:00</b><small>pickup slot · passed</small></div><div class="flag">Incident: empty pickup · +4</div></div>
+<div class="tr"><i class="dot o"></i><div><b>Bentley Continental GT</b><small>CD-420322</small></div><div>Marvellin Motorhandel</div><div>Munich → Hamburg</div><div><span class="pill teal">Moving</span></div><div><b>Tue 12:00</b><small>ETA 13:13 CEST</small></div><div class="flag o">Incident: vehicle warning · +4</div></div>
+<div class="tr"><i class="dot o"></i><div><b>Ferrari 296 GTB</b><small>CD-421013</small></div><div>Meravelio Motorhouse</div><div>Espoo → Turku</div><div><span class="pill teal">Moving</span></div><div><b>Tue 11:00</b><small>no driver-app ETA</small></div><div class="flag o">Moving, no driver-app position</div></div>
+<div class="tr"><i class="dot o"></i><div><b>BMW i4</b><small>CD-420015</small></div><div>Suvellio Motors</div><div>Espoo → Helsinki</div><div><span class="pill org">Ready to post</span></div><div><b>Wed 11:00</b><small>pickup slot</small></div><div class="flag o">Waiting on site confirmation</div></div>
+<div class="tr"><i class="dot o"></i><div><b>Audi Q5</b><small>CD-420689</small></div><div>Aderviane Véhicules</div><div>Marseille → Paris</div><div><span class="pill">Finding a driver</span></div><div><b>Wed 10:00</b><small>offer €343 · 3 d</small></div><div class="flag o">Site handover review · +1</div></div>
+<div class="tr"><i class="dot o"></i><div><b>Volvo V60</b><small>CD-420516</small></div><div>Auvelloria Motor Collection</div><div>Helsinki → Helsinki</div><div><span class="pill org">Ready to post</span></div><div><b>Sun 09:00</b><small>pickup slot</small></div><div class="flag o">Site access unconfirmed · +4</div></div>
+<div class="tr"><i class="dot o"></i><div><b>Ferrari Roma</b><small>CD-420458</small></div><div>Kovellin Automobilhandel</div><div>Hamburg → Hamburg</div><div><span class="pill">New</span></div><div><b>8 Oct</b><small>order created</small></div><div class="flag o">Release document unclear · +4</div></div>
+<div class="tr"><i class="dot s"></i><div><b>Audi RS 6</b><small>CD-420455</small></div><div>Orelvian Premium Cars</div><div>Lahti → Helsinki</div><div><span class="pill grn">Delivered</span></div><div><b>16 Oct</b><small>delivered</small></div><div class="flag o">Post-delivery condition claim · +2</div></div>
+<div class="tr"><i class="dot s"></i><div><b>Volvo V60</b><small>CD-420194</small></div><div>Auvelloria Motor Collection</div><div>Lyon → Vantaa</div><div><span class="pill grn">Delivered</span></div><div><b>20 Oct</b><small>delivered</small></div><div class="ok">Invoice reference query · +2</div></div>
+</div></body></html>

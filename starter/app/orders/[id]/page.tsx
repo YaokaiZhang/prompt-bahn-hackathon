@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { use, useEffect, useState } from "react"
-import { AppFrame } from "../../components/app-frame"
+import { Shell } from "../../components/shell"
 import { OrderPane, type Detail } from "../../components/order-detail"
 
 export default function OrderPage({ params }: { params: Promise<{ id: string }> }) {
@@ -23,10 +23,10 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
     if (detail) document.title = `${detail.view.header.reference} · ${detail.view.header.vehicle?.title ?? "Order"} · Control Room`
   }, [detail])
 
-  return <AppFrame section="board" snapshotAt={detail?.view.snapshotAt ?? null}><main className="page">
-    <nav className="crumbs" aria-label="Breadcrumb"><Link href="/">Orders</Link><span>/</span><span>{detail?.view.header.reference ?? "Record"}</span></nav>
-    {error && <div className="record-state" role="alert"><h1>{error}</h1><p>The record could not be opened. <Link href="/">Back to orders</Link></p></div>}
-    {!error && !detail && <div className="record-state" aria-busy="true"><div className="cover skeleton-cover" /><p>Loading order…</p></div>}
+  return <Shell section="orders" snapshotAt={detail?.view.snapshotAt ?? null}><main className="page">
+    <nav className="crumbs" aria-label="Breadcrumb"><Link href={detail ? `/?order=${detail.order.id}` : "/"}>Orders</Link><span>/</span><span>{detail?.view.header.reference ?? id}</span></nav>
+    {error && <div className="state" role="alert"><h1 className="display">{error}</h1><p>The record could not be opened. <Link className="name-link" href="/">Back to orders</Link></p></div>}
+    {!error && !detail && <div aria-busy="true"><div className="hero-photo" /><p className="queue-note">Loading order…</p></div>}
     {detail && <OrderPane detail={detail} />}
-  </main></AppFrame>
+  </main></Shell>
 }
