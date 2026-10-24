@@ -6,7 +6,7 @@
 
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { CONTACT_TYPES, policyFor } from "@/lib/reviewer/policy"
+import { CONTACT_TYPES, POLICY_ROW_IDS, policyFor, renderPolicy } from "@/lib/reviewer/policy"
 import type { Engine, OrderState } from "./engine"
 
 import { eachStore, testEngine, testGateway } from "./testing"
@@ -36,6 +36,20 @@ test("policy lookup: every contact type has a row for a question and for an orde
     assert.equal(policyFor(type, "change").id, "order-change", type)
     assert.equal(policyFor(type, "change").decision, "needs a yes", type)
   }
+})
+
+test("policy lookup: a pickup-readiness call to a customer-side pickup place or contact acts alone; the paying customer is never called", () => {
+  for (const type of ["customer_owned_site", "customer_given_contact"] as const) {
+    assert.equal(policyFor(type, "pickup_readiness").id, "pickup-readiness", type)
+    assert.equal(policyFor(type, "pickup_readiness").decision, "acts alone", type)
+  }
+  assert.equal(policyFor("third_party_site", "pickup_readiness").id, "site-routine")
+  for (const type of ["paying_customer", "driver", "operator"] as const) {
+    assert.throws(() => policyFor(type, "pickup_readiness"), /No policy row/, type)
+  }
+  // The reviewer's prompt and its policy_row enum keep the five rows it was tuned on.
+  assert.doesNotMatch(renderPolicy(), /pickup-readiness/)
+  assert.ok(!POLICY_ROW_IDS.includes("pickup-readiness"))
 })
 
 test("a customer-side finding becomes a propose-only proposal with its evidence, contact type, who pays and policy row", async () => {

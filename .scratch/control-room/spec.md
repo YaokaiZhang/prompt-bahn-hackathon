@@ -27,7 +27,7 @@ A control room that sorts every order into one of four groups: **Needs action**,
 
 **The reviewer's output:** for each conflict it finds, it cites the records that disagree and the record that names the contact. It then drafts who to ask and what to ask.
 
-**Approval:** an approval policy decides what needs an operator's yes. Routine questions to third-party sites (including sellers), drivers and operators go out on their own. The agent never contacts the customer side: the paying customer, a contact the customer gave us, or a site the customer owns. For those it proposes the action to the operator, with a drafted script, and the operator makes the contact and records the answer. Any change to the order needs a yes.
+**Approval:** an approval policy decides what needs an operator's yes. Routine questions to third-party sites (including sellers), drivers and operators go out on their own. The agent never contacts the customer side: the paying customer, a contact the customer gave us, or a site the customer owns. The one exception is a pickup-readiness call (car ready, papers and keys there, callback if nobody answers) to the order's pickup place or pickup contact, which goes out on its own even when that contact is customer side (ADR 0001 amendment); the paying customer is never called. For everything else on the customer side it proposes the action to the operator, with a drafted script, and the operator makes the contact and records the answer. Any change to the order needs a yes.
 
 **Calls run in three tiers, cheapest first:**
 1. Fixed questions read by a real TTS voice, answered on a keypad.
@@ -95,7 +95,7 @@ The calls go to a mock phone page that a teammate opens as the Site or Driver pe
 ### Operator approval
 41. As an operator, I want a read-only Rules page listing who is contacted, the kind of action, and whether the agent acts alone or needs a yes, so that I understand the agent's authority.
 42. As an operator, I want routine questions to third-party sites (including sellers), drivers and operators to go out without my approval, and to see their results, so that cheap work happens on its own.
-43. As an operator, I want the agent never to contact the customer side itself (the paying customer, a contact the customer gave us, or a site the customer owns), and instead to propose the contact to me with a drafted script, so that customer contact stays with people.
+43. As an operator, I want the agent never to contact the customer side itself (the paying customer, a contact the customer gave us, or a site the customer owns), and instead to propose the contact to me with a drafted script, so that customer contact stays with people. The exception is a pickup-readiness call to the order's pickup place or pickup contact, which the agent makes on its own; it never calls the paying customer.
 43a. As an operator, I want to record the customer's answer on the proposal after I make the contact, so that the agent can continue from it.
 44. As an operator, I want any change coming out of a call (new date, cost, booking, order update) to wait for my yes, so that nothing changes without a person.
 45. As an operator, I want to approve several proposals in one click, with each script visible and each row saying what approving will do (write a change, or hand me a customer contact), so that approval is fast and unsurprising.
@@ -257,8 +257,8 @@ Every model call goes through it, and every call reports its `usage.cost`. Every
   | Contact type | How it's recognised | Agent may |
   |---|---|---|
   | Paying customer | `orders.customer_id`; reached through its existing support conversation (customers have no contact fields) | Propose only. The operator contacts them. |
-  | Customer-given contact | endpoint `stated_by` is `CUSTOMER_ORDER_INPUT` (for example Celia Hollowmere on CD-420437) | Propose only |
-  | Customer-owned site | `site.customer_id` equals `orders.customer_id` | Propose only |
+  | Customer-given contact | endpoint `stated_by` is `CUSTOMER_ORDER_INPUT` (for example Celia Hollowmere on CD-420437) | Propose only, except a pickup-readiness call when it is the pickup contact (call on its own) |
+  | Customer-owned site | `site.customer_id` equals `orders.customer_id` | Propose only, except a pickup-readiness call when it is the pickup place (call on its own) |
   | Third-party site or seller's site | any other site or endpoint contact | Call on its own |
   | Driver | assignment `driver_id` | Call on its own |
   | Operator | note or event author role | Ask in the app on its own |
@@ -312,7 +312,7 @@ Every model call goes through it, and every call reports its `usage.cost`. Every
   - **Setup:** built from the real dataset files, with the clock fixed at 2026-10-21T09:00Z, an in-memory store, and a scripted `ModelGateway`. That gateway replays reviewer findings and call turns recorded by the reviewer eval script and committed as fixtures.
   - **Cases to cover:**
     - each demo case lands in the expected group with the expected reason;
-    - CD-420437's question to the customer is a propose-only proposal that cites its policy row, and no call to the customer side is ever started, including to Celia Hollowmere;
+    - CD-420437's question to the customer is a propose-only proposal that cites its policy row, and no call to the customer side is ever started, including to Celia Hollowmere (only pickup-readiness calls to a pickup place or pickup contact may reach the customer side);
     - every rule's first action is taken, and no Needs action order lacks a decision;
     - background calls finish through the simulated person, and only demo or "ring live" calls ring;
     - CD-420516's site call goes out without approval;
@@ -343,7 +343,7 @@ Every model call goes through it, and every call reports its `usage.cost`. Every
 - Editing the seed snapshot.
 - Real authentication.
 - Travel, entirely, in v1: the travel planner, the mock driver travel site, and any travel rule. The planner is a stretch goal with a separate spec if built. Its triggers are CD-420399 and CD-420311.
-- Any agent contact with the customer side.
+- Any agent contact with the customer side, other than a pickup-readiness call to the order's pickup place or pickup contact.
 - The final visual design. The UI design template is still to come, and this spec defines behaviour and content, not styling.
 - Browser Web Push notifications.
 
