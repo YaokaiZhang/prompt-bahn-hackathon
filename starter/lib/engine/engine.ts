@@ -27,7 +27,7 @@ import { createCallRunner, type CallOptions } from "./call-runner"
 import type { PhonePersona, PhoneView } from "./phone"
 import type { AudioClip } from "./voice-agent"
 import { latestEta } from "./eta"
-import { answeredRecords, callbackItems, orderCalls, reportedEta, utcTime, type BlockedCall, type Call, type CalleeInput, type CallLine, type CallLineView, type Handover, type OrderCalls } from "./calls"
+import { answeredRecords, callbackItems, orderCalls, reportedEta, statedByCallee, utcTime, type BlockedCall, type Call, type CalleeInput, type CallLine, type CallLineView, type Handover, type OrderCalls } from "./calls"
 
 /** The snapshot as the engine reads it: one bundle per order. */
 export type Snapshot = { snapshotAt: string; bundles: Bundle[] }
@@ -482,8 +482,7 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     if (!call.claims.length && !eta) return
     // The callee's own earlier statements on the questions the call answered are superseded,
     // and so is every record the answered topics asked about.
-    const marks = [call.callee.handle, call.callee.name].filter((mark): mark is string => !!mark).map((mark) => mark.toLowerCase())
-    const byCallee = (statedBy: string) => marks.some((mark) => statedBy.toLowerCase().includes(mark))
+    const byCallee = statedByCallee(call.callee)
     const current = eta ? latestEta(bundleOf(call.orderId)) : null
     const replacedEta = current && !current.superseded ? [current.recordId] : []
     const supersedes = [...new Set([...statementsBy(carried.flatMap((proposal) => proposal.evidence), byCallee), ...answeredRecords(call)])]
