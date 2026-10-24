@@ -1,0 +1,112 @@
+{
+  "reference": "CD-420399",
+  "origin": "hand-written",
+  "note": "HAND-WRITTEN from docs/PRD.md §6.5, not a model reply. Covers: one valid finding, plus one whose quote is not in the record (\"€137.10\" against amount_cents 13710); its repair still quotes a value that is not there, so it is dropped. `npm run review:eval` with OPENROUTER_API_KEY overwrites this file with recorded replies.",
+  "model": null,
+  "recordedAt": null,
+  "caseFileHash": null,
+  "turns": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_399_1",
+            "type": "function",
+            "function": {
+              "name": "submit_findings",
+              "arguments": {
+                "summary": "The driver says nothing is booked, yet a train positioning claim is filed on this assignment while they were on CD-420326.",
+                "findings": [
+                  {
+                    "title": "Train positioning claim on a job the driver says has no travel booking",
+                    "conflict": [
+                      { "record_id": "msg-x3bdbe64dcd0bd46e", "field": "body", "quote": "I have no travel booking." },
+                      { "record_id": "expense-x9d676667cdd4f893", "field": "kind", "quote": "TRAIN_POSITIONING" },
+                      { "record_id": "expense-x9d676667cdd4f893", "field": "amount_cents", "quote": "13710" },
+                      { "record_id": "asg-x8cb23e805f9b3043", "field": "driver_history.prior_order_id", "quote": "ord-00326" }
+                    ],
+                    "ask": {
+                      "role": "driver",
+                      "contact_type": "driver",
+                      "contact_record_id": "asg-x8cb23e805f9b3043",
+                      "contact_quote": "drv-331",
+                      "name": "Driver drv-331, assigned to CD-420399"
+                    },
+                    "who_pays": "The driver does not pay Bahn; cus-029 Merovik Premiumfahrzeuge pays for the order.",
+                    "policy_row": "driver-routine",
+                    "question": "You filed a 137.10 EUR train positioning claim on CD-420399 for travel on 20 Oct, but you told us you have no travel booking for this job. Which trip was that ticket for?",
+                    "why": "The claim was incurred while the driver was still on CD-420326, so it may belong to another job; it needs case-specific authorisation before approval."
+                  },
+                  {
+                    "title": "Train claim amount needs authorisation",
+                    "conflict": [
+                      { "record_id": "expense-x9d676667cdd4f893", "field": "review_note", "quote": "needs case-specific authorization before approval" },
+                      { "record_id": "expense-x9d676667cdd4f893", "field": "amount_cents", "quote": "€137.10" }
+                    ],
+                    "ask": {
+                      "role": "driver",
+                      "contact_type": "driver",
+                      "contact_record_id": "asg-x8cb23e805f9b3043",
+                      "contact_quote": "drv-331",
+                      "name": "Driver drv-331"
+                    },
+                    "who_pays": "The driver does not pay Bahn.",
+                    "policy_row": "driver-routine",
+                    "question": "Can you send the receipt for the 137.10 EUR train ticket?",
+                    "why": "The claim cannot be approved without authorisation."
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "finishReason": "tool_calls",
+      "model": "hand-written",
+      "usage": { "promptTokens": 15300, "completionTokens": 980, "cachedTokens": 5100, "cacheWriteTokens": 0, "reasoningTokens": 420, "cost": 0.0201 }
+    },
+    {
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_399_2",
+            "type": "function",
+            "function": {
+              "name": "submit_findings",
+              "arguments": {
+                "summary": "Resubmitting the amount finding.",
+                "findings": [
+                  {
+                    "title": "Train claim amount needs authorisation",
+                    "conflict": [
+                      { "record_id": "expense-x9d676667cdd4f893", "field": "review_note", "quote": "needs case-specific authorization before approval" },
+                      { "record_id": "expense-x9d676667cdd4f893", "field": "amount_cents", "quote": "137.10 EUR" }
+                    ],
+                    "ask": {
+                      "role": "driver",
+                      "contact_type": "driver",
+                      "contact_record_id": "asg-x8cb23e805f9b3043",
+                      "contact_quote": "drv-331",
+                      "name": "Driver drv-331"
+                    },
+                    "who_pays": "The driver does not pay Bahn.",
+                    "policy_row": "driver-routine",
+                    "question": "Can you send the receipt for the 137.10 EUR train ticket?",
+                    "why": "The claim cannot be approved without authorisation."
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "finishReason": "tool_calls",
+      "model": "hand-written",
+      "usage": { "promptTokens": 16600, "completionTokens": 340, "cachedTokens": 5100, "cacheWriteTokens": 0, "reasoningTokens": 90, "cost": 0.0162 }
+    }
+  ]
+}

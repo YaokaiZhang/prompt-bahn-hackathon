@@ -6,13 +6,18 @@ An eval script runs the real model on CD-420516, CD-420437, CD-420089, CD-420399
 
 **Blocked by:** 01 (Engine seam, store and test runner).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] The reviewer runs for one order from the command line and prints its findings and cost
-- [ ] Each finding cites the records that disagree and the record that names who to ask
-- [ ] A finding with a missing id or a wrong quote gets one repair attempt and is dropped if it still fails
-- [ ] The tool budget of 8 calls is enforced
-- [ ] The same case file is answered from the cache with no model call
+- [x] The reviewer runs for one order from the command line and prints its findings and cost
+- [x] Each finding cites the records that disagree and the record that names who to ask
+- [x] A finding with a missing id or a wrong quote gets one repair attempt and is dropped if it still fails
+- [x] The tool budget of 8 calls is enforced
+- [x] The same case file is answered from the cache with no model call
 - [ ] The eval script scores the 7 cases and records fixtures
-- [ ] Tests use the scripted gateway and never call the network
-- [ ] With no API key, the reviewer reports "not reviewed yet" instead of failing
+- [x] Tests use the scripted gateway and never call the network
+- [x] With no API key, the reviewer reports "not reviewed yet" instead of failing
+
+## Comments
+
+- **Eval not run against the real model.** `openrouter.ai` is denied by this container's egress proxy (CONNECT 403), so `npm run review:eval` and `npm run review -- <ref>` could not reach the model even with `OPENROUTER_API_KEY` set; they report "not reviewed yet: the model call failed". The eval script is complete: with network access it scores the 7 cases, prints the cost and overwrites `starter/lib/reviewer/fixtures/cases/*.json` with recorded replies. Until then those fixtures are hand-written from PRD §6.5 (`"origin": "hand-written"`) and `npm run review:eval -- --replay` scores them offline (19/19). The model id `anthropic/claude-haiku-5.5` could not be checked against OpenRouter's model list for the same reason.
+- The OpenRouter adapter follows the documented OpenAI-compatible chat-completions shape (tools, `reasoning.effort`, `cache_control` on the system part, `usage.cost`); OpenRouter's docs were not reachable either, so it is verified only against a fake fetch.

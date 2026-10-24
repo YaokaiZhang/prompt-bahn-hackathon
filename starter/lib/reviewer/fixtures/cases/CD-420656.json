@@ -1,0 +1,54 @@
+{
+  "reference": "CD-420656",
+  "origin": "hand-written",
+  "note": "HAND-WRITTEN from docs/PRD.md §6.5, not a model reply. Covers: a valid site finding whose evidence is quoted in French. `npm run review:eval` with OPENROUTER_API_KEY overwrites this file with recorded replies.",
+  "model": null,
+  "recordedAt": null,
+  "caseFileHash": null,
+  "turns": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_656_1",
+            "type": "function",
+            "function": {
+              "name": "submit_findings",
+              "arguments": {
+                "summary": "The customer says the workshop is still waiting on a part, while the pickup endpoint stays CONFIRMED and the site plans Friday's handover queue; ask the site whether the car will be released.",
+                "findings": [
+                  {
+                    "title": "Customer says the car will not be released on time, the pickup is still CONFIRMED in Friday's queue",
+                    "conflict": [
+                      { "record_id": "msg-x30a84e718591defa", "field": "body", "quote": "le véhicule ne sera pas libéré à la date prévue" },
+                      { "record_id": "msg-x488144ab691ee379", "field": "body", "quote": "Le service de préparation attend encore une pièce." },
+                      { "record_id": "ep-x377904e24cf3732d", "field": "contact_status", "quote": "CONFIRMED" },
+                      { "record_id": "win-x1bc8edb0f9c54604", "field": "purpose", "quote": "SELECTED_PICKUP_SLOT" },
+                      { "record_id": "msg-xa89af197576aeb8f", "field": "body", "quote": "Friday's CD-420656 and CD-420692 are a separate handover queue" }
+                    ],
+                    "ask": {
+                      "role": "site",
+                      "contact_type": "third_party_site",
+                      "contact_record_id": "ep-x377904e24cf3732d",
+                      "contact_quote": "site-065@example.test",
+                      "name": "Adrian Aldermere, site desk at Rivellon Marseille"
+                    },
+                    "who_pays": "The site does not pay Bahn; cus-036 Orvellane Automobiles pays and is not contacted.",
+                    "policy_row": "site-routine",
+                    "question": "For CD-420656: will the car be ready for collection in the booked slot on Friday 23 Oct, 09:00 to 12:00, or is the workshop still waiting on a part? If so, when do you expect it?",
+                    "why": "A driver is assigned for Friday; if the car is not released, a slot change must be proposed to the customer, which needs an operator's yes."
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "finishReason": "tool_calls",
+      "model": "hand-written",
+      "usage": { "promptTokens": 14800, "completionTokens": 610, "cachedTokens": 5100, "cacheWriteTokens": 0, "reasoningTokens": 260, "cost": 0.0176 }
+    }
+  ]
+}

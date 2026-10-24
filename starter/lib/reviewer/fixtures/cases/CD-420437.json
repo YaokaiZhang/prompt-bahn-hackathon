@@ -1,0 +1,98 @@
+{
+  "reference": "CD-420437",
+  "origin": "hand-written",
+  "note": "HAND-WRITTEN from docs/PRD.md §6.5, not a model reply. Covers: a finding that cites a record id that does not exist (msg-x0049fe6fc2fd0b0f), gets one repair attempt and passes. `npm run review:eval` with OPENROUTER_API_KEY overwrites this file with recorded replies.",
+  "model": null,
+  "recordedAt": null,
+  "caseFileHash": null,
+  "turns": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_437_1",
+            "type": "function",
+            "function": {
+              "name": "submit_findings",
+              "arguments": {
+                "summary": "Delivery is due today but nobody is named who may receive and sign; only the paying customer can settle it.",
+                "findings": [
+                  {
+                    "title": "No authorised receiver: the customer's contact-hours messages disagree, the ETA has slipped to the end of the promise, and the follow-up is overdue",
+                    "conflict": [
+                      { "record_id": "msg-x47456eacbe1e0e07", "field": "body", "quote": "available only until early afternoon on the planned date" },
+                      { "record_id": "msg-x0049fe6fc2fd0b0f", "field": "body", "quote": "I still cannot confirm who is authorized to inspect and sign for the car." },
+                      { "record_id": "win-x3ce81a48192137db", "field": "end_local", "quote": "21 Oct 16:00 CEST" },
+                      { "record_id": "track-x0e9acf00fc4d6673", "field": "estimated_delivery_local", "quote": "21 Oct 15:58 CEST" },
+                      { "record_id": "work-x6c27e55269d19e01", "field": "kind", "quote": "RECEIVER_AUTHORITY_CHECK" }
+                    ],
+                    "ask": {
+                      "role": "customer",
+                      "contact_type": "paying_customer",
+                      "contact_record_id": "conv-x0eed829e1b54984f",
+                      "contact_quote": "cus-025",
+                      "name": "Calverona Auto (cus-025), through its open support conversation"
+                    },
+                    "who_pays": "cus-025 Calverona Auto pays Bahn: propose only, an operator makes the contact.",
+                    "policy_row": "customer-side",
+                    "question": "For CD-420437, the Bentley Flying Spur arriving in Munich at about 16:00 today: is Celia Hollowmere authorised to inspect and sign for the car, and if not, who is, and can they be there until 18:00?",
+                    "why": "The driver must not hand over the car or keys without an authorised receiver, the ETA is at the end of the 11:00 to 16:00 promise, and the receiver-authority check was due at 10:58 local."
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "finishReason": "tool_calls",
+      "model": "hand-written",
+      "usage": { "promptTokens": 16900, "completionTokens": 720, "cachedTokens": 5100, "cacheWriteTokens": 0, "reasoningTokens": 350, "cost": 0.0198 }
+    },
+    {
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_437_2",
+            "type": "function",
+            "function": {
+              "name": "submit_findings",
+              "arguments": {
+                "summary": "Corrected the message id of the customer's correction.",
+                "findings": [
+                  {
+                    "title": "No authorised receiver: the customer's contact-hours messages disagree, the ETA has slipped to the end of the promise, and the follow-up is overdue",
+                    "conflict": [
+                      { "record_id": "msg-x47456eacbe1e0e07", "field": "body", "quote": "available only until early afternoon on the planned date" },
+                      { "record_id": "msg-x0049fe6fc2fd0b0e", "field": "body", "quote": "I still cannot confirm who is authorized to inspect and sign for the car." },
+                      { "record_id": "win-x3ce81a48192137db", "field": "end_local", "quote": "21 Oct 16:00 CEST" },
+                      { "record_id": "track-x0e9acf00fc4d6673", "field": "estimated_delivery_local", "quote": "21 Oct 15:58 CEST" },
+                      { "record_id": "work-x6c27e55269d19e01", "field": "kind", "quote": "RECEIVER_AUTHORITY_CHECK" }
+                    ],
+                    "ask": {
+                      "role": "customer",
+                      "contact_type": "paying_customer",
+                      "contact_record_id": "conv-x0eed829e1b54984f",
+                      "contact_quote": "cus-025",
+                      "name": "Calverona Auto (cus-025), through its open support conversation"
+                    },
+                    "who_pays": "cus-025 Calverona Auto pays Bahn: propose only, an operator makes the contact.",
+                    "policy_row": "customer-side",
+                    "question": "For CD-420437, the Bentley Flying Spur arriving in Munich at about 16:00 today: is Celia Hollowmere authorised to inspect and sign for the car, and if not, who is, and can they be there until 18:00?",
+                    "why": "The driver must not hand over the car or keys without an authorised receiver, the ETA is at the end of the 11:00 to 16:00 promise, and the receiver-authority check was due at 10:58 local."
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "finishReason": "tool_calls",
+      "model": "hand-written",
+      "usage": { "promptTokens": 17900, "completionTokens": 610, "cachedTokens": 5100, "cacheWriteTokens": 0, "reasoningTokens": 120, "cost": 0.0187 }
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "reference": "CD-420458",
+  "origin": "hand-written",
+  "note": "HAND-WRITTEN from docs/PRD.md §6.5, not a model reply. Covers: nothing to ask, because the open question is already with the customer (asked 08:51, next check 10:00). `npm run review:eval` with OPENROUTER_API_KEY overwrites this file with recorded replies.",
+  "model": null,
+  "recordedAt": null,
+  "caseFileHash": null,
+  "turns": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_458_1",
+            "type": "function",
+            "function": {
+              "name": "submit_findings",
+              "arguments": {
+                "summary": "The seller's hold and the missing signed release were put to the customer at 08:51 and the site conversation's next check is at 10:00; nothing new to ask until then.",
+                "findings": []
+              }
+            }
+          }
+        ]
+      },
+      "finishReason": "tool_calls",
+      "model": "hand-written",
+      "usage": { "promptTokens": 13200, "completionTokens": 180, "cachedTokens": 5100, "cacheWriteTokens": 0, "reasoningTokens": 140, "cost": 0.0124 }
+    }
+  ]
+}

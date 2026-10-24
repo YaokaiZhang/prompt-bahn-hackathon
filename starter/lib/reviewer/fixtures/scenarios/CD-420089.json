@@ -1,0 +1,69 @@
+{
+  "reference": "CD-420089",
+  "origin": "hand-written",
+  "note": "HAND-WRITTEN from docs/PRD.md §6.5, not a model reply. Covers: a read-only tool call (get_driver_duties) whose returned record (the CD-420719 delivery step) is cited in the finding. Permanent test scenario: the reviewer eval never overwrites this file (it writes fixtures/cases/).",
+  "model": null,
+  "recordedAt": null,
+  "caseFileHash": null,
+  "turns": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_089_1",
+            "type": "function",
+            "function": { "name": "get_driver_duties", "arguments": { "driver_id": "drv-055" } }
+          }
+        ]
+      },
+      "finishReason": "tool_calls",
+      "model": "hand-written",
+      "usage": { "promptTokens": 14100, "completionTokens": 120, "cachedTokens": 5100, "cacheWriteTokens": 0, "reasoningTokens": 80, "cost": 0.0141 }
+    },
+    {
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_089_2",
+            "type": "function",
+            "function": {
+              "name": "submit_findings",
+              "arguments": {
+                "summary": "The booked positioning train starts in Lahti, but drv-055's CD-420719 duty ends with a handover in Helsinki; only the note's author can say whether the train still holds.",
+                "findings": [
+                  {
+                    "title": "Positioning train from Lahti, but the driver's CD-420719 duty ends in Helsinki",
+                    "conflict": [
+                      { "record_id": "note-x30f784d8cd92ba78", "field": "body", "quote": "Driver's train is due at 26 Oct 08:20 local" },
+                      { "record_id": "res-xac6651462ee0355a", "field": "route_label", "quote": "Driver positioning train: Lahti to Espoo" },
+                      { "record_id": "asg-xa8246d35bc877646", "field": "positioning.planned_release_city", "quote": "Lahti" },
+                      { "record_id": "step-x88ed7ca82db890c5", "field": "title", "quote": "Hand over BMW 5 Series at Velantora Helsinki, Helsinki" }
+                    ],
+                    "ask": {
+                      "role": "operator",
+                      "contact_type": "operator",
+                      "contact_record_id": "note-x30f784d8cd92ba78",
+                      "contact_quote": "ops-shift",
+                      "name": "ops-shift, author of the booked-connection note"
+                    },
+                    "who_pays": "Internal question: the operator does not pay Bahn; cus-006 Norvessia Autotalot pays for the order.",
+                    "policy_row": "operator-question",
+                    "question": "Your note on CD-420089 relies on the Lahti to Espoo train on 26 Oct. drv-055's CD-420719 duty ends with a handover in Helsinki on 23 Oct. Is the Lahti train still the right booking?",
+                    "why": "If the driver starts from Helsinki, the booked train does not position them and the 26 Oct pickup in Espoo has no working plan."
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "finishReason": "tool_calls",
+      "model": "hand-written",
+      "usage": { "promptTokens": 16200, "completionTokens": 690, "cachedTokens": 5100, "cacheWriteTokens": 0, "reasoningTokens": 300, "cost": 0.0193 }
+    }
+  ]
+}

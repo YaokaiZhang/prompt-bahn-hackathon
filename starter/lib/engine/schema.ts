@@ -2,7 +2,7 @@
 // starter's tables, so reseeding keeps working, and the snapshot is never edited.
 // Every table is prefixed `cr_` and listed in ENGINE_TABLES, which reset truncates.
 
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core"
+import { index, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core"
 
 /** One row (id "current") once the demo clock has moved; no row means the clock is at its start. */
 export const demoClock = pgTable("cr_demo_clock", {
@@ -10,5 +10,17 @@ export const demoClock = pgTable("cr_demo_clock", {
   now: timestamp("now", { withTimezone: true }).notNull(),
 })
 
+/**
+ * Reviewer results (ticket 05), keyed by a hash of the case file plus prompt version and model.
+ * `result` is the `Reviewed` value from lib/reviewer/reviewer.ts.
+ */
+export const reviewResults = pgTable("cr_review_results", {
+  key: text("key").primaryKey(),
+  orderId: text("order_id").notNull(),
+  caseHash: text("case_hash").notNull(),
+  result: jsonb("result").$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+}, (table) => [index("cr_review_results_order_idx").on(table.orderId)])
+
 /** Every engine table. Add new tables here so reset clears them. */
-export const ENGINE_TABLES = [demoClock]
+export const ENGINE_TABLES = [demoClock, reviewResults]
