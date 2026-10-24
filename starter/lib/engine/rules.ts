@@ -86,7 +86,7 @@ function result(id: RuleId, strength: "strong" | "weak", title: string, outcome:
 
 // R1 — Site requires a signed release and there is no verified RELEASE_AUTHORITY document.
 function signedRelease(facts: Facts): RuleResult {
-  const title = "Signed release on file when the pickup site requires one"
+  const title = RULE_CATALOGUE.R1.title
   const { bundle, pickupPoint } = facts
   const siteId = str(pickupPoint?.details.site_id) ?? bundle.order.pickupSiteId
   const site = siteId ? bundle.sites.get(siteId) ?? null : null
@@ -110,7 +110,7 @@ const LIVE_DUTY = new Set(["ASSIGNED", "IN_PROGRESS"])
 
 // R3 — The positioning's previous duty skips another live duty of the same driver.
 function positioningSkip(facts: Facts, context: RuleContext): RuleResult {
-  const title = "Driver positioning follows the driver's actual previous duty"
+  const title = RULE_CATALOGUE.R3.title
   const positioned = rows(facts.bundle, "work_assignments").filter((row) => LIVE_DUTY.has(String(row.details.status)) && obj(row.details.positioning))
   if (!positioned.length) return result("R3", "strong", title, "pass", "No live assignment on this order records driver positioning.", null, [])
   for (const assignment of positioned) {
@@ -145,7 +145,7 @@ const windowText = (row: RelatedRow) => `${fmtDateTime(str(row.details.start_at)
 
 // R7 — The selected delivery promise differs from the customer's requested delivery slot.
 function promiseVersusRequest(facts: Facts): RuleResult {
-  const title = "Delivery promise matches the customer's requested slot"
+  const title = RULE_CATALOGUE.R7.title
   const promise = facts.promise
   if (facts.finished && !promise) return result("R7", "strong", title, "pass", "The order is finished.", null, [])
   if (!promise) return result("R7", "strong", title, "unknown", "No delivery promise is selected yet.", null, [])
@@ -169,7 +169,7 @@ const byObserved = (a: RelatedRow, b: RelatedRow) => String(a.details.observed_a
 
 // R10 — In transit with tracking missing or older than 4 h, and no open alert.
 function staleTracking(facts: Facts): RuleResult {
-  const title = `Live position within ${STALE_TRACKING_HOURS} h while the car is moving`
+  const title = RULE_CATALOGUE.R10.title
   const { bundle } = facts
   if (!facts.moving.length) return result("R10", "strong", title, "pass", "No driver is on the road with this car.", null, [])
   const observations = rows(bundle, "tracking_observations")
@@ -194,7 +194,7 @@ function staleTracking(facts: Facts): RuleResult {
 
 // R12 — The latest ETA is after the promise end.
 function etaAfterPromise(facts: Facts): RuleResult {
-  const title = "Latest ETA within the delivery promise"
+  const title = RULE_CATALOGUE.R12.title
   if (!facts.moving.length || facts.finished) return result("R12", "strong", title, "pass", "The car is not on the road, so there is no ETA to compare.", null, [])
   const promise = facts.promise
   const latest = rows(facts.bundle, "tracking_observations").filter((row) => str(row.details.estimated_delivery_at)).sort(byObserved).pop() ?? null
@@ -214,7 +214,7 @@ function etaAfterPromise(facts: Facts): RuleResult {
 
 // R11 — The pickup slot passed with no pickup recorded.
 function missedPickup(facts: Facts): RuleResult {
-  const title = "Pickup recorded once the pickup slot has passed"
+  const title = RULE_CATALOGUE.R11.title
   const slot = facts.pickupSlot
   if (facts.pickedUp) return result("R11", "strong", title, "pass", "The pickup is recorded.", null, slot ? [ref("time_windows", slot, "Pickup slot")] : [])
   if (facts.finished) return result("R11", "strong", title, "pass", "The order is finished.", null, [])
@@ -229,7 +229,7 @@ const SETTLED_EXPENSE = new Set(["REJECTED", "SUPERSEDED"])
 
 // R13 — A positioning expense with no matching reservation.
 function expenseWithoutReservation(facts: Facts): RuleResult {
-  const title = "Positioning costs match a travel reservation"
+  const title = RULE_CATALOGUE.R13.title
   const { bundle } = facts
   const claims = rows(bundle, "expenses").filter((row) => String(row.details.kind ?? "").endsWith("_POSITIONING") && !SETTLED_EXPENSE.has(String(row.details.status)))
   if (!claims.length) return result("R13", "strong", title, "pass", "No positioning cost is claimed on this order.", null, [])
@@ -260,7 +260,7 @@ function countLabels(sources: SourceRef[]): string {
 
 // CLOSE — Only on a delivered or cancelled order: is anything still open? (spec "Grouping": Done)
 function nothingOpen(facts: Facts): RuleResult {
-  const title = "Nothing left open on the finished order"
+  const title = RULE_CATALOGUE.CLOSE.title
   const { bundle } = facts
   const open: SourceRef[] = [
     ...rows(bundle, "proofs").filter((row) => OPEN_PROOF.has(String(row.details.status))).map((row) => ref("proofs", row, `Proof ${String(row.details.status).toLowerCase()}`)),
@@ -293,7 +293,7 @@ const humanise = (code: string) => code.toLowerCase().replace(/_/g, " ")
 // NEXT — Only on an order with a next check recorded on an open conversation
 // (`next_check_at`): once the clock reaches it, plan its follow-up (spec "Call state machine").
 function nextCheckDue(facts: Facts, checks: NextCheck[]): RuleResult {
-  const title = "Scheduled next checks are followed up when due"
+  const title = RULE_CATALOGUE.NEXT.title
   const source = (check: NextCheck): SourceRef => ({ collection: "conversations", id: check.conversationId, label: `${humanise(check.category)} thread` })
   const what = (check: NextCheck) => `the ${fmtDateTime(check.at)} next check on the ${humanise(check.category)} thread${check.waitingOn ? ` (waiting on ${humanise(check.waitingOn)})` : ""}`
   const due = checks.filter((check) => check.at <= facts.nowIso)
@@ -332,7 +332,7 @@ const weakAction = (facts: Facts): FirstAction | null => facts.pickupSoon && fac
 
 // R5 — The contact name or handle is missing, or nobody confirmed the contact for this order.
 function contactOnRecord(facts: Facts): RuleResult {
-  const title = "Handover contacts on record and confirmed for this order"
+  const title = RULE_CATALOGUE.R5.title
   const all = endpointsOf(facts)
   const missing = ({ row }: Endpoint) => !str(row.details.contact_name) || !str(row.details.contact_handle)
   const gaps = all.filter((endpoint) => missing(endpoint) || (endpoint.ahead && endpoint.row.details.contact_status !== "CONFIRMED"))
@@ -348,7 +348,7 @@ function contactOnRecord(facts: Facts): RuleResult {
 
 // R4 — Confirmed only from the site profile, not by anyone about this car.
 function confirmedFromProfile(facts: Facts): RuleResult {
-  const title = "Handover details confirmed by someone about this order"
+  const title = RULE_CATALOGUE.R4.title
   const open = openEndpoints(facts)
   const profile = open.filter(({ row }) => row.details.last_confirmed_source === "MANAGED_SITE_PROFILE")
   if (!profile.length) return result("R4", "weak", title, "pass", "No open handover relies on the site profile alone.", null, open.map(({ row, label }) => ref("order_endpoint_details", row, `${label} details`)))
@@ -359,7 +359,7 @@ function confirmedFromProfile(facts: Facts): RuleResult {
 
 // R6 — The promise source is not the customer.
 function promiseFromCustomer(facts: Facts): RuleResult {
-  const title = "Delivery promise set by the customer"
+  const title = RULE_CATALOGUE.R6.title
   const promise = facts.promise
   if (!promise) return result("R6", "weak", title, "pass", "No delivery promise is selected yet.", null, [])
   const source = str(promise.details.source)
@@ -468,4 +468,22 @@ export function buildFleet(bundles: Bundle[]): Fleet {
     }
   }
   return { dutiesByDriver }
+}
+
+/** Every rule with its strength, what it checks and its first action: the Rules page lists these. */
+export type RuleInfo = { id: RuleId; strength: "strong" | "weak"; title: string; firstAction: string }
+
+export const RULE_CATALOGUE: Record<RuleId, RuleInfo> = {
+  R1: { id: "R1", strength: "strong", title: "Signed release on file when the pickup site requires one", firstAction: "Routine site call when pickup is within 48 h and a contact is known; otherwise shown to a person" },
+  R3: { id: "R3", strength: "strong", title: "Driver positioning follows the driver's actual previous duty", firstAction: "Reviewer pass (it becomes an operator question)" },
+  R7: { id: "R7", strength: "strong", title: "Delivery promise matches the customer's requested slot", firstAction: "Reviewer pass" },
+  R10: { id: "R10", strength: "strong", title: `Live position within ${STALE_TRACKING_HOURS} h while the car is moving`, firstAction: "Routine driver check-in call" },
+  R11: { id: "R11", strength: "strong", title: "Pickup recorded once the pickup slot has passed", firstAction: "Shown to a person" },
+  R12: { id: "R12", strength: "strong", title: "Latest ETA within the delivery promise", firstAction: "Routine driver call (\"can you still deliver on time?\")" },
+  R13: { id: "R13", strength: "strong", title: "Positioning costs match a travel reservation", firstAction: "Reviewer pass" },
+  CLOSE: { id: "CLOSE", strength: "strong", title: "Nothing left open on the finished order", firstAction: "Shown to a person (finished orders only)" },
+  NEXT: { id: "NEXT", strength: "strong", title: "Scheduled next checks are followed up when due", firstAction: "Routine site call when the check waits on the pickup site; otherwise shown to a person" },
+  R4: { id: "R4", strength: "weak", title: "Handover details confirmed by someone about this order", firstAction: "Couldn't check; a routine site call when pickup is within 48 h and a contact is known" },
+  R5: { id: "R5", strength: "weak", title: "Handover contacts on record and confirmed for this order", firstAction: "Couldn't check; a routine site call when pickup is within 48 h and a contact is known" },
+  R6: { id: "R6", strength: "weak", title: "Delivery promise set by the customer", firstAction: "Couldn't check; a routine site call when pickup is within 48 h and a contact is known" },
 }
