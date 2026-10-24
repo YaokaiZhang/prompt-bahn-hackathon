@@ -10,6 +10,7 @@
 import type { Bundle, RelatedRow } from "@/lib/present/bundle"
 import { bool, finalDeliveryPoint, obj, originPickupPoint, rows, str } from "@/lib/present/bundle"
 import { fmtDateTime } from "@/lib/present/time"
+import { nextChecksOf, type NextCheck } from "./due"
 import type { Callee, FirstAction, PlannedAction, RuleId, RuleResult, SourceRef, Urgency } from "./checks"
 
 /** One driver duty, indexed across all orders, for the positioning rule. */
@@ -280,6 +281,32 @@ function nothingOpen(facts: Facts): RuleResult {
     "show_person", open)
 }
 
+/**
+ * What a next check waits on, when it is the pickup site: a routine site call follows up.
+ * Anything else (the customer, a seller hold, Ops' own review) goes to a person; tickets 07/08
+ * turn that into a proposal or an operator question.
+ */
+const SITE_WAITS = new Set(["SITE_CONFIRMATION", "STOCK_CONTROL_REPLY"])
+
+const humanise = (code: string) => code.toLowerCase().replace(/_/g, " ")
+
+// NEXT — Only on an order with a next check recorded on an open conversation
+// (`next_check_at`): once the clock reaches it, plan its follow-up (spec "Call state machine").
+function nextCheckDue(facts: Facts, checks: NextCheck[]): RuleResult {
+  const title = "Scheduled next checks are followed up when due"
+  const source = (check: NextCheck): SourceRef => ({ collection: "conversations", id: check.conversationId, label: `${humanise(check.category)} thread` })
+  const what = (check: NextCheck) => `the ${fmtDateTime(check.at)} next check on the ${humanise(check.category)} thread${check.waitingOn ? ` (waiting on ${humanise(check.waitingOn)})` : ""}`
+  const due = checks.filter((check) => check.at <= facts.nowIso)
+  if (!due.length) {
+    return result("NEXT", "strong", title, "pass", `Not due yet: ${checks.map(what).join("; ")}.`, null, checks.map(source))
+  }
+  const toSite = due.every((check) => check.waitingOn !== null && SITE_WAITS.has(check.waitingOn))
+  const action: FirstAction = toSite && facts.callee ? "site_call" : "show_person"
+  const follow = action === "site_call" ? "a routine site call follows up" : "the open question is not the site's to answer, so it goes to a person"
+  const listed = due.map(what).join("; ")
+  return result("NEXT", "strong", title, "fail", `${listed[0].toUpperCase()}${listed.slice(1)} ${due.length === 1 ? "is" : "are"} due; ${follow}.`, action, due.map(source))
+}
+
 type Endpoint = { row: RelatedRow; label: string; ahead: boolean }
 
 /**
@@ -413,9 +440,11 @@ function urgencyOf(facts: Facts, rules: RuleResult[]): Urgency {
 
 export function evaluateRules(bundle: Bundle, context: RuleContext): Evaluation {
   const facts = gather(bundle, context)
+  const nextChecks = nextChecksOf(bundle)
   let rules = [
     ...STRONG.map((check) => check(facts, context)),
     ...(facts.finished ? [nothingOpen(facts)] : []),
+    ...(nextChecks.length ? [nextCheckDue(facts, nextChecks)] : []),
     ...WEAK.map((check) => check(facts)),
   ]
   // A finished order has no call left to make: any strong gap goes to a person.

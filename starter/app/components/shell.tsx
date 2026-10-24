@@ -3,7 +3,7 @@
 import Link from "next/link"
 import type { ReactNode } from "react"
 import { homeFor, PICKER_PATH } from "@/lib/persona"
-import { fmtDateTime } from "@/lib/present/time"
+import { DemoClock } from "./demo-clock"
 import { BahnLogo } from "./logo"
 import { PersonaSwitch, usePersona } from "./persona"
 
@@ -18,7 +18,8 @@ const LINKS: { section: Section; href: string; label: string }[] = [
 ]
 
 /**
- * Bahn's page header: wordmark, pill navigation in a sand track, the snapshot clock and the persona switch.
+ * Bahn's page header: wordmark, pill navigation in a sand track, the demo clock (with the Operator's
+ * demo-only controls) and the persona switch.
  * The operator's navigation shows only to the Operator persona; Site and Driver get the bar without it.
  */
 export function Shell({ children, section, snapshotAt, fixed = false }: { children: ReactNode; section?: Section; snapshotAt?: string | null; fixed?: boolean }) {
@@ -32,9 +33,7 @@ export function Shell({ children, section, snapshotAt, fixed = false }: { childr
       {persona === "operator" && <nav className="nav" aria-label="Main navigation">
         {LINKS.map((link) => <Link key={link.section} href={link.href} aria-current={section === link.section ? "page" : undefined}>{link.label}</Link>)}
       </nav>}
-      <div className="clock">{snapshotAt
-        ? <><b>{fmtDateTime(snapshotAt, null, false)} UTC</b><span>Snapshot · fictional data</span></>
-        : <span>Fictional snapshot</span>}</div>
+      <DemoClock operator={persona === "operator"} snapshotAt={snapshotAt} />
       <span className="bar-fiction">Fictional data</span>
       <PersonaSwitch />
     </header>

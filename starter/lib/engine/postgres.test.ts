@@ -59,7 +59,8 @@ test("our tables hold no foreign keys, and the starter's seed runs beside them w
   await store.reset()
   await store.writeClock("2026-10-21T11:00:00.000Z")
   const seed = spawnSync("npx", ["tsx", "scripts/seed.ts"], {
-    env: { ...process.env, DATABASE_URL: process.env.TEST_DATABASE_URL }, encoding: "utf8",
+    // No model key: the seed sweep only reports "not reviewed yet" and calls no model.
+    env: { ...process.env, DATABASE_URL: process.env.TEST_DATABASE_URL, OPENROUTER_API_KEY: "" }, encoding: "utf8",
   })
   assert.equal(seed.status, 0, seed.stderr)
   assert.equal(await store.readClock(), "2026-10-21T11:00:00.000Z")

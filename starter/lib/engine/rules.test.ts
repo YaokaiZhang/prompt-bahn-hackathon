@@ -150,7 +150,7 @@ const FIRST_ACTIONS = ["site_call", "driver_call", "reviewer_pass", "show_person
 test("every order reports every strong rule as passed, failed or not evaluable, and each failure declares a first action", async () => {
   const state = await snapshotState()
   for (const row of state.orders) {
-    assert.deepEqual(row.rules.filter((r) => r.strength === "strong" && r.id !== "CLOSE").map((r) => r.id), STRONG, row.reference)
+    assert.deepEqual(row.rules.filter((r) => r.strength === "strong" && r.id !== "CLOSE" && r.id !== "NEXT").map((r) => r.id), STRONG, row.reference)
     for (const r of row.rules) {
       assert.ok(["pass", "fail", "unknown"].includes(r.outcome))
       if (r.outcome === "fail") assert.ok(FIRST_ACTIONS.includes(r.firstAction ?? ""), `${row.reference} ${r.id} declares a first action`)

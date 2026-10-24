@@ -3,6 +3,7 @@
 import { useEffect } from "react"
 import type { OrderChecks, RecordView } from "@/lib/present/types"
 import { ChecksPanel } from "./checks"
+import { CitedProvider } from "./review"
 import { KeyDates, RecordHero } from "./record/header"
 import { RecordsPanel } from "./record/records"
 import { ActivitySection, ConversationsSection, DecisionsSection, EvidenceSection, RouteSection } from "./record/sections"
@@ -18,7 +19,9 @@ function useOpenLinkedSection() {
       const target = id ? document.getElementById(id) : null
       if (!target) return
       if (target instanceof HTMLDetailsElement) target.open = true
-      target.scrollIntoView({ block: "start" })
+      // A cited record inside a folded section: open every fold around it.
+      for (let parent = target.parentElement; parent; parent = parent.parentElement) if (parent instanceof HTMLDetailsElement) parent.open = true
+      target.scrollIntoView({ block: target.id.startsWith("rec-") ? "center" : "start" })
     }
     open()
     window.addEventListener("hashchange", open)
@@ -29,7 +32,7 @@ function useOpenLinkedSection() {
 export function OrderPane({ detail }: { detail: Detail }) {
   const { view, checks } = detail
   useOpenLinkedSection()
-  return <>
+  return <CitedProvider ids={checks?.review?.highlights ?? []}>
     <RecordHero view={view} />
     {checks && <ChecksPanel orderId={detail.order.id} checks={checks} />}
     <div className={view.attention.length ? "panel" : "panel-quiet"} id="attention"><OpenItems view={view} /></div>
@@ -40,5 +43,5 @@ export function OrderPane({ detail }: { detail: Detail }) {
     <DecisionsSection view={view} />
     <ActivitySection view={view} />
     <RecordsPanel view={view} orderId={detail.order.id} />
-  </>
+  </CitedProvider>
 }
