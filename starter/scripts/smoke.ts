@@ -298,6 +298,17 @@ async function main(): Promise<void> {
     if (phone.current && (phone.current.answerer !== "live" || phone.current.state === "ended")) throw new Error(`The ${persona} phone holds a call that is not live`)
     console.log(`Phone (${persona}): ${phone.current ? `1 live call (${phone.current.state})` : "idle"}, ${phone.queued.length} queued.`)
   }
+  // Ticket 12: the push-to-talk route is reachable by the Driver persona and refuses a turn without a recording (no model call).
+  const voice = await fetch(`${base}/api/phone/voice`, { method: "POST", headers: { cookie: "persona=driver", "content-type": "application/json" }, body: JSON.stringify({ callId: "none" }) })
+  if (voice.status !== 400) throw new Error(`The tier-2 voice route answered ${voice.status} to a turn without a recording (expected 400)`)
+  // Ticket 12: CD-420437's driver can be rung live about the tight ETA (on request, or already called).
+  const order437 = overview.visible.find((card: { reference: string }) => card.reference === "CD-420437") as { id: string } | undefined
+  if (order437) {
+    const detail437 = await (await appFetch(`${base}/api/orders/${order437.id}`)).json() as { checks: { callLines?: { line: string; status: string }[]; calls?: unknown[] } | null }
+    const driverLine = detail437.checks?.callLines?.find((line) => line.line === "driver")
+    if (!driverLine) throw new Error("CD-420437 has no driver line to ring about its tight ETA")
+    console.log(`Tier 2: CD-420437's driver line is ${driverLine.status}; ${detail437.checks?.calls?.length ?? 0} call(s) on record.`)
+  }
   console.log(`Verified ${order.id}: ${orderPlans.length} plans, ${(body.related.transport_points ?? []).length} points, ${(body.related.transport_segments ?? []).length} segments. Board and record agree on "needs a person" and on the group for ${overview.visible.length} orders (${Object.entries(overview.groupCounts).map(([group, count]) => `${group} ${count}`).join(", ")}).`)
 }
 

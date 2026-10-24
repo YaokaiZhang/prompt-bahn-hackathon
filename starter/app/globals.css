@@ -231,6 +231,18 @@ ul, ol { padding: 0; list-style: none; }
 .phone-keypad button:active:not(:disabled) { background: var(--sand-200); }
 .phone-keypad button[aria-pressed="true"] { background: var(--ink); color: var(--birch); }
 .phone-keypad button:disabled:not([aria-pressed="true"]) { color: var(--sand-300); cursor: default; }
+/* ── Mock phone: tier 2, push-to-talk (ticket 12) ───────────────────────── */
+.phone-talk-wrap { display: grid; justify-items: center; gap: 10px; margin-top: 4px; text-align: center; }
+.phone-talk { display: grid; place-items: center; align-content: center; gap: 6px; width: 132px; height: 132px; border: 0; border-radius: 50%; background: var(--ink); color: var(--birch); font-size: 14px; font-weight: 700; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; transition: background-color 0.18s var(--ease), transform 0.18s var(--ease), box-shadow 0.18s var(--ease); }
+.phone-talk:focus-visible { outline: 3px solid var(--teal); outline-offset: 4px; }
+.phone-talk[data-recording] { background: var(--orange); color: var(--ink); transform: scale(1.06); box-shadow: 0 0 0 10px var(--orange-bg); animation: phone-talk 1.4s var(--ease) infinite; }
+.phone-talk:disabled { background: var(--sand-100); color: var(--muted); cursor: default; }
+@keyframes phone-talk { 0%, 100% { box-shadow: 0 0 0 8px var(--orange-bg); } 50% { box-shadow: 0 0 0 16px var(--orange-bg); } }
+@media (prefers-reduced-motion: reduce) { .phone-talk[data-recording] { animation: none; transform: none; } }
+.phone-convo { display: grid; gap: 6px; margin: 0; padding: 12px 14px; border-radius: var(--r-sm); background: var(--birch); list-style: none; font-size: 14px; line-height: 1.4; color: var(--body); }
+.phone-convo b { margin-right: 4px; font-size: 12.5px; color: var(--muted); }
+.phone-convo-callee { color: var(--teal-ink); }
+.phone-hangup { justify-self: center; }
 .phone-outcome { display: inline-flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; color: var(--ink); }
 .phone-error { margin-top: 12px; padding: 10px 14px; border-radius: var(--r-sm); background: var(--red-bg); font-size: 14px; color: var(--red-ink); }
 .phone-queue { margin-top: 20px; padding: 16px 18px; border-radius: var(--r-md); background: var(--sand-50); }
@@ -874,6 +886,13 @@ details.more > :not(summary) { margin-top: 10px; }
 .call-line-agent .call-line-text { color: var(--ink); }
 .call-line-callee .call-line-text { font-weight: 600; color: var(--teal-ink); }
 .call-line-system .call-line-text { color: var(--muted); }
+.call-line-meta { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 500; color: var(--muted); }
+.call-check { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 3px 10px; margin: 0; padding: 8px 12px; border-radius: var(--r-sm); background: var(--sand-50); font-size: 13.5px; line-height: 1.4; }
+.call-check dt { font-weight: 600; color: var(--brown); }
+.call-check dd { margin: 0; color: var(--body); }
+.call-check .call-line-meta { display: inline; margin-left: 6px; }
+.call-handover { margin: 8px 0 0 32px; background: var(--orange-bg); }
+@media (max-width: 720px) { .call-handover { margin-left: 0; } .call-check { grid-template-columns: 64px minmax(0, 1fr); } }
 .call-play { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: var(--r-pill); background: var(--sand-100); color: var(--ink); transition: background-color 0.18s var(--ease); }
 .call-play:hover { background: var(--sand-200); }
 .call-play[aria-pressed="true"] { background: var(--ink); color: var(--birch); }

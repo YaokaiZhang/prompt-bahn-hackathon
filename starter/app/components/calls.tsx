@@ -6,6 +6,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import type { BlockedCall, Call, CallLineView, CallState } from "@/lib/engine/calls"
+import type { TurnCheck, TurnPath } from "@/lib/engine/voice-agent"
 import type { Tone } from "@/lib/present/types"
 import { CLOCK_EVENT } from "./demo-clock"
 import { Icon } from "./icons"
@@ -73,16 +74,40 @@ function CostMeter({ call }: { call: Call }) {
   </div>
 }
 
+const PATH_LABEL: Record<TurnPath, string> = {
+  voice: "Audio model",
+  replaced: "Checked reply (the audio model's was not allowed)",
+  fallback: "Fallback: transcribed, checked, spoken",
+}
+
+const NEXT_LABEL: Record<TurnCheck["next"], string> = { continue: "Keep talking", resolved: "End: resolved", handover: "End: hand over to a person" }
+
+/** Haiku's structured result for one tier-2 turn. */
+function TurnCheckView({ check, cost }: { check: TurnCheck; cost: number }) {
+  return <dl className="call-check">
+    {check.failed && <><dt>Check</dt><dd>Failed: safe reply, nothing recorded.</dd></>}
+    {check.claims.length > 0 && <><dt>Said</dt><dd>{check.claims.join("; ")}</dd></>}
+    {check.changes.length > 0 && <><dt>Change</dt><dd>{check.changes.map((change) => change.change).join("; ")} <span className="call-line-meta">Needs your yes</span></dd></>}
+    {check.conflicts.length > 0 && <><dt>Conflict</dt><dd>{check.conflicts.join("; ")}</dd></>}
+    {check.replyOk === false && <><dt>Reply</dt><dd>Not used{check.replyIssue ? `: ${check.replyIssue}` : ""}</dd></>}
+    <dt>Next</dt><dd>{NEXT_LABEL[check.next]}{cost ? <span className="call-line-meta">Haiku · {usd(cost)}</span> : null}</dd>
+  </dl>
+}
+
 function Transcript({ call }: { call: Call }) {
   const start = new Date(call.transcript[0]?.wallAt ?? call.startedAt).getTime()
   const end = useRef<HTMLLIElement | null>(null)
   const live = call.state !== "ended"
   useEffect(() => { if (live) end.current?.scrollIntoView({ block: "nearest" }) }, [live, call.transcript.length])
   return <ol className="call-transcript" aria-live={live ? "polite" : "off"}>
-    {call.transcript.map((line, i) => <li key={i} className={`call-line call-line-${line.by}`} ref={i === call.transcript.length - 1 ? end : undefined}>
+    {call.transcript.map((line, i) => <li key={i} className={`call-line call-line-${line.by}${line.check ? " call-line-check" : ""}`} ref={i === call.transcript.length - 1 ? end : undefined}>
       <span className="call-line-at">{clock((new Date(line.wallAt).getTime() - start) / 1000)}</span>
-      <span className="call-line-by">{line.by === "agent" ? "Agent" : line.by === "callee" ? "Callee" : ""}{line.tier > 1 && line.by === "agent" ? ` · tier ${line.tier}` : ""}</span>
-      <span className="call-line-text">{line.text}</span>
+      <span className="call-line-by">{line.check ? "Check" : line.by === "agent" ? "Agent" : line.by === "callee" ? "Callee" : ""}{line.tier > 1 && line.by === "agent" && !line.check ? ` · tier ${line.tier}` : ""}</span>
+      {line.check ? <TurnCheckView check={line.check} cost={line.cost} /> : <span className="call-line-text">
+        {line.text}
+        {line.path && <span className="call-line-meta">{PATH_LABEL[line.path]}{line.cost ? ` · ${usd(line.cost)}` : ""}</span>}
+        {!line.path && line.tier > 1 && line.by === "callee" && line.cost > 0 && <span className="call-line-meta">Transcribed · {usd(line.cost)}</span>}
+      </span>}
       {line.audioId ? <PlayButton audioId={line.audioId} /> : <span />}
     </li>)}
   </ol>
@@ -108,6 +133,10 @@ function CallCard({ call }: { call: Call }) {
     <p className="call-reason">{call.reason}</p>
     {live && call.answerer === "live" && call.state === "ringing" && <p className="call-reason tone-accent">Ringing on the {PHONE_NAME[call.line]} page (Phone, {call.line === "site" ? "Site" : "Driver"} persona). It waits there while another live call is on that phone.</p>}
     {call.summary && <p className="call-summary">{call.summary}{call.callbackAt && call.outcome === "callback" ? ` Callback at ${demoTime(call.callbackAt)}.` : ""}</p>}
+    {call.handover && <dl className="call-check call-handover" aria-label="Handover">
+      <dt>Open question</dt><dd>{call.handover.question}</dd>
+      <dt>Next step</dt><dd>{call.handover.nextStep}</dd>
+    </dl>}
     <CostMeter call={call} />
     {live ? <Transcript call={call} /> : <More label={`Transcript (${call.transcript.length} lines)`}><Transcript call={call} /></More>}
   </article>
@@ -116,7 +145,7 @@ function CallCard({ call }: { call: Call }) {
 const PHONE_NAME: Record<CallLineView["line"], string> = { site: "Site phone", driver: "Driver phone" }
 
 /** Lines the operator can ring live now: something left to ask, or a callback waiting (ticket 11). */
-const ringable = (line: CallLineView) => !!line.callee && (line.status === "to_call" || line.status === "callback" || line.status === "callback_due")
+const ringable = (line: CallLineView) => !!line.callee && (line.status === "to_call" || line.status === "callback" || line.status === "callback_due" || line.status === "on_request")
 
 /** "Ring live": starts the line's call now, ringing on the Site or Driver phone page instead of the simulated person. */
 function RingLive({ orderId, line }: { orderId: string; line: CallLineView }) {
@@ -131,7 +160,7 @@ function RingLive({ orderId, line }: { orderId: string; line: CallLineView }) {
   const name = line.callee?.name ? line.callee.name.split(",")[0] : line.callee?.handle
   return <div className="call-ring-live">
     <button type="button" className="btn btn-tertiary btn-s" onClick={ring} disabled={state.busy}><Icon name="phone" />{state.busy ? "Ringing…" : `Ring ${name} live`}</button>
-    <span>{line.status === "callback" ? "Calls back now, " : ""}on the {PHONE_NAME[line.line]} page instead of the simulated person.</span>
+    <span>{line.status === "on_request" ? `${line.text} Rings ` : line.status === "callback" ? "Calls back now, " : ""}on the {PHONE_NAME[line.line]} page instead of the simulated person.</span>
     {state.error && <span className="call-ring-error" role="alert">{state.error}</span>}
   </div>
 }

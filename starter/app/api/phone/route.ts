@@ -3,7 +3,8 @@
 //                                          Site and Driver read their own phone; Operator picks one with `as` (default site).
 //                                          Polling marks the phone page open (a ringing call rings out only on an open phone).
 //   POST { callId, input, as? }         -> PhoneView after the callee's move. `input` is
-//                                          { type: "answer" | "decline" | "no_answer" } or { type: "key", digit }.
+//                                          { type: "answer" | "decline" | "no_answer" | "hang_up" } or { type: "key", digit }.
+//   Tier-2 speech turns go to POST /api/phone/voice (ticket 12).
 // A refused move (call queued, ended, wrong turn) answers 409 with `{ error }`.
 
 import { NextRequest, NextResponse } from "next/server"
@@ -25,7 +26,7 @@ async function phoneOf(as: unknown): Promise<PhonePersona | null> {
 function inputOf(value: unknown): CalleeInput | null {
   if (!value || typeof value !== "object") return null
   const input = value as { type?: unknown; digit?: unknown }
-  if (input.type === "answer" || input.type === "decline" || input.type === "no_answer") return { type: input.type }
+  if (input.type === "answer" || input.type === "decline" || input.type === "no_answer" || input.type === "hang_up") return { type: input.type }
   if (input.type === "key" && typeof input.digit === "string") return { type: "key", digit: input.digit }
   return null
 }

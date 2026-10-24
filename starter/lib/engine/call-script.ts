@@ -31,8 +31,8 @@ export type Question = {
   topics: string[]
 }
 
-/** A topic is one reason to call: `rule:R10` or `proposal:<id>`. */
-export type Topic = { id: string; kind: "rule" | "proposal"; title: string; script?: string }
+/** A topic is one reason to call: `rule:R10`, `proposal:<id>`, or `check:on_time` (asked only when the operator rings live). */
+export type Topic = { id: string; kind: "rule" | "proposal" | "check"; title: string; script?: string }
 
 export const CALLBACK_MINUTES: Record<string, number> = { "1": 15, "2": 60, "3": 120 }
 
@@ -122,6 +122,10 @@ export function questionsFor(topics: Topic[], who: { name: string | null; handle
     out.push({ ...question, topics: [topic] })
   }
   for (const topic of topics) {
+    if (topic.kind === "check") {
+      if (topic.id === "check:on_time") add(fixed("on_time", who), topic.id)
+      continue
+    }
     if (topic.kind === "rule") {
       const id = RULE_QUESTION[topic.id.replace(/^rule:/, "")]
       if (id) add(fixed(id, who), topic.id)

@@ -7,7 +7,9 @@
 //      ├─decline──> declined ─┐          └─2─> callback_time ──digit──> ended (callback)
 //      └─no answer─> no_answer┴──> ended (callback; "unreachable" after MAX_ATTEMPTS)
 //                                                          └─problem / unclear──> tier2
-//   tier2: ticket 12 runs the voice agent there. Without it the call ends politely
+//   tier2: the voice agent (ticket 12, voice-agent.ts) takes live calls there: the
+//   callee speaks (push-to-talk), the agent answers aloud, until it ends "resolved" or
+//   "handover". Without a voice agent, or on a simulated call, the call ends politely
 //   as "handover" (a person follows up; ticket 14 makes that a tier-3 handover).
 //
 // A call is an append-only list of events in the store; `foldCall` reads the current
@@ -36,6 +38,7 @@ import {
 import type { PlannedAction } from "./checks"
 import type { DueItem } from "./due"
 import type { Proposal } from "./proposals"
+import type { TurnCheck, TurnPath } from "./voice-agent"
 
 export type CallLine = "site" | "driver"
 export type CallState =
@@ -43,7 +46,7 @@ export type CallState =
   | "availability" | "callback_time" | "tier1" | "tier2" | "ended"
 export type CallOutcome = "resolved" | "callback" | "handover" | "unreachable"
 export type Answerer = "simulated" | "live"
-export type CalleeInput = { type: "answer" } | { type: "decline" } | { type: "no_answer" } | { type: "key"; digit: string }
+export type CalleeInput = { type: "answer" } | { type: "decline" } | { type: "no_answer" } | { type: "key"; digit: string } | { type: "hang_up" }
 export type Tier = 1 | 2 | 3
 
 export type CallCallee = { name: string | null; handle: string; role: string | null; contactType: ContactType; recordId: string | null }
@@ -67,7 +70,18 @@ export type CallHeader = {
   zone: string
 }
 
-export type CallEventKind = "started" | "answered" | "declined" | "no_answer" | "said" | "pressed" | "tier" | "callback" | "ended"
+export type CallEventKind =
+  | "started" | "answered" | "declined" | "no_answer" | "said" | "pressed" | "tier" | "callback" | "ended"
+  /** Tier 2: what the callee said (transcribed), and the checker's structured result for the turn. */
+  | "heard" | "checked"
+  /** The callee hung up. */
+  | "hung_up"
+
+/**
+ * What ticket 14 (tier-3 handover) picks up when a tier-2 call ends unresolved: the
+ * open question, the proposed next step and the summary (the transcript is on the call).
+ */
+export type Handover = { question: string; nextStep: string; summary: string }
 
 export type CallChange = { title: string; change: string; claim: string }
 
@@ -101,12 +115,21 @@ export type StoredCallEvent = {
     summary?: string
     claims?: string[]
     changes?: CallChange[]
+    /** Tier 2: the checker's result ("checked"), how the reply was made ("said"), the model that made it. */
+    check?: TurnCheck
+    path?: TurnPath
+    model?: string | null
+    /** Why a tier-2 step fell back (audio model or checker failed). */
+    error?: string | null
+    handover?: Handover
   } | null
 }
 
 export type Expecting =
   | { type: "ring" }
   | { type: "key"; ask: string; text: string; options: { digit: string; label: string }[] }
+  /** Tier 2: the callee's turn to speak (push-to-talk). */
+  | { type: "speech" }
 
 export type TranscriptLine = {
   at: string
@@ -115,6 +138,12 @@ export type TranscriptLine = {
   text: string
   tier: Tier
   audioId: string | null
+  /** Model cost of this step, USD. */
+  cost: number
+  /** Tier 2: the checker's structured result for the turn (on its "checked" line). */
+  check?: TurnCheck
+  /** Tier 2: the agent's reply came from the audio model or the fallback. */
+  path?: TurnPath
 }
 
 export type CostRates = {
@@ -157,6 +186,8 @@ export type Call = Omit<CallHeader, "callId"> & {
   summary: string | null
   claims: string[]
   changes: CallChange[]
+  /** A tier-2 call that ended unresolved: what a person must pick up (ticket 14). */
+  handover: Handover | null
   cost: CallCost
   startedAt: string
   endedAt: string | null
@@ -214,10 +245,14 @@ export function foldCall(events: StoredCallEvent[], rates: CostRates = DEFAULT_R
   let summary: string | null = null
   let claims: string[] = []
   let changes: CallChange[] = []
+  let handover: Handover | null = null
   let endedAt: string | null = null
   const move = (next: CallState) => { if (state !== next) { state = next; path.push(next) } }
   const line = (event: StoredCallEvent, by: TranscriptLine["by"], text: string) =>
-    transcript.push({ at: event.at, wallAt: event.wallAt, by, text, tier, audioId: event.data?.audioId ?? null })
+    transcript.push({
+      at: event.at, wallAt: event.wallAt, by, text, tier, audioId: event.data?.audioId ?? null, cost: event.data?.cost ?? 0,
+      ...(event.data?.check ? { check: event.data.check } : {}), ...(event.data?.path ? { path: event.data.path } : {}),
+    })
   for (const event of events) {
     switch (event.kind) {
       case "started":
@@ -246,6 +281,15 @@ export function foldCall(events: StoredCallEvent[], rates: CostRates = DEFAULT_R
         move(tier === 2 ? "tier2" : state)
         line(event, "system", event.text)
         break
+      case "heard":
+        line(event, "callee", event.text)
+        break
+      case "checked":
+        line(event, "system", event.text)
+        break
+      case "hung_up":
+        line(event, "callee", event.text)
+        break
       case "callback":
         callbackAt = event.data?.callbackAt ?? null
         line(event, "system", event.text)
@@ -256,6 +300,7 @@ export function foldCall(events: StoredCallEvent[], rates: CostRates = DEFAULT_R
         summary = event.data?.summary ?? null
         claims = event.data?.claims ?? []
         changes = event.data?.changes ?? []
+        handover = event.data?.handover ?? null
         endedAt = event.at
         line(event, "system", event.text)
         break
@@ -267,10 +312,12 @@ export function foldCall(events: StoredCallEvent[], rates: CostRates = DEFAULT_R
   else if (state !== "ended" && asking && last.kind === "said") {
     const asked = optionsFor(header, asking)
     if (asked) expecting = { type: "key", ask: asking, text: last.text, options: asked.options.map(({ digit, label }) => ({ digit, label })) }
+  } else if (state === "tier2" && last.kind === "said") {
+    expecting = { type: "speech" }
   }
   const { callId, ...rest } = header
   return {
-    ...rest, id: callId, state, path, tier, expecting, answers, transcript, callbackAt, outcome, summary, claims, changes,
+    ...rest, id: callId, state, path, tier, expecting, answers, transcript, callbackAt, outcome, summary, claims, changes, handover,
     cost: costOf(events, rates), startedAt: events[0].at, endedAt, lastWallAt: last.wallAt, lastSeconds: last.data?.seconds ?? 0,
   }
 }
@@ -280,7 +327,7 @@ export type AgentStep =
   | { kind: "said"; text: string; ask?: string }
   | { kind: "tier"; tier: Tier; text: string }
   | { kind: "callback"; callbackAt: string; text: string }
-  | { kind: "ended"; outcome: CallOutcome; text: string; summary: string; claims: string[]; changes: CallChange[] }
+  | { kind: "ended"; outcome: CallOutcome; text: string; summary: string; claims: string[]; changes: CallChange[]; handover?: Handover }
 
 const MINUTE = 60_000
 const addMinutes = (iso: string, minutes: number) => new Date(new Date(iso).getTime() + minutes * MINUTE).toISOString()
@@ -324,6 +371,21 @@ function said(call: Call): { claims: string[]; changes: CallChange[]; escalation
   return { claims, changes, escalation }
 }
 
+/**
+ * Everything the person said on the call: the keypad's claims and changes, then the
+ * latest successful tier-2 check's (each check lists the whole call so far). The voice
+ * agent never agreed to any of them: changes become change proposals when the call ends.
+ */
+export function tier2Said(call: Call): { claims: string[]; changes: CallChange[] } {
+  const keypad = said(call)
+  const latest = [...call.transcript].reverse().find((line) => line.check && !line.check.failed)?.check
+  const claims = [...keypad.claims]
+  const changes = [...keypad.changes]
+  for (const claim of latest?.claims ?? []) if (!claims.includes(claim)) claims.push(claim)
+  for (const change of latest?.changes ?? []) if (!changes.some((row) => row.title === change.title && row.change === change.change)) changes.push(change)
+  return { claims, changes }
+}
+
 function ending(call: Call, outcome: CallOutcome, text: string, extra: { escalation?: string | null } = {}): AgentStep {
   const { claims, changes } = said(call)
   const name = who(call.callee)
@@ -338,10 +400,10 @@ function ending(call: Call, outcome: CallOutcome, text: string, extra: { escalat
 
 /**
  * The agent's next steps on a call whose turn it is (`expecting` null), as of the
- * demo time `now`. `tier2` says whether a voice agent can take the call over
- * (ticket 12); without one an escalation ends the call as a handover.
+ * demo time `now`. `tier2` is the voice agent's first words when one can take the
+ * call over (ticket 12: live calls only); null: an escalation ends the call as a handover.
  */
-export function agentTurn(call: Call, now: string, tier2: boolean, lastEvent: StoredCallEvent): AgentStep[] {
+export function agentTurn(call: Call, now: string, tier2: string | null, lastEvent: StoredCallEvent): AgentStep[] {
   if (call.state === "ended" || call.expecting) return []
   const next = (from: number): AgentStep[] => {
     const answered = new Set(call.answers.filter((row) => row.ask.startsWith("q") && call.questions[Number(row.ask.slice(1))]?.options.some((option) => option.digit === row.digit)).map((row) => row.ask))
@@ -365,6 +427,8 @@ export function agentTurn(call: Call, now: string, tier2: boolean, lastEvent: St
       return callback(DECLINED_CALLBACK_MINUTES, false)
     case "no_answer":
       return callback(NO_ANSWER_CALLBACK_MINUTES, false)
+    case "hung_up":
+      return call.tier >= 2 ? [hungUp(call)] : callback(UNCLEAR_CALLBACK_MINUTES, false)
     case "pressed": {
       const answer = call.answers[call.answers.length - 1]
       const asked = optionsFor(headerOf(call), answer.ask)
@@ -385,9 +449,16 @@ export function agentTurn(call: Call, now: string, tier2: boolean, lastEvent: St
   }
 }
 
-function escalate(call: Call, why: string, tier2: boolean): AgentStep[] {
+function hungUp(call: Call): AgentStep {
+  const summary = `${who(call.callee)} hung up during the voice call. A person should follow up.`
+  const { claims, changes } = tier2Said(call)
+  return { kind: "ended", outcome: "handover", text: summary, summary, claims, changes,
+    handover: { question: "The callee hung up before the problem was settled.", nextStep: `Call ${who(call.callee)} back.`, summary } }
+}
+
+function escalate(call: Call, why: string, tier2: string | null): AgentStep[] {
   const move: AgentStep = { kind: "tier", tier: 2, text: `Moved to tier 2: ${why}.` }
-  if (tier2) return [move]
+  if (tier2) return [move, { kind: "said", text: tier2 }]
   return [move, { kind: "said", text: HANDOVER_LINE }, ending(call, "handover", HANDOVER_LINE, { escalation: why })]
 }
 
@@ -401,7 +472,9 @@ function headerOf(call: Call): CallHeader {
 /** Is the callee's input acceptable now? Returns why not, or null. */
 export function refuseInput(call: Call, input: CalleeInput): string | null {
   if (call.state === "ended") return `${call.id} has ended`
+  if (input.type === "hang_up") return call.state === "ringing" ? `${call.id} is ringing: decline it instead` : null
   if (!call.expecting) return `${call.id} is waiting for the agent`
+  if (call.expecting.type === "speech") return `${call.id} is listening: speak (push-to-talk) or hang up`
   if (call.expecting.type === "ring" && input.type === "key") return `${call.id} is ringing: answer, decline or let it ring out first`
   if (call.expecting.type === "key" && input.type !== "key") return `${call.id} is waiting for a keypad answer`
   if (input.type === "key" && !/^[0-9*#]$/.test(input.digit)) return `"${input.digit}" is not a keypad key`
@@ -415,6 +488,7 @@ export function calleeEvent(call: Call, input: CalleeInput, base: Pick<StoredCal
     case "answer": return { ...base, by: "callee", kind: "answered", text: `${name} answered.`, data: { seconds } }
     case "decline": return { ...base, by: "callee", kind: "declined", text: `${name} declined the call.`, data: { seconds } }
     case "no_answer": return { ...base, by: "callee", kind: "no_answer", text: "No answer.", data: { seconds } }
+    case "hang_up": return { ...base, by: "callee", kind: "hung_up", text: `${name} hung up.`, data: { seconds } }
     case "key": {
       const ask = call.expecting?.type === "key" ? call.expecting.ask : ""
       const label = call.expecting?.type === "key" ? call.expecting.options.find((option) => option.digit === input.digit)?.label ?? "not an option" : ""
@@ -436,6 +510,12 @@ export type LineStatus =
   | "callback_due"
   /** The last call ended needing a person (handover, unreachable). */
   | "needs_person"
+  /**
+   * Something worth asking, but only when the operator rings it live (ticket 12): a
+   * driver whose ETA is close to the promise end ("can you still deliver on time?").
+   * The pump never starts it; it holds nothing in grouping.
+   */
+  | "on_request"
   /** Nothing left to call about. */
   | "done"
 
@@ -487,7 +567,32 @@ function plannedContact(bundle: Bundle, endpointId: string, ruleIds: string[]): 
   return { type, allowed: readiness && pickupCallAllowed(type) }
 }
 
-function driverOf(bundle: Bundle): CallCallee | null {
+/** How close an ETA may come to the promise end before the operator may ask the driver (ticket 12). */
+export const TIGHT_ETA_MINUTES = 10
+
+/**
+ * A car on the road whose latest ETA is inside the delivery promise but within
+ * TIGHT_ETA_MINUTES of its end: the reason to ask "can you still deliver on time?"
+ * (story 71, CD-420437). R12 covers an ETA after the end; this is the near miss.
+ */
+export function tightEta(bundle: Bundle): string | null {
+  const status = String(bundle.order.status)
+  if (status === "DELIVERED" || status === "CANCELLED") return null
+  const moving = rows(bundle, "work_assignments").some((row) => row.details.order_id === bundle.order.id && row.details.status === "IN_PROGRESS")
+  if (!moving) return null
+  const windows = rows(bundle, "time_windows").filter((row) => row.details.purpose === "CUSTOMER_DELIVERY_PROMISE")
+  const promise = windows.find((row) => row.details.is_selected === true) ?? null
+  const latest = rows(bundle, "tracking_observations").filter((row) => str(row.details.estimated_delivery_at))
+    .sort((a, b) => String(a.details.observed_at ?? "").localeCompare(String(b.details.observed_at ?? ""))).pop()
+  const eta = str(latest?.details.estimated_delivery_at)
+  const end = str(promise?.details.end_at)
+  if (!eta || !end) return null
+  const margin = (new Date(end).getTime() - new Date(eta).getTime()) / MINUTE
+  if (margin < 0 || margin > TIGHT_ETA_MINUTES) return null
+  return `Latest ETA ${utcTime(eta)} is ${Math.round(margin)} min before the promise ends at ${utcTime(end)}`
+}
+
+export function driverOf(bundle: Bundle): CallCallee | null {
   const moving = rows(bundle, "work_assignments").filter((row) => row.details.order_id === bundle.order.id && row.details.status === "IN_PROGRESS")
   const assignment = moving[0] ?? rows(bundle, "work_assignments").find((row) => row.details.order_id === bundle.order.id)
   const driverId = str(assignment?.details.driver_id)
@@ -532,6 +637,11 @@ export function orderCalls(bundle: Bundle, planned: PlannedAction[], proposals: 
     if (!callee) continue
     for (const id of action.ruleIds) add(line, callee, { id: `rule:${id}`, kind: "rule", title: RULE_TOPIC_TITLE[id] ?? id })
   }
+  const tight = tightEta(bundle)
+  if (tight && !topics.get("driver")?.topics.some((topic) => topic.id === "rule:R12")) {
+    const callee = driverOf(bundle)
+    if (callee) add("driver", callee, { id: "check:on_time", kind: "check", title: tight })
+  }
   for (const proposal of proposals) {
     // A reviewer finding for a customer-side contact is a customer_contact proposal, never a call.
     if (proposal.kind !== "call" || proposal.waitingOn !== "agent" || !proposal.contact.handle || isCustomerSide(proposal.contact.type)) continue
@@ -559,6 +669,9 @@ export function orderCalls(bundle: Bundle, planned: PlannedAction[], proposals: 
     } else if (latest?.outcome === "callback" && latest.callbackAt && (open.length || latest.topics.length)) {
       status = latest.callbackAt > now ? "callback" : "callback_due"
       text = status === "callback" ? `Callback to ${name} at ${utcTime(latest.callbackAt)}.` : `Callback to ${name} is due; the agent calls now.`
+    } else if (open.length && open.every((topic) => topic.kind === "check")) {
+      status = "on_request"
+      text = `Ask ${name} if they can still deliver on time: ${open.map((topic) => topic.title).join("; ")}.`
     } else if (open.length) {
       status = "to_call"
       text = `Agent will call ${name}: ${open.map((topic) => topic.title).join("; ")}.`

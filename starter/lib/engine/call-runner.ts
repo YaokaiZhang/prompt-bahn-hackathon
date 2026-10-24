@@ -8,17 +8,20 @@
 // Live calls ring on a persona's phone (ticket 11, phone.ts): one at a time per
 // phone, the rest queued; each round also rings out a live call that rang
 // `ringTimeoutMs` on an open phone ("no answer", so the agent schedules a callback).
-// Tier 2 (ticket 12): set `tier2: true` and take the call's turns while it is in
-// state "tier2"; the runner leaves such calls alone.
+// Tier 2 (ticket 12): with a `voice` agent, an escalation on a LIVE call moves it to
+// state "tier2" and the agent speaks first; then each `voice(callId, clip)` is one
+// turn (the callee's recording in, the agent's reply out). The round leaves tier-2
+// calls alone. Simulated calls cannot talk: their escalations end as a handover.
 
 import type { Bundle } from "@/lib/present/bundle"
 import {
-  agentTurn, calleeEvent, DEFAULT_RATES, foldCall, newCallHeader, refuseInput,
+  agentTurn, calleeEvent, DEFAULT_RATES, foldCall, newCallHeader, refuseInput, tier2Said,
   type Answerer, type Call, type CalleeInput, type CallHeader, type CostRates, type OrderCalls, type StoredCallEvent,
 } from "./calls"
 import { simulatedPerson, type SimulatedPerson } from "./simulated-person"
 import type { Speech } from "./speech"
 import { estimateSeconds } from "./speech"
+import { briefFor, type AudioClip, type TurnResult, type VoiceAgent, type VoiceTurn } from "./voice-agent"
 import type { EngineStore } from "./store"
 import { phoneView, queuedBehind, type PhonePersona, type PhoneView } from "./phone"
 
@@ -29,8 +32,8 @@ export type CallOptions = {
   speech?: Speech | null
   /** Decides, when a call starts, whether the simulated person or a live phone answers. Default: simulated. */
   answererFor?: (header: Omit<CallHeader, "answerer">) => Answerer
-  /** A voice agent can take tier 2 (ticket 12). Without it an escalation ends the call as a handover. */
-  tier2?: boolean
+  /** The voice agent that takes live calls at tier 2 (ticket 12). Without it an escalation ends the call as a handover. */
+  voice?: VoiceAgent | null
   rates?: Partial<CostRates>
   /**
    * 0 (default): the simulated person answers at once (tests, scripts). 1: it waits
@@ -69,6 +72,8 @@ export type CallRunner = {
   run(steps?: number): Promise<boolean>
   start(orderId: string, line: "site" | "driver", answerer?: Answerer): Promise<Call>
   input(callId: string, input: CalleeInput): Promise<Call>
+  /** A tier-2 turn: the callee's recording (push-to-talk); the voice agent answers. */
+  voice(callId: string, clip: AudioClip): Promise<Call>
   /** A persona's mock phone: the live call on it, the queue behind it (ticket 11). */
   phone(persona: PhonePersona): Promise<PhoneView>
 }
@@ -114,7 +119,8 @@ export function createCallRunner(deps: CallRunnerDeps): CallRunner {
   async function agentStep(events: StoredCallEvent[]): Promise<boolean> {
     const call = foldCall(events, rates)
     const now = await deps.clock()
-    const steps = agentTurn(call, now, options.tier2 ?? false, events[events.length - 1])
+    const opener = options.voice && call.answerer === "live" ? options.voice.opener(call) : null
+    const steps = agentTurn(call, now, opener, events[events.length - 1])
     if (!steps.length) return false
     const base = { callId: call.id, orderId: call.orderId, at: now, wallAt: iso(wall()), by: "agent" as const }
     const out: StoredCallEvent[] = []
@@ -131,7 +137,9 @@ export function createCallRunner(deps: CallRunnerDeps): CallRunner {
       } else if (step.kind === "callback") {
         out.push({ ...base, seq: seq++, kind: "callback", text: step.text, data: { callbackAt: step.callbackAt } })
       } else {
-        out.push({ ...base, seq: seq++, kind: "ended", text: step.text, data: { outcome: step.outcome, summary: step.summary, claims: step.claims, changes: step.changes } })
+        out.push({ ...base, seq: seq++, kind: "ended", text: step.text, data: {
+          outcome: step.outcome, summary: step.summary, claims: step.claims, changes: step.changes, ...(step.handover ? { handover: step.handover } : {}),
+        } })
       }
     }
     if (!(await store.appendCallEvents(out))) return false
@@ -147,6 +155,45 @@ export function createCallRunner(deps: CallRunnerDeps): CallRunner {
     if (!(await store.appendCallEvents([event]))) return false
     await agentStep([...events, event])
     return true
+  }
+
+  /** One tier-2 turn, stored as heard -> checked -> said (-> ended). */
+  async function voiceStep(events: StoredCallEvent[], clip: AudioClip): Promise<void> {
+    const agent = options.voice
+    if (!agent) throw new Error("No voice agent takes tier 2")
+    const call = foldCall(events, rates)
+    if (call.state !== "tier2" || call.expecting?.type !== "speech") throw new Error(`${call.id} is not listening for speech`)
+    const bundle = deps.bundles.get(call.orderId)
+    if (!bundle) throw new Error(`Unknown order ${call.orderId}`)
+    const history: VoiceTurn[] = call.transcript.filter((line) => line.tier === 2 && line.by !== "system").map((line) => ({ by: line.by === "agent" ? "agent" : "callee", text: line.text }))
+    const turn = events.filter((event) => event.kind === "heard").length + 1
+    const result = await agent.turn({ call, brief: briefFor(bundle, call), history, clip, speech, turn })
+    const now = await deps.clock()
+    const base = { callId: call.id, orderId: call.orderId, at: now, wallAt: iso(wall()) }
+    let seq = events.length
+    const out: StoredCallEvent[] = [
+      { ...base, seq: seq++, by: "callee", kind: "heard", text: result.heard.text || "(nothing heard)", data: { seconds: result.heard.seconds, cost: result.heard.cost, model: result.heard.model } },
+      { ...base, seq: seq++, by: "agent", kind: "checked", text: checkLine(result), data: { check: result.check, cost: result.checkCost, model: result.checkModel, error: result.checkError, seconds: 0 } },
+      { ...base, seq: seq++, by: "agent", kind: "said", text: result.said.text, data: {
+        audioId: result.said.audioId, seconds: result.said.seconds, cost: result.said.cost, model: result.said.model, path: result.path, error: result.voiceError,
+      } },
+    ]
+    if (result.check.next !== "continue") {
+      const sofar = foldCall([...events, ...out], rates)
+      const { claims, changes } = tier2Said(sofar)
+      const name = call.callee.name ? call.callee.name.split(",")[0] : call.callee.handle
+      const resolved = result.check.next === "resolved"
+      const summary = resolved ? `${name}: ${result.check.summary}` : `${name}: ${result.check.summary} A person should follow up.`
+      out.push({ ...base, seq: seq++, by: "agent", kind: "ended", text: summary, data: {
+        outcome: resolved ? "resolved" : "handover", summary, claims, changes,
+        ...(resolved ? {} : { handover: {
+          question: result.check.openQuestion ?? "What the voice agent could not settle on the call.",
+          nextStep: result.check.nextStep ?? `Call ${name} back.`, summary: result.check.summary,
+        } }),
+      } })
+    }
+    if (!(await store.appendCallEvents(out))) throw new Error(`${call.id} moved on while the agent was answering`)
+    if (out.some((event) => event.kind === "ended")) await deps.ended(foldCall([...events, ...out], rates))
   }
 
   async function startLine(bundle: Bundle, header: CallHeader): Promise<boolean> {
@@ -243,6 +290,27 @@ export function createCallRunner(deps: CallRunnerDeps): CallRunner {
       await calleeStep(events, input, Math.round(seconds * 10) / 10)
       return foldCall((await eventsByCall()).get(callId)!, rates)
     }),
+    voice: (callId, clip) => serial(async () => {
+      const events = (await eventsByCall()).get(callId)
+      if (!events) throw new Error(`No call ${callId}`)
+      const behind = queuedBehind([...(await read()).values()].flat(), foldCall(events, rates))
+      if (behind) throw new Error(behind)
+      await voiceStep(events, clip)
+      return foldCall((await eventsByCall()).get(callId)!, rates)
+    }),
     phone,
   }
+}
+
+/** The "checked" line in the transcript: the checker's result in one sentence. */
+function checkLine(result: TurnResult): string {
+  const { check } = result
+  const parts = [
+    check.claims.length ? `Heard: ${check.claims.join("; ")}.` : "No new facts.",
+    ...(check.changes.length ? [`Change to propose: ${check.changes.map((change) => change.title).join("; ")}.`] : []),
+    ...(check.conflicts.length ? [`Conflicts with the records: ${check.conflicts.join("; ")}.`] : []),
+    ...(check.replyOk === false ? [`Audio reply not used${check.replyIssue ? `: ${check.replyIssue}` : ""}.`] : []),
+    `Next: ${check.next === "continue" ? "keep talking" : check.next === "resolved" ? "end, resolved" : "hand over to a person"}.`,
+  ]
+  return `${result.checkError ? "Check failed, safe reply. " : ""}${parts.join(" ")}`
 }

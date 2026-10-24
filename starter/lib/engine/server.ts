@@ -13,6 +13,9 @@ import { createPostgresProseCache } from "./prose-cache"
 import { demoAnswerer, RING_TIMEOUT_MS, type PhonePersona } from "./phone"
 import { simulatedPerson } from "./simulated-person"
 import { createDiskAudioStore, openRouterSpeechFromEnv, type AudioStore } from "./speech"
+import { createVoiceAgent, type VoiceAgent } from "./voice-agent"
+import { openRouterTranscriberFromEnv, openRouterVoiceFromEnv } from "./voice-openrouter"
+import type { ModelGateway } from "@/lib/reviewer/gateway"
 
 // The snapshot is read once per server process (kept across dev reloads).
 // Restart the server after reseeding. Reviews are read from cr_review_results on
@@ -76,6 +79,17 @@ function startPump(engine: Engine): void {
   cache.controlRoomPump.unref?.()
 }
 
+/**
+ * Tier 2 (ticket 12): the audio model answers live calls aloud, the ear transcribes,
+ * Haiku (the reviewer's gateway) checks each turn. Needs the key; TIER2_AUDIO_MODEL=off
+ * runs the fallback (ear, Haiku, text to speech) only.
+ */
+function voiceAgent(gateway: ModelGateway | null): VoiceAgent | null {
+  const ear = openRouterTranscriberFromEnv()
+  if (!gateway || !ear) return null
+  return createVoiceAgent({ voice: openRouterVoiceFromEnv(getAudioStore()), ear, checker: gateway })
+}
+
 export function getEngine(): Promise<Engine> {
   cache.controlRoomEngine ??= reviewSourceFromDatabase(db)
     .then((source) => {
@@ -91,7 +105,7 @@ export function getEngine(): Promise<Engine> {
         calls: {
           person: simulatedPerson(), speech: openRouterSpeechFromEnv(getAudioStore()), pace: 1,
           ...(LIVE_DEMO ? { answererFor: demoAnswerer() } : {}),
-          phoneOpenSince, ringTimeoutMs: RING_TIMEOUT,
+          phoneOpenSince, ringTimeoutMs: RING_TIMEOUT, voice: voiceAgent(gateway),
         },
       })
       startPump(engine)

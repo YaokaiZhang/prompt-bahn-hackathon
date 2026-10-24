@@ -12,7 +12,7 @@
 //     idle    -> IdleScreen       (with the last call's result)
 //     ringing -> RingingScreen    (caller ID, order, answer / decline / ignore)
 //     tier1   -> KeypadScreen     (prompt caption, options, keypad)
-//     tier2   -> Tier2Screen      (placeholder: ticket 12 puts push-to-talk here)
+//     tier2   -> Tier2Screen      (ticket 12: push-to-talk with the voice agent; mic opens when it shows)
 //     ended   -> EndedScreen      (outcome, until the person taps Done)
 // Answering is the user gesture that unlocks audio (and, in tier 2, the microphone).
 
@@ -65,7 +65,15 @@ export function usePhone(as: PhonePersona) {
     setView(data)
     return null
   }, [as])
-  return { view, error, send }
+  /** A tier-2 turn: the recording as base64 WAV. Resolves once the agent answered (a few seconds). */
+  const sendVoice = useCallback(async (callId: string, wav: string): Promise<string | null> => {
+    const response = await fetch("/api/phone/voice", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ callId, audio: { data: wav, format: "wav" }, as }) })
+    const data = await response.json().catch(() => null) as (PhoneView & { error?: string }) | null
+    if (!response.ok || !data) return data?.error ?? "The agent did not get that. Hold the button and say it again."
+    setView(data)
+    return null
+  }, [as])
+  return { view, error, send, sendVoice }
 }
 
 /**
@@ -168,7 +176,7 @@ const PHONE_LABEL: Record<PhonePersona, string> = { site: "Site phone", driver: 
 /** The whole phone page body: which phone (Operator may switch), the screen, the queue. */
 export function PhoneApp({ persona }: { persona: PhonePersona | "operator" }) {
   const [as, setAs] = useState<PhonePersona>(persona === "operator" ? "site" : persona)
-  const { view, error, send } = usePhone(as)
+  const { view, error, send, sendVoice } = usePhone(as)
   const call = view?.current ?? null
   const [ended, setEnded] = useState<Call | null>(null)
   const [ignored, setIgnored] = useState<string | null>(null)
@@ -203,7 +211,7 @@ export function PhoneApp({ persona }: { persona: PhonePersona | "operator" }) {
       {!view ? <p className="phone-wait">Connecting…</p>
         : mode === "ringing" && call ? <RingingScreen call={call} view={view} ignored={ignored === call.id} onIgnore={() => setIgnored(call.id)} act={act} />
         : mode === "tier1" && call ? <KeypadScreen call={call} playing={prompts.playing} act={act} />
-        : mode === "tier2" && call ? <Tier2Screen call={call} />
+        : mode === "tier2" && call ? <Tier2Screen call={call} playing={prompts.playing} stopPrompt={prompts.stop} act={act} sendVoice={sendVoice} />
         : mode === "ended" && ended ? <EndedScreen call={ended} onDone={() => setEnded(null)} />
         : <IdleScreen persona={as} last={view.last} />}
       {/* One element plays every prompt, so the Answer tap unlocks it for the whole call. */}
@@ -276,12 +284,165 @@ function KeypadScreen({ call, playing, act }: { call: Call; playing: boolean; ac
   </div>
 }
 
-/** Tier 2 (ticket 12): the voice agent with push-to-talk replaces this placeholder. */
-function Tier2Screen({ call }: { call: Call }) {
-  return <div className="phone-screen phone-in-call">
-    <CallerId call={call} />
-    <div className="phone-call-pills"><Pill tone="accent" dot>Tier 2</Pill></div>
-    <p className="phone-prompt">The voice agent takes over this call.</p>
+/** Shortest recording worth sending, seconds. */
+const MIN_TALK_SECONDS = 0.5
+
+/**
+ * Push-to-talk recording: the microphone opens once per call (asked when tier 2 starts,
+ * or on the first press), each hold records one clip, and the clip goes out as a 16 kHz
+ * mono WAV (what the ear and the audio model both accept).
+ */
+function useRecorder(active: boolean) {
+  const stream = useRef<MediaStream | null>(null)
+  const recorder = useRef<MediaRecorder | null>(null)
+  const chunks = useRef<Blob[]>([])
+  const startedAt = useRef(0)
+  const [recording, setRecording] = useState(false)
+  const [micError, setMicError] = useState<string | null>(null)
+
+  const open = useCallback(async (): Promise<MediaStream | null> => {
+    if (stream.current) return stream.current
+    if (!navigator.mediaDevices?.getUserMedia) { setMicError("This browser has no microphone access. Hang up and a colleague will follow up."); return null }
+    try {
+      stream.current = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } })
+      setMicError(null)
+      return stream.current
+    } catch {
+      setMicError("Allow the microphone to talk to the agent, then hold the button again.")
+      return null
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!active) return
+    void open()
+    return () => { stream.current?.getTracks().forEach((track) => track.stop()); stream.current = null }
+  }, [active, open])
+
+  const start = useCallback(async () => {
+    if (recorder.current) return
+    const media = await open()
+    if (!media) return
+    chunks.current = []
+    const next = new MediaRecorder(media)
+    next.ondataavailable = (event) => { if (event.data.size) chunks.current.push(event.data) }
+    recorder.current = next
+    startedAt.current = Date.now()
+    next.start()
+    setRecording(true)
+  }, [open])
+
+  /** Stops the recording; the clip as base64 WAV, or null when it was too short. */
+  const stop = useCallback(async (): Promise<string | null> => {
+    const current = recorder.current
+    recorder.current = null
+    setRecording(false)
+    if (!current || current.state === "inactive") return null
+    const stopped = new Promise<void>((resolve) => { current.onstop = () => resolve() })
+    current.stop()
+    await stopped
+    if ((Date.now() - startedAt.current) / 1000 < MIN_TALK_SECONDS) return null
+    return toWavBase64(new Blob(chunks.current, { type: current.mimeType }))
+  }, [])
+
+  return { recording, micError, start, stop }
+}
+
+/** Any recording the browser made, decoded and resampled to a 16 kHz mono 16-bit WAV, base64. */
+async function toWavBase64(blob: Blob): Promise<string> {
+  const Context = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+  const context = new Context()
+  const decoded = await context.decodeAudioData(await blob.arrayBuffer())
+  void context.close()
+  const rate = 16_000
+  const offline = new OfflineAudioContext(1, Math.max(1, Math.ceil(decoded.duration * rate)), rate)
+  const source = offline.createBufferSource()
+  source.buffer = decoded
+  source.connect(offline.destination)
+  source.start()
+  const samples = (await offline.startRendering()).getChannelData(0)
+  const view = new DataView(new ArrayBuffer(44 + samples.length * 2))
+  const text = (offset: number, value: string) => { for (let i = 0; i < value.length; i++) view.setUint8(offset + i, value.charCodeAt(i)) }
+  text(0, "RIFF"); view.setUint32(4, 36 + samples.length * 2, true); text(8, "WAVE")
+  text(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true)
+  view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true)
+  text(36, "data"); view.setUint32(40, samples.length * 2, true)
+  for (let i = 0; i < samples.length; i++) view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, samples[i])) * 0x7fff, true)
+  const bytes = new Uint8Array(view.buffer)
+  let binary = ""
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  return btoa(binary)
+}
+
+/**
+ * Tier 2 (ticket 12): the voice agent. The person holds the talk button (or Space)
+ * while speaking; on release the clip goes to the agent, which answers aloud. The
+ * conversation so far shows under the latest reply.
+ */
+function Tier2Screen({ call, playing, stopPrompt, act, sendVoice }: {
+  call: Call; playing: boolean; stopPrompt: () => void; act: (input: CalleeInput) => void
+  sendVoice: (callId: string, wav: string) => Promise<string | null>
+}) {
+  const now = useNow(true)
+  const answeredAt = call.transcript.find((line) => line.by === "callee")?.wallAt ?? call.lastWallAt
+  const listening = call.expecting?.type === "speech"
+  const { recording, micError, start, stop } = useRecorder(true)
+  const [sending, setSending] = useState(false)
+  const [note, setNote] = useState<string | null>(null)
+  const holding = useRef(false)
+  const startedTier2 = call.transcript.findIndex((line) => line.tier === 2)
+  const lines = call.transcript.slice(startedTier2).filter((line) => line.by !== "system")
+  const said = [...lines].reverse().find((line) => line.by === "agent")
+  const canTalk = listening && !sending
+
+  const press = () => {
+    if (!canTalk || holding.current) return
+    holding.current = true
+    setNote(null)
+    stopPrompt()
+    void start()
+  }
+  const release = async () => {
+    if (!holding.current) return
+    holding.current = false
+    const wav = await stop()
+    if (!wav) { setNote("Hold the button while you speak, then let go."); return }
+    setSending(true)
+    const refused = await sendVoice(call.id, wav)
+    setSending(false)
+    if (refused) setNote(refused)
+  }
+  useEffect(() => {
+    const down = (event: KeyboardEvent) => { if (event.code === "Space" && !event.repeat && !(event.target instanceof HTMLButtonElement)) { event.preventDefault(); press() } }
+    const up = (event: KeyboardEvent) => { if (event.code === "Space") { event.preventDefault(); void release() } }
+    window.addEventListener("keydown", down)
+    window.addEventListener("keyup", up)
+    return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up) }
+  })
+
+  const status = recording ? "Listening to you" : sending ? "The agent is thinking…" : playing ? "The agent is speaking" : listening ? "Your turn" : "The agent is speaking"
+  return <div className="phone-screen phone-in-call phone-tier2">
+    <div className="phone-call-head">
+      <span><b>{call.reference}</b> · Bahn control room</span>
+      <span className="phone-timer">{clock((now - new Date(answeredAt).getTime()) / 1000)}</span>
+    </div>
+    <div className="phone-call-pills"><Pill tone="accent" dot>Tier 2</Pill><Pill tone={recording ? "warn" : "accent"}>{status}</Pill></div>
+    <p className="phone-prompt" aria-live="polite">{said?.text ?? "…"}</p>
+    <div className="phone-talk-wrap">
+      <button type="button" className="phone-talk" data-recording={recording || undefined} disabled={!canTalk && !recording}
+        aria-pressed={recording} aria-describedby="phone-talk-hint"
+        onPointerDown={(event) => { event.currentTarget.setPointerCapture?.(event.pointerId); press() }}
+        onPointerUp={() => void release()} onPointerCancel={() => void release()}
+        onContextMenu={(event) => event.preventDefault()}>
+        <Icon name="mic" size={28} />
+        <span>{recording ? "Release to send" : sending ? "Sending…" : "Hold to talk"}</span>
+      </button>
+      <p className="phone-hint" id="phone-talk-hint">{micError ?? note ?? (canTalk ? "Hold while you speak (or hold Space), then let go." : "Wait for the agent to finish.")}</p>
+    </div>
+    {lines.length > 1 && <ol className="phone-convo" aria-label="Conversation so far">
+      {lines.slice(0, -1).slice(-4).map((line, i) => <li key={i} className={`phone-convo-${line.by}`}><b>{line.by === "agent" ? "Agent" : "You"}</b> {line.text}</li>)}
+    </ol>}
+    <button type="button" className="btn btn-tertiary phone-hangup" onClick={() => act({ type: "hang_up" })} disabled={sending}><Icon name="close" />Hang up</button>
   </div>
 }
 
@@ -298,6 +459,7 @@ function EndedScreen({ call, onDone }: { call: Call; onDone: () => void }) {
     <CallerId call={call} />
     {call.outcome && <p className="phone-outcome"><Icon name={call.outcome === "resolved" ? "check" : "waiting"} className={call.outcome === "resolved" ? "tone-ok" : "tone-accent"} />{OUTCOME_TEXT[call.outcome]}</p>}
     {call.summary && <p className="phone-reason">{call.summary}</p>}
+    {call.handover && <p className="phone-reason"><b>Open question:</b> {call.handover.question}</p>}
     <button type="button" className="btn btn-primary" onClick={onDone}>Done</button>
   </div>
 }
