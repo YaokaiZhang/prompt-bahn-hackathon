@@ -283,6 +283,17 @@ async function main(): Promise<void> {
   const rulesPage = await appFetch(`${base}/rules`)
   if (!rulesPage.ok || !(await rulesPage.text()).includes("customer-side")) throw new Error(`Rules page did not render the policy (${rulesPage.status})`)
   console.log(`Proposals: ${approvals.waiting.length} waiting for a yes, each with its policy row; the Rules page lists the policy.`)
+  // Ticket 11: each persona's phone holds at most one live call of its own line; the rest queue. Read-only.
+  for (const persona of ["site", "driver"] as const) {
+    const phoneResponse = await fetch(`${base}/api/phone`, { headers: { cookie: `persona=${persona}` } })
+    if (!phoneResponse.ok) throw new Error(`Phone API for ${persona} returned ${phoneResponse.status}`)
+    const phone = await phoneResponse.json() as { persona: string; current: { line: string; answerer: string; state: string } | null; queued: { line: string }[] }
+    if (phone.persona !== persona) throw new Error(`The ${persona} phone answered as ${phone.persona}`)
+    const strays = [phone.current, ...phone.queued].filter((call) => call && call.line !== persona)
+    if (strays.length) throw new Error(`The ${persona} phone holds calls for another line`)
+    if (phone.current && (phone.current.answerer !== "live" || phone.current.state === "ended")) throw new Error(`The ${persona} phone holds a call that is not live`)
+    console.log(`Phone (${persona}): ${phone.current ? `1 live call (${phone.current.state})` : "idle"}, ${phone.queued.length} queued.`)
+  }
   console.log(`Verified ${order.id}: ${orderPlans.length} plans, ${(body.related.transport_points ?? []).length} points, ${(body.related.transport_segments ?? []).length} segments. Board and record agree on "needs a person" and on the group for ${overview.visible.length} orders (${Object.entries(overview.groupCounts).map(([group, count]) => `${group} ${count}`).join(", ")}).`)
 }
 

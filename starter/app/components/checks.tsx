@@ -94,7 +94,7 @@ export function ChecksPanel({ orderId, checks, compact = false }: { orderId: str
         </div>
       </li>)}</ul>
     </div>}
-    <CallsBlock calls={checks.calls} lines={checks.callLines} blocked={checks.blockedCalls} compact={compact} />
+    <CallsBlock orderId={orderId} calls={checks.calls} lines={checks.callLines} blocked={checks.blockedCalls} compact={compact} />
     {compact ? <CompactProposals orderId={orderId} proposals={checks.proposals ?? []} /> : <ProposalsBlock orderId={orderId} proposals={checks.proposals ?? []} />}
     {checks.review && <ReviewBlock orderId={orderId} review={checks.review} compact={compact}
       shown={new Set((checks.proposals ?? []).map((proposal) => proposal.findingId).filter((id): id is string => !!id))} />}

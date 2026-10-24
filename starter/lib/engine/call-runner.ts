@@ -5,6 +5,9 @@
 // Who answers: `answererFor(header)` decides when a call starts. "simulated" calls
 // are answered here by the `SimulatedPerson`; "live" calls wait for the phone page
 // (ticket 11) to send `callEvent` commands, and the agent answers each at once.
+// Live calls ring on a persona's phone (ticket 11, phone.ts): one at a time per
+// phone, the rest queued; each round also rings out a live call that rang
+// `ringTimeoutMs` on an open phone ("no answer", so the agent schedules a callback).
 // Tier 2 (ticket 12): set `tier2: true` and take the call's turns while it is in
 // state "tier2"; the runner leaves such calls alone.
 
@@ -17,6 +20,7 @@ import { simulatedPerson, type SimulatedPerson } from "./simulated-person"
 import type { Speech } from "./speech"
 import { estimateSeconds } from "./speech"
 import type { EngineStore } from "./store"
+import { phoneView, queuedBehind, type PhonePersona, type PhoneView } from "./phone"
 
 export type CallOptions = {
   /** Who answers background calls. Default: the demo scripts plus a stable mix. */
@@ -36,6 +40,13 @@ export type CallOptions = {
   pace?: number
   /** Real time, ms. */
   wallClock?: () => number
+  /**
+   * When each persona's phone page opened (real ms), or null while none is open (ticket 11).
+   * A live call rings out as "no answer" only while its phone is open. Default: always open.
+   */
+  phoneOpenSince?: (persona: PhonePersona) => number | null
+  /** How long a live call rings on an open phone before it rings out (ms). Default RING_TIMEOUT_MS. */
+  ringTimeoutMs?: number
 }
 
 export type CallRunnerDeps = {
@@ -58,6 +69,8 @@ export type CallRunner = {
   run(steps?: number): Promise<boolean>
   start(orderId: string, line: "site" | "driver", answerer?: Answerer): Promise<Call>
   input(callId: string, input: CalleeInput): Promise<Call>
+  /** A persona's mock phone: the live call on it, the queue behind it (ticket 11). */
+  phone(persona: PhonePersona): Promise<PhoneView>
 }
 
 const MAX_ROUNDS = 200
@@ -70,6 +83,7 @@ export function createCallRunner(deps: CallRunnerDeps): CallRunner {
   const wall = options.wallClock ?? (() => Date.now())
   const pace = options.pace ?? 0
   const answererFor = options.answererFor ?? (() => "simulated" as const)
+  const openSince = options.phoneOpenSince ?? (() => 0)
 
   async function eventsByCall(): Promise<Map<string, StoredCallEvent[]>> {
     const out = new Map<string, StoredCallEvent[]>()
@@ -144,8 +158,26 @@ export function createCallRunner(deps: CallRunnerDeps): CallRunner {
     return store.appendCallEvents([event])
   }
 
-  async function round(): Promise<boolean> {
+  async function phone(persona: PhonePersona): Promise<PhoneView> {
+    return phoneView([...(await read()).values()].flat(), persona, { openSince: openSince(persona), ringTimeoutMs: options.ringTimeoutMs })
+  }
+
+  /** A live call that rang out on an open phone: "no answer" (the agent schedules the callback). */
+  async function expireRings(): Promise<boolean> {
     let changed = false
+    for (const persona of ["site", "driver"] as const) {
+      const view = await phone(persona)
+      if (!view.current || !view.ringsOutAt || wall() < new Date(view.ringsOutAt).getTime()) continue
+      const events = (await eventsByCall()).get(view.current.id)
+      if (!events) continue
+      const seconds = (wall() - new Date(view.ringingSince ?? view.current.lastWallAt).getTime()) / 1000
+      if (await calleeStep(events, { type: "no_answer" }, Math.round(Math.min(120, seconds) * 10) / 10)) changed = true
+    }
+    return changed
+  }
+
+  async function round(): Promise<boolean> {
+    let changed = await expireRings()
     const now = await deps.clock()
     const calls = await read()
     for (const order of await deps.linesAt(now)) {
@@ -205,9 +237,12 @@ export function createCallRunner(deps: CallRunnerDeps): CallRunner {
       const events = (await eventsByCall()).get(callId)
       if (!events) throw new Error(`No call ${callId}`)
       const call = foldCall(events, rates)
+      const behind = queuedBehind([...(await read()).values()].flat(), call)
+      if (behind) throw new Error(behind)
       const seconds = Math.min(120, Math.max(0, (wall() - new Date(call.lastWallAt).getTime()) / 1000))
       await calleeStep(events, input, Math.round(seconds * 10) / 10)
       return foldCall((await eventsByCall()).get(callId)!, rates)
     }),
+    phone,
   }
 }
