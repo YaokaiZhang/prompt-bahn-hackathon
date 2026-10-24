@@ -1,3 +1,4 @@
+import { appFetch } from "./app-fetch"
 import { readFile } from "node:fs/promises"
 import { join } from "node:path"
 
@@ -35,7 +36,7 @@ async function main(): Promise<void> {
   if (!order?.active_plan_id) throw new Error("No order with a plan, points and segments in the source dataset")
 
   const base = process.env.APP_URL ?? "http://localhost:3000"
-  const response = await fetch(`${base}/api/orders/${order.id}`)
+  const response = await appFetch(`${base}/api/orders/${order.id}`)
   if (!response.ok) throw new Error(`Order API returned ${response.status} from ${base}`)
   const body = await response.json() as OrderResponse
   if (body.order.id !== order.id) throw new Error("Order API returned a different order")
@@ -56,13 +57,13 @@ async function main(): Promise<void> {
   if (JSON.stringify(actualVins) !== JSON.stringify(expectedVins)) throw new Error("Order API lost synthetic VINs")
 
   const [missedResponse, custodyResponse, referenceResponse, relayResponse, proposalResponse, travelResponse, bundleResponse] = await Promise.all([
-    fetch(`${base}/api/orders/ord-00194`),
-    fetch(`${base}/api/orders/ord-00004`),
-    fetch(`${base}/api/reference-data`),
-    fetch(`${base}/api/orders/ord-00702`),
-    fetch(`${base}/api/orders/ord-00299`),
-    fetch(`${base}/api/orders/ord-00449`),
-    fetch(`${base}/api/orders/ord-00384`),
+    appFetch(`${base}/api/orders/ord-00194`),
+    appFetch(`${base}/api/orders/ord-00004`),
+    appFetch(`${base}/api/reference-data`),
+    appFetch(`${base}/api/orders/ord-00702`),
+    appFetch(`${base}/api/orders/ord-00299`),
+    appFetch(`${base}/api/orders/ord-00449`),
+    appFetch(`${base}/api/orders/ord-00384`),
   ])
   if (!missedResponse.ok || !custodyResponse.ok || !referenceResponse.ok ||
       !relayResponse.ok || !proposalResponse.ok || !travelResponse.ok || !bundleResponse.ok) {
@@ -97,9 +98,9 @@ async function main(): Promise<void> {
     throw new Error("Second bundle order lost the shared acceptance history")
   }
   const [ownedBoardResponse, ownedDetailResponse, resolvedDetailResponse] = await Promise.all([
-    fetch(`${base}/api/overview?q=CD-420593`),
-    fetch(`${base}/api/orders/ord-00593`),
-    fetch(`${base}/api/orders/ord-00020`),
+    appFetch(`${base}/api/overview?q=CD-420593`),
+    appFetch(`${base}/api/orders/ord-00593`),
+    appFetch(`${base}/api/orders/ord-00020`),
   ])
   if (!ownedBoardResponse.ok || !ownedDetailResponse.ok || !resolvedDetailResponse.ok) {
     throw new Error("Alert lifecycle routes did not load")
@@ -113,10 +114,10 @@ async function main(): Promise<void> {
     throw new Error("Acknowledged or resolved alert evidence disappeared from the starter API")
   }
   const [identityResponse, contactResponse, streetResponse, supportResponse] = await Promise.all([
-    fetch(`${base}/api/orders/ord-00009`),
-    fetch(`${base}/api/orders/ord-00010`),
-    fetch(`${base}/api/orders/ord-00023`),
-    fetch(`${base}/api/orders/ord-00015`),
+    appFetch(`${base}/api/orders/ord-00009`),
+    appFetch(`${base}/api/orders/ord-00010`),
+    appFetch(`${base}/api/orders/ord-00023`),
+    appFetch(`${base}/api/orders/ord-00015`),
   ])
   if ([identityResponse, contactResponse, streetResponse, supportResponse].some((res) => !res.ok)) {
     throw new Error("One of the incomplete-input or support cases did not load")
@@ -143,7 +144,7 @@ async function main(): Promise<void> {
         row.details.owner === "ops-readiness")) {
     throw new Error("Delayed support handoff was lost from the starter API")
   }
-  const inboxResponse = await fetch(`${base}/api/inbox`)
+  const inboxResponse = await appFetch(`${base}/api/inbox`)
   if (!inboxResponse.ok) throw new Error("Unlinked support inbox did not load")
   const inbox = await inboxResponse.json() as {
     threads: { id: string; order_id?: string; link_state: string;
@@ -165,14 +166,14 @@ async function main(): Promise<void> {
     throw new Error("Inbox link uncertainty was lost from the starter API")
   }
   // The board and the order record must agree on whether an order needs a person.
-  const overviewResponse = await fetch(`${base}/api/overview`)
+  const overviewResponse = await appFetch(`${base}/api/overview`)
   if (!overviewResponse.ok) throw new Error("Overview did not load")
   const overview = await overviewResponse.json() as { visible: { id: string; reference: string; attention: unknown[] }[] }
   const disagreements: string[] = []
   for (let index = 0; index < overview.visible.length; index += 10) {
     const cards = overview.visible.slice(index, index + 10)
     const views = await Promise.all(cards.map(async (card) => {
-      const detailResponse = await fetch(`${base}/api/orders/${card.id}`)
+      const detailResponse = await appFetch(`${base}/api/orders/${card.id}`)
       if (!detailResponse.ok) throw new Error(`Order API returned ${detailResponse.status} for ${card.id}`)
       const detail = await detailResponse.json() as { view: { attention: unknown[] } }
       return detail.view.attention

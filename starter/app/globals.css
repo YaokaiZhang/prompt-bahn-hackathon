@@ -130,6 +130,45 @@ ul, ol { padding: 0; list-style: none; }
 .clock b { display: block; font-size: 14px; font-weight: 600; color: var(--ink); }
 .shell-main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
+/* ── Persona switch in the bar ──────────────────────────────────────────── */
+.persona { position: relative; flex: none; }
+.persona summary { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px 0 16px; border-radius: var(--r-pill); background: var(--sand-50); font-size: 15px; font-weight: 600; color: var(--ink); list-style: none; cursor: pointer; white-space: nowrap; transition: background-color 0.18s var(--ease); }
+.persona summary::-webkit-details-marker { display: none; }
+.persona summary:hover, .persona[open] summary { background: var(--sand-100); }
+.persona-chevron { color: var(--muted); transform: rotate(90deg); transition: transform 0.18s var(--ease); }
+.persona[open] .persona-chevron { transform: rotate(-90deg); }
+.persona-menu { position: absolute; right: 0; top: calc(100% + 8px); z-index: 20; display: grid; gap: 2px; min-width: 220px; padding: 8px; border-radius: var(--r-md); background: var(--birch); box-shadow: inset 0 0 0 1px var(--sand-200); }
+.persona-menu p { padding: 6px 12px 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.persona-menu button { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 14px; border: 0; border-radius: var(--r-pill); background: transparent; font-size: 15px; font-weight: 600; color: var(--brown); text-align: left; transition: background-color 0.18s var(--ease), color 0.18s var(--ease); }
+.persona-menu button:hover { background: var(--sand-50); color: var(--ink); }
+.persona-menu button[aria-current="true"] { background: var(--ink); color: var(--birch); }
+.persona-check { margin-left: auto; }
+
+/* ── Persona picker and phone placeholder ───────────────────────────────── */
+.picker, .phone-page { width: 100%; margin: 0 auto; padding: 56px var(--gutter) 64px; }
+.picker { max-width: 760px; }
+.picker-head p { margin-top: 14px; max-width: 60ch; font-size: 18px; color: var(--body); }
+.picker-options { display: grid; gap: 8px; margin-top: 28px; }
+.picker-option { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 18px; width: 100%; padding: 18px 22px 18px 18px; border: 0; border-radius: 18px; background: var(--sand-50); color: var(--ink); text-align: left; transition: background-color 0.18s var(--ease), color 0.18s var(--ease); }
+.picker-option:hover { background: var(--sand-100); }
+.picker-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: var(--birch); color: var(--ink); }
+.picker-text { display: grid; gap: 4px; }
+.picker-text b { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.picker-text b em { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: var(--r-pill); background: var(--sand-100); font-size: 12px; font-weight: 600; font-style: normal; letter-spacing: 0; color: var(--brown); }
+.picker-text > span { font-size: 15px; color: var(--muted); }
+.picker-go { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--brown); white-space: nowrap; }
+.picker-option[aria-current="true"] { background: var(--ink); color: var(--birch); }
+.picker-option[aria-current="true"] .picker-icon { background: var(--body); color: var(--birch); }
+.picker-option[aria-current="true"] .picker-text > span, .picker-option[aria-current="true"] .picker-go { color: var(--sand-200); }
+.picker-option[aria-current="true"] .picker-text b em { background: var(--sand-200); color: var(--ink); }
+.picker-note { margin-top: 20px; font-size: 13px; color: var(--muted); }
+.phone-page { max-width: 460px; }
+.phone { margin-top: 28px; min-height: 460px; display: grid; place-items: center; padding: 32px 28px; border-radius: var(--r-lg); background: var(--sand-50); }
+.phone-idle { display: grid; justify-items: center; gap: 10px; max-width: 30ch; text-align: center; }
+.phone-icon { display: grid; place-items: center; width: 72px; height: 72px; margin-bottom: 8px; border-radius: 50%; background: var(--birch); color: var(--muted); }
+.phone-idle b { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+.phone-idle p { color: var(--muted); }
+
 /* ── Orders home: queue and preview ─────────────────────────────────────── */
 .home { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(380px, 460px) minmax(0, 1fr); gap: 20px; padding: 8px var(--gutter) 24px; }
 .queue { display: flex; flex-direction: column; min-height: 0; }
@@ -496,6 +535,16 @@ details.more > :not(summary) { margin-top: 10px; }
   .bar { flex-wrap: wrap; height: auto; padding-top: 10px; padding-bottom: 10px; row-gap: 8px; }
   .nav { order: 2; width: 100%; overflow-x: auto; scrollbar-width: none; }
   .brand { flex: 1; }
+  .persona { order: 1; }
+  .persona summary { height: 36px; padding: 0 12px 0 14px; font-size: 14px; }
+  /* The bar scrolls sideways here, which would clip an absolute menu. */
+  .persona-menu { position: fixed; top: 54px; right: var(--gutter); }
+  .picker, .phone-page { padding-top: 28px; }
+  .picker-head h1, .phone-page h1 { font-size: 34px; }
+  .picker-head p { font-size: 16px; }
+  .picker-option { grid-template-columns: auto minmax(0, 1fr); gap: 14px; padding: 16px 18px 16px 14px; }
+  .picker-go { display: none; }
+  .phone { min-height: 400px; }
   .qcard[aria-current="true"] { background: var(--sand-50); color: var(--ink); }
   .qcard[aria-current="true"] .qcard-meta, .qcard[aria-current="true"] .qcard-stage, .qcard[aria-current="true"] .qcard-date { color: var(--muted); }
   .qcard[aria-current="true"] .qcard-why.tone-danger { color: var(--red-ink); }
