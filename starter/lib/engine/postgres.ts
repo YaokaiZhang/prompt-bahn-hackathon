@@ -1,6 +1,7 @@
-import { eq, getTableName, sql } from "drizzle-orm"
+import { eq, getTableName, inArray, sql } from "drizzle-orm"
+import type { BriefingItem } from "./briefing"
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js"
-import { demoClock, ENGINE_TABLES } from "./schema"
+import { briefingItems, demoClock, ENGINE_TABLES } from "./schema"
 import type { EngineStore } from "./store"
 
 /** Any drizzle postgres-js client, whatever schema it was built with. */
@@ -18,6 +19,21 @@ export function createPostgresStore(db: Database): EngineStore {
     async writeClock(now) {
       await db.insert(demoClock).values({ id: CURRENT, now: new Date(now) })
         .onConflictDoUpdate({ target: demoClock.id, set: { now: new Date(now) } })
+    },
+    async readBriefing() {
+      const rows = await db.select().from(briefingItems)
+      return rows.map((row) => ({ ...(row.item as unknown as BriefingItem), read: row.read }))
+    },
+    async addBriefing(item) {
+      const added = await db.insert(briefingItems)
+        .values({ id: item.id, kind: item.kind, at: new Date(item.at), item: item as unknown as Record<string, unknown>, read: item.read })
+        .onConflictDoNothing({ target: briefingItems.id })
+        .returning({ id: briefingItems.id })
+      return added.length > 0
+    },
+    async markBriefingRead(ids) {
+      if (ids && !ids.length) return
+      await db.update(briefingItems).set({ read: true }).where(ids ? inArray(briefingItems.id, ids) : sql`true`)
     },
     async reset() {
       const names = ENGINE_TABLES.map((table) => `"${getTableName(table)}"`).join(", ")

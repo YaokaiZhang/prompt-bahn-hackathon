@@ -31,7 +31,7 @@ function DueList({ items }: { items: DueItem[] }) {
   return <ul className="demo-due">
     {items.map((item) => <li key={item.id}>
       <Icon name="waiting" size={14} />
-      <span>{item.title}{item.orderId && item.reference ? <> on <Link className="ref-link" href={`/orders/${item.orderId}`}>{item.reference}</Link></> : null}{item.detail ? <em>{item.detail}</em> : null}</span>
+      <span>{item.kind === "digest" ? <Link className="ref-link" href="/briefing">{item.title}</Link> : item.title}{item.orderId && item.reference ? <> on <Link className="ref-link" href={`/orders/${item.orderId}`}>{item.reference}</Link></> : null}{item.detail ? <em>{item.detail}</em> : null}</span>
     </li>)}
   </ul>
 }
@@ -113,7 +113,7 @@ export function DemoClock({ operator, snapshotAt }: { operator: boolean; snapsho
         <b>Demo controls</b>
         <span className="pill tone-neutral">Demo only</span>
       </div>
-      <p className="demo-sub">Moves the demo clock. Next checks fire when it reaches them, and the rule checks re-run on every move. All data is fictional.</p>
+      <p className="demo-sub">Moves the demo clock. Next checks fire and Briefing digests arrive when it reaches them, and the rule checks re-run on every move. All data is fictional.</p>
       <div className="demo-actions">
         <button type="button" className="btn btn-tertiary btn-s" disabled={busy} onClick={() => move("advance")}>+15 min</button>
         <button type="button" className="btn btn-primary btn-s" disabled={busy || !clock?.nextDueAt} onClick={() => move("next")}>
