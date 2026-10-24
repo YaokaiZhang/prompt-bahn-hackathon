@@ -124,7 +124,30 @@ Each list item links to its source records.
   A finding of "nothing to ask" is allowed and expected.
 - **Evidence:** every question cites the records that don't agree and the record that names the contact. The UI highlights those fields.
 
-### 6.2 What it must not do
+### 6.2 Context management
+
+One order's records take about 4k tokens at the median and 9k at most (ord-00194, 68 records). SCHEMA.md takes about 7k tokens. Everything fits in one call, so the design is about structure and bounds, not compression.
+
+1. **One fresh context per order per run.** No conversation carries over between orders, so facts can't leak from one order to another. Memory lives in our tables, not in a chat history.
+2. **Stable system prompt, cached.** It holds the role, the rules in §6.3, the policy table (§7.1), and a condensed SCHEMA.md limited to the fields the reviewer reads (about 5–8k tokens). The prompt is identical for every order, so OpenRouter prompt caching (Anthropic `cache_control`) keeps the 100-order sweep cheap.
+3. **A prepared case file as the first user message.** The records are not fetched through tools. The case file holds:
+   - the order's records in compact, normalised form, oldest first, each with its record ID, time, source and `stated_by`;
+   - local times already worked out, and "now" from the demo clock;
+   - the rule-check results;
+   - prior state from our tables: earlier findings, questions already asked and still open, operator instructions on this order, and call results. This is how "don't re-ask" and operator instructions survive between runs.
+4. **Tools only for what lies outside the order:**
+   - the driver's other duties;
+   - related or linked orders;
+   - the site profile;
+   - inbox threads that name the order;
+   - the policy table.
+
+   A run may make at most 8 tool calls.
+5. **Structured output through a `submit_findings` tool.** The server checks that every cited record ID exists and that every quoted value matches the record. A finding that fails gets one repair attempt and is then dropped. This guards against invented evidence.
+6. **Cache key:** a hash of the case file. Any effect event, new message or operator instruction changes the hash and triggers a re-run.
+7. **Handoff:** the voice and action agents don't receive the reviewer's context. They get a short brief: the finding, the records that disagree, the contact and the policy row.
+
+### 6.3 What it must not do
 
 - Ask about data the records already give.
 - Re-ask a question that is already open. For example, CD-420458 was asked at 08:51 with the next check at 10:00, so the agent waits.
@@ -132,7 +155,7 @@ Each list item links to its source records.
 - Ask the driver about something the seller is responsible for.
 - Treat a quote as a reservation, an inbox candidate as a confirmed link, a home city as a current location, a SYSTEM or OPS window as customer-approved, or a replaced plan as current.
 
-### 6.3 Finding a contact
+### 6.4 Finding a contact
 
 1. The order's own endpoint contact (`order_endpoint_details.contact_handle`).
 2. The site profile's `pickup_contact_email`. All 71 site profiles have one; none has a phone or a named person, which is fine because calls are mocked.
@@ -140,7 +163,7 @@ Each list item links to its source records.
 
 Drivers are reached through the app or phone channel, keyed by driver ID.
 
-### 6.4 Test and demo cases
+### 6.5 Test and demo cases
 
 These come from the dataset. Each is a fixture with expected findings.
 
