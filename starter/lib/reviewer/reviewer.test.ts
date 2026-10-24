@@ -147,6 +147,78 @@ test("nothing to ask is a valid result: an open question is not asked again", as
   assert.deepEqual(result.dropped, [])
 })
 
+/** A fixture whose turns each submit `findings` exactly as given (an array, or a string as some models send). */
+function submissions(reference: string, ...findings: unknown[]): Fixture {
+  return {
+    reference, origin: "hand-written", note: "Test-only submissions.",
+    turns: findings.map((value, n) => ({
+      message: {
+        role: "assistant" as const, content: null,
+        tool_calls: [{ id: `call_${n}`, type: "function" as const, function: { name: "submit_findings", arguments: JSON.stringify({ summary: "Test.", findings: value }) } }],
+      },
+      finishReason: "tool_calls", model: "scripted",
+    })),
+  }
+}
+
+async function scenarioFindings(reference: string): Promise<unknown[]> {
+  const fixture = fixtures.find((item) => item.reference === reference)!
+  const args = fixture.turns[0].message.tool_calls![0].function.arguments as { findings: unknown[] }
+  return structuredClone(args.findings)
+}
+
+test("findings sent as a JSON-encoded string are read as the list they encode", async () => {
+  const valid = await scenarioFindings("CD-420516")
+  const gateway = createScriptedGateway([submissions("CD-420516", JSON.stringify(valid))])
+  const reviewer = createReviewer({ gateway, source: await testReviewSource() })
+  const result = reviewed(await reviewer.review("CD-420516", { now: NOW }))
+  assert.equal(gateway.calls.length, 1)
+  assert.equal(result.findings.length, 1)
+  assert.equal(result.findings[0].ask.contactRecordId, "ep-xf77895617a67a311")
+  assert.equal(result.findings[0].repaired, false)
+})
+
+test("a JSON-encoded findings string with stray closing brackets after the array is still read", async () => {
+  const valid = await scenarioFindings("CD-420516")
+  const gateway = createScriptedGateway([submissions("CD-420516", `${JSON.stringify(valid)}}]`)])
+  const result = reviewed(await createReviewer({ gateway, source: await testReviewSource() }).review("CD-420516", { now: NOW }))
+  assert.equal(gateway.calls.length, 1)
+  assert.equal(result.findings.length, 1)
+})
+
+test("a submission in the wrong format gets its own retry and still leaves the evidence repair", async () => {
+  const valid = await scenarioFindings("CD-420516")
+  const wrongQuote = structuredClone(valid) as Array<{ conflict: Array<{ quote: string }> }>
+  wrongQuote[0].conflict[0].quote = "Use the front gate"
+  const gateway = createScriptedGateway([submissions("CD-420516", "[{\"title\": broken", wrongQuote, valid)])
+  const reviewer = createReviewer({ gateway, source: await testReviewSource() })
+  const result = reviewed(await reviewer.review("CD-420516", { now: NOW }))
+  assert.equal(gateway.calls.length, 3)
+  assert.match(text(gateway.calls[1].messages.at(-1)!), /findings must be a list/)
+  assert.match(text(gateway.calls[2].messages.at(-1)!), /"Use the front gate" is not in note-x7b4b75e5977108cd/)
+  assert.equal(result.findings.length, 1)
+  assert.equal(result.findings[0].repaired, true)
+  assert.deepEqual(result.dropped, [])
+})
+
+test("a quote copied as the case file's \"key\":\"value\" text matches that field", async () => {
+  const valid = await scenarioFindings("CD-420516") as Array<{ conflict: Array<{ record_id: string; field: string; quote: string }> }>
+  valid[0].conflict[3] = { record_id: "ep-xf77895617a67a311", field: "last_confirmed_source", quote: "\"last_confirmed_source\":\"MANAGED_SITE_PROFILE\"" }
+  const gateway = createScriptedGateway([submissions("CD-420516", valid)])
+  const result = reviewed(await createReviewer({ gateway, source: await testReviewSource() }).review("CD-420516", { now: NOW }))
+  assert.equal(gateway.calls.length, 1)
+  assert.equal(result.findings.length, 1)
+})
+
+test("the repair feedback shows the named field's real value", async () => {
+  const valid = await scenarioFindings("CD-420516")
+  const wrong = structuredClone(valid) as Array<{ conflict: Array<{ record_id: string; field: string; quote: string }> }>
+  wrong[0].conflict[3] = { record_id: "ep-xf77895617a67a311", field: "contact_status", quote: "UNCONFIRMED" }
+  const gateway = createScriptedGateway([submissions("CD-420516", wrong, valid)])
+  await createReviewer({ gateway, source: await testReviewSource() }).review("CD-420516", { now: NOW })
+  assert.match(text(gateway.calls[1].messages.at(-1)!), /"UNCONFIRMED" is not in ep-xf77895617a67a311\.contact_status \(its value is "CONFIRMED"\)/)
+})
+
 test("the tool budget of 8 calls is enforced", async () => {
   const lookup = (n: number) => ({ id: `call_${n}`, type: "function" as const, function: { name: "get_site_profile", arguments: { site_id: "site-001" } } })
   const greedy: Fixture = {

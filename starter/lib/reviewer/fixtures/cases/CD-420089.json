@@ -1,69 +1,84 @@
 {
   "reference": "CD-420089",
-  "origin": "hand-written",
-  "note": "HAND-WRITTEN from docs/PRD.md §6.5, not a model reply. Covers: a read-only tool call (get_driver_duties) whose returned record (the CD-420719 delivery step) is cited in the finding. `npm run review:eval` with OPENROUTER_API_KEY overwrites this file with recorded replies.",
-  "model": null,
-  "recordedAt": null,
-  "caseFileHash": null,
+  "origin": "recorded",
+  "note": "Recorded by the reviewer eval (Operator (note author ops-shift): is the Lahti train still right, given the CD-420719 duty ends in Helsinki. No approval.)",
+  "model": "anthropic/claude-haiku-5.5",
+  "recordedAt": "2026-10-24T16:56:42.772Z",
+  "caseFileHash": "eb0792ce3380bb54d03d84997fa2b2f082ee741c6d767d936772a79c9b613378",
   "turns": [
     {
-      "message": {
-        "role": "assistant",
-        "content": null,
-        "tool_calls": [
-          {
-            "id": "call_089_1",
-            "type": "function",
-            "function": { "name": "get_driver_duties", "arguments": { "driver_id": "drv-055" } }
-          }
-        ]
-      },
+      "id": "gen-1792860986-Y8JWdvmUsMzOREYL8YED",
+      "model": "anthropic/claude-haiku-5.5",
       "finishReason": "tool_calls",
-      "model": "hand-written",
-      "usage": { "promptTokens": 14100, "completionTokens": 120, "cachedTokens": 5100, "cacheWriteTokens": 0, "reasoningTokens": 80, "cost": 0.0141 }
-    },
-    {
       "message": {
         "role": "assistant",
         "content": null,
         "tool_calls": [
           {
-            "id": "call_089_2",
             "type": "function",
+            "index": 0,
+            "id": "toolu_01WNZp8tvGCa2i9PxRPQ4CRp",
             "function": {
-              "name": "submit_findings",
-              "arguments": {
-                "summary": "The booked positioning train starts in Lahti, but drv-055's CD-420719 duty ends with a handover in Helsinki; only the note's author can say whether the train still holds.",
-                "findings": [
-                  {
-                    "title": "Positioning train from Lahti, but the driver's CD-420719 duty ends in Helsinki",
-                    "conflict": [
-                      { "record_id": "note-x30f784d8cd92ba78", "field": "body", "quote": "Driver's train is due at 26 Oct 08:20 local" },
-                      { "record_id": "res-xac6651462ee0355a", "field": "route_label", "quote": "Driver positioning train: Lahti to Espoo" },
-                      { "record_id": "asg-xa8246d35bc877646", "field": "positioning.planned_release_city", "quote": "Lahti" },
-                      { "record_id": "step-x88ed7ca82db890c5", "field": "title", "quote": "Hand over BMW 5 Series at Velantora Helsinki, Helsinki" }
-                    ],
-                    "ask": {
-                      "role": "operator",
-                      "contact_type": "operator",
-                      "contact_record_id": "note-x30f784d8cd92ba78",
-                      "contact_quote": "ops-shift",
-                      "name": "ops-shift, author of the booked-connection note"
-                    },
-                    "who_pays": "Internal question: the operator does not pay Bahn; cus-006 Norvessia Autotalot pays for the order.",
-                    "policy_row": "operator-question",
-                    "question": "Your note on CD-420089 relies on the Lahti to Espoo train on 26 Oct. drv-055's CD-420719 duty ends with a handover in Helsinki on 23 Oct. Is the Lahti train still the right booking?",
-                    "why": "If the driver starts from Helsinki, the booked train does not position them and the 26 Oct pickup in Espoo has no working plan."
-                  }
-                ]
-              }
+              "name": "get_driver_duties",
+              "arguments": "{\"driver_id\": \"drv-055\"}"
             }
           }
+        ],
+        "reasoning_details": [
+          {
+            "type": "reasoning.text",
+            "text": "I'm reviewing order ord-00089's pickup and delivery details alongside driver drv-055's positioning history, checking the previous duty's ETA and the planned release city of Lahti against the booked train leg to Espoo.\n\nI need to verify whether drv-055 has another active duty overlapping this window via get_driver_duties, and confirm the previous duty's actual delivery endpoint matches the assumed Lahti release point. There's also the unresolved custodian issue at the third-party handoff—contact Jasper Cinderbrook is unconfirmed, and I should check whether OPS's selected pickup slot of 10:00-13:00 conflicts with the customer's broader availability window.\n\n",
+            "format": "anthropic-claude-v1",
+            "index": 0,
+            "signature": "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.eyJlbmRwb2ludF9zbHVnIjoiYW50aHJvcGljL2NsYXVkZS1oYWlrdS01LjUtMjAyNjEwMDd8Y2xhdWRlLW9uLWF3cyJ9"
+          }
         ]
       },
+      "usage": {
+        "promptTokens": 16064,
+        "completionTokens": 737,
+        "cachedTokens": 5761,
+        "cacheWriteTokens": 0,
+        "reasoningTokens": 679,
+        "cost": 0.00145641
+      }
+    },
+    {
+      "id": "gen-1792860993-GeMlIIOm23GOXFki0aww",
+      "model": "anthropic/claude-haiku-5.5",
       "finishReason": "tool_calls",
-      "model": "hand-written",
-      "usage": { "promptTokens": 16200, "completionTokens": 690, "cachedTokens": 5100, "cacheWriteTokens": 0, "reasoningTokens": 300, "cost": 0.0193 }
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "type": "function",
+            "index": 0,
+            "id": "toolu_0115cEArXuePQYBv7AYHMVZb",
+            "function": {
+              "name": "submit_findings",
+              "arguments": "{\"summary\": \"The driver's positioning for the Espoo pickup starts from Lahti (the previous duty CD-420576's Lahti delivery), but the driver's own assignment CD-420719 has a live delivery in Helsinki on 23 Oct, after that Lahti delivery and before this pickup, so the booked Lahti-to-Espoo train and its planned release city assume the wrong start.\", \"findings\": \"[{\\\"title\\\":\\\"Driver positioning for Espoo pickup starts from Lahti, but driver's Helsinki delivery on 23 Oct is skipped\\\",\\\"conflict\\\":[{\\\"record_id\\\":\\\"asg-xa8246d35bc877646\\\",\\\"field\\\":\\\"positioning.planned_release_city\\\",\\\"quote\\\":\\\"Lahti\\\"},{\\\"record_id\\\":\\\"res-xac6651462ee0355a\\\",\\\"field\\\":\\\"from_city\\\",\\\"quote\\\":\\\"Lahti\\\"},{\\\"record_id\\\":\\\"travel-x9f257e384701f386\\\",\\\"field\\\":\\\"from_city\\\",\\\"quote\\\":\\\"Lahti\\\"},{\\\"record_id\\\":\\\"step-x88ed7ca82db890c5\\\",\\\"field\\\":\\\"title\\\",\\\"quote\\\":\\\"Hand over BMW 5 Series at Velantora Helsinki, Helsinki\\\"}],\\\"ask\\\":{\\\"role\\\":\\\"operator\\\",\\\"contact_type\\\":\\\"operator\\\",\\\"contact_record_id\\\":\\\"note-x30f784d8cd92ba78\\\",\\\"contact_quote\\\":\\\"ops-shift\\\",\\\"name\\\":\\\"ops-shift (operator desk that wrote the booked-connection note)\\\"},\\\"who_pays\\\":\\\"Customer cus-006 Norvessia Autotalot pays Bahn; this question goes to the Bahn operator desk, not the customer.\\\",\\\"policy_row\\\":\\\"operator-question\\\",\\\"question\\\":\\\"For order CD-420089 (ord-00089): driver drv-055's booked train res-xac6651462ee0355a starts from Lahti, based on the previous duty CD-420576 releasing at Lahti. But drv-055 also has CD-420719 (asg-xb8ad81e2d1e793a9) delivering the BMW 5 Series at Velantora Helsinki on 23 Oct, which ends after that Lahti delivery and before the Espoo pickup on 26 Oct. Does the positioning plan still hold, and where will the driver actually travel from to reach Espoo?\\\",\\\"why\\\":\\\"The booked train and the planned release city assume a Lahti start, but the driver's live Helsinki delivery on 23 Oct comes after the Lahti release and before the 26 Oct Espoo pickup, so the positioning plan may start from the wrong city; this needs settling before the 26 Oct 10:00 pickup slot. Related open work: the ops-shift note on the booked connection check (note-x30f784d8cd92ba78) and the pending driver match thread inbox-x41075bca6588a2d7 with the driver.\\\"}]}]\"}"
+            }
+          }
+        ],
+        "reasoning_details": [
+          {
+            "type": "reasoning.text",
+            "text": "I'm checking the prior duty CD-420576, which delivers to Varnela Lahti with planned arrival around 13:00Z and ETA 11:35Z — the positioning lines up with a Lahti release. Then I'm verifying the timing of CD-420719, confirming it actually falls before this pickup with an Oulu pickup on Oct 22 followed by Helsinki.\n\nLooking closer, CD-420719 ends with a Helsinki delivery on Oct 23 at 12:00Z, which lands after the prior delivery and before the Oct 26 pickup, meaning the driver would actually be in Helsinki, not Lahti, as the positioning assumes — so there's a mismatch between the travel/reservation's \"Lahti\" start city and the real end location of the last duty. I note the note flagging this connection comes from ops-shift, while the travel booking itself was made by ops-travel, and per the positioning rule I should direct my question to whichever party authored the relevant note or booking.\n\nStatus is ASSIGNED, confirming it's a live duty. There's also a mismatch: the positioning train starts from Lahti, but the driver will be in Helsinki on 23 Oct, so the plan doesn't account for how they'd get from Helsinki back to Lahti first — worth flagging to ops-shift to confirm the positioning plan still holds. The taxi positioning expense claim of 75.18 EUR is an internal authorization matter, so I'll skip that.\n\n",
+            "format": "anthropic-claude-v1",
+            "index": 0,
+            "signature": "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.eyJlbmRwb2ludF9zbHVnIjoiYW50aHJvcGljL2NsYXVkZS1oYWlrdS01LjUtMjAyNjEwMDd8Y2xhdWRlLW9uLWF3cyJ9"
+          }
+        ]
+      },
+      "usage": {
+        "promptTokens": 20172,
+        "completionTokens": 2166,
+        "cachedTokens": 5761,
+        "cacheWriteTokens": 0,
+        "reasoningTokens": 1212,
+        "cost": 0.00258171
+      }
     }
   ]
 }

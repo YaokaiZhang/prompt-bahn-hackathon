@@ -99,6 +99,33 @@ function parseArguments(call: ToolCall): { args: Record<string, unknown>; error:
   }
 }
 
+function parseArray(text: string): unknown[] | null {
+  try {
+    const parsed = JSON.parse(text) as unknown
+    return Array.isArray(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The submitted findings as a list. Some models send the array JSON-encoded as a
+ * string, sometimes with stray closing brackets after it; read both.
+ */
+function findingsList(value: unknown): unknown[] | null {
+  if (Array.isArray(value)) return value
+  if (typeof value !== "string") return null
+  let text = value.trim()
+  for (let i = 0; i < 4; i += 1) {
+    const list = parseArray(text)
+    if (list) return list
+    const trimmed = text.replace(/\s*[}\]]$/, "")
+    if (trimmed === text) return null
+    text = trimmed
+  }
+  return null
+}
+
 function titleOf(raw: unknown): string | null {
   return raw && typeof raw === "object" && typeof (raw as Record<string, unknown>).title === "string" ? (raw as { title: string }).title : null
 }
@@ -144,6 +171,7 @@ export function createReviewer(options: ReviewerOptions): Reviewer {
     let turns = 0
     let nudged = false
     let repairUsed = false
+    let formatRetried = false
     let done = false
     let summary = ""
     let answeredModel = model
@@ -156,10 +184,14 @@ export function createReviewer(options: ReviewerOptions): Reviewer {
     /** Checks a submission; returns the tool result text for the model. */
     function submit(args: Record<string, unknown>): string {
       if (!summary && typeof args.summary === "string") summary = args.summary
-      const raw = Array.isArray(args.findings) ? args.findings : null
+      const raw = findingsList(args.findings)
       const repairing = repairUsed
       if (!raw) {
-        if (!repairing) { repairUsed = true; return "findings must be a list. Call submit_findings again; an empty list means nothing to ask." }
+        // A format slip gets its own retry, so the evidence repair is still there.
+        if (!formatRetried) {
+          formatRetried = true
+          return "findings must be a list (a JSON array of finding objects, not a string). Call submit_findings again; an empty list means nothing to ask."
+        }
         done = true
         return "findings must be a list; the submission was dropped."
       }

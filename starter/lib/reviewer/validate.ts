@@ -64,13 +64,40 @@ function fieldValue(record: CaseRecord, field: string): unknown {
   return value
 }
 
+/**
+ * A quote copied from the case file's JSON as `"key":"value"` (or `"key":123`): the value,
+ * provided the key is the named field or its last part (or no field is named).
+ */
+function keyValueQuote(field: string, quote: string): string | null {
+  const match = /^\s*"([^"]+)"\s*:\s*(.+?)\s*,?\s*$/.exec(quote)
+  if (!match) return null
+  const [, key, rest] = match
+  if (field && key !== field && key !== field.split(".").at(-1)) return null
+  try {
+    const value = JSON.parse(rest) as unknown
+    return typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value) : null
+  } catch {
+    return null
+  }
+}
+
 /** Is `quote` in the record? In the named field when it exists, else anywhere in the record. */
 export function quoteMatches(record: CaseRecord, field: string, quote: string): boolean {
+  const pair = keyValueQuote(field, quote)
+  if (pair !== null) return quoteMatches(record, field, pair)
   const wanted = normaliseText(quote).replace(/^["']|["']$/g, "").replace(/[.]$/, "")
   if (!wanted) return false
   const named = field ? fieldValue(record, field) : undefined
   const haystack = named !== undefined ? leaves(named) : [...leaves(record.fields), record.statedBy ?? "", record.id]
   return haystack.some((value) => normaliseText(value).includes(wanted))
+}
+
+/** For repair feedback: the named field's actual value, when it is short enough to show. */
+function valueHint(record: CaseRecord, field: string): string {
+  const value = field ? fieldValue(record, field) : undefined
+  if (value === undefined) return field ? ` (${record.id} has no field ${field})` : ""
+  const shown = typeof value === "string" ? value : JSON.stringify(value)
+  return shown.length <= 200 ? ` (its value is ${JSON.stringify(shown)})` : ""
 }
 
 function text(value: unknown): string | null {
@@ -118,7 +145,7 @@ export function checkFinding(raw: unknown, ctx: CheckContext): Check {
     if (!recordId || !quote) { errors.push(`conflict[${i}] needs record_id and quote`); return }
     const record = ctx.index.get(recordId)
     if (!record) { errors.push(`conflict[${i}]: record ${recordId} does not exist`); return }
-    if (!quoteMatches(record, field, quote)) { errors.push(`conflict[${i}]: "${quote}" is not in ${recordId}${field ? `.${field}` : ""}`); return }
+    if (!quoteMatches(record, field, quote)) { errors.push(`conflict[${i}]: "${quote}" is not in ${recordId}${field ? `.${field}` : ""}${valueHint(record, field)}`); return }
     conflict.push({ recordId, field, quote })
   })
 
