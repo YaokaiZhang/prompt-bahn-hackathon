@@ -120,5 +120,7 @@ export function renderRecord(record: CaseRecord): string {
   if (record.at) head.push(`${record.at} (${record.local})`)
   head.push(`source ${record.source}`)
   if (record.statedBy) head.push(`stated_by ${record.statedBy}`)
+  // A control-room effect event wrote a newer version of what this record states (ticket 09).
+  if (typeof record.fields.superseded_by === "string") head.push(`SUPERSEDED by ${record.fields.superseded_by} (history)`)
   return `${head.join(" · ")}\n  ${JSON.stringify(record.fields)}`
 }

@@ -1,9 +1,10 @@
 import { asc, eq, getTableName, inArray, sql } from "drizzle-orm"
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js"
 import type { BriefingItem } from "./briefing"
+import type { EffectEvent } from "./effects"
 import type { StoredCallEvent } from "./calls"
 import type { StoredProposalEvent } from "./proposals"
-import { briefingItems, callEvents, demoClock, ENGINE_TABLES, proposalEvents } from "./schema"
+import { briefingItems, callEvents, demoClock, effectEvents, ENGINE_TABLES, proposalEvents } from "./schema"
 import type { EngineStore } from "./store"
 
 /** Any drizzle postgres-js client, whatever schema it was built with. */
@@ -35,6 +36,20 @@ export function createPostgresStore(db: Database): EngineStore {
         proposalId: event.proposalId, orderId: event.orderId, at: new Date(event.at), by: event.by, kind: event.kind, text: event.text,
         data: (event.data ?? null) as Record<string, unknown> | null,
       })))
+    },
+    async readEffects() {
+      const found = await db.select().from(effectEvents).orderBy(asc(effectEvents.seq))
+      return found.map((row) => ({
+        ...(row.effect as Record<string, unknown>),
+        id: row.id, orderId: row.orderId, type: row.type, at: row.at.toISOString(), by: row.by, source: row.source, text: row.text,
+      }) as EffectEvent)
+    },
+    async appendEffects(events) {
+      if (!events.length) return
+      await db.insert(effectEvents).values(events.map((event) => {
+        const { id, orderId, type, at, by, source, text, ...effect } = event
+        return { id, orderId, type, at: new Date(at), by, source, text, effect: effect as Record<string, unknown> }
+      }))
     },
     async readCallEvents() {
       const found = await db.select().from(callEvents).orderBy(asc(callEvents.callId), asc(callEvents.seq))

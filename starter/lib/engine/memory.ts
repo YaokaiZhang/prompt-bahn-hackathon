@@ -1,4 +1,5 @@
 import type { BriefingItem } from "./briefing"
+import type { EffectEvent } from "./effects"
 import type { StoredCallEvent } from "./calls"
 import type { StoredProposalEvent } from "./proposals"
 import type { EngineStore } from "./store"
@@ -7,6 +8,7 @@ export function createMemoryStore(): EngineStore {
   let clock: string | null = null
   let briefing = new Map<string, BriefingItem>()
   let proposalEvents: StoredProposalEvent[] = []
+  let effects: EffectEvent[] = []
   let callEvents: StoredCallEvent[] = []
   return {
     async readClock() { return clock },
@@ -22,6 +24,8 @@ export function createMemoryStore(): EngineStore {
     },
     async readProposalEvents() { return structuredClone(proposalEvents) },
     async appendProposalEvents(events) { proposalEvents = [...proposalEvents, ...structuredClone(events)] },
+    async readEffects() { return structuredClone(effects) },
+    async appendEffects(events) { effects = [...effects, ...structuredClone(events)] },
     async readCallEvents() { return structuredClone(callEvents) },
     async appendCallEvents(events) {
       const taken = new Set(callEvents.map((event) => `${event.callId}#${event.seq}`))
@@ -30,6 +34,6 @@ export function createMemoryStore(): EngineStore {
       callEvents = [...callEvents, ...structuredClone(events)]
       return true
     },
-    async reset() { clock = null; briefing = new Map(); proposalEvents = []; callEvents = [] },
+    async reset() { clock = null; briefing = new Map(); proposalEvents = []; effects = []; callEvents = [] },
   }
 }

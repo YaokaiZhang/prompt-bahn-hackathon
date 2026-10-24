@@ -215,12 +215,15 @@ async function main(): Promise<void> {
   let callCount = 0
   let running = 0
   let movedByCalls = 0
+  const effectProblems: string[] = []
+  let effectCount = 0
   for (let index = 0; index < overview.visible.length; index += 10) {
     const cards = overview.visible.slice(index, index + 10)
     const views = await Promise.all(cards.map(async (card) => {
       const detailResponse = await appFetch(`${base}/api/orders/${card.id}`)
       if (!detailResponse.ok) throw new Error(`Order API returned ${detailResponse.status} for ${card.id}`)
-      const detail = await detailResponse.json() as { view: { attention: unknown[] }; checks: { group: string; review?: { status: string; recordsRead: number; findings: unknown[] }; calls?: SmokeCall[] } | null }
+      const detail = await detailResponse.json() as { view: { attention: unknown[] }; checks: { group: string; review?: { status: string; recordsRead: number; findings: unknown[] }; calls?: SmokeCall[]
+        effects?: { id: string; type: string; version: number; text: string; by: string }[]; history?: { kind: string; effectId: string | null }[] } | null }
       return detail
     }))
     cards.forEach((card, position) => {
@@ -245,6 +248,13 @@ async function main(): Promise<void> {
       if (!moved && (!card.verdict || card.verdict.group !== recordGroup)) {
         groupDisagreements.push(`${card.reference} (queue ${card.verdict?.group ?? "none"}, order ${recordGroup ?? "none"})`)
       }
+      // Ticket 09: every order lists its effect events (each a version >= 2 with who committed it), and each is in its history.
+      const checks = views[position].checks
+      if (checks && (!Array.isArray(checks.effects) || !Array.isArray(checks.history))) effectProblems.push(`${card.reference} (no effects or history list)`)
+      for (const effect of checks?.effects ?? []) {
+        effectCount += 1
+        if (!(effect.version >= 2) || !effect.text || !effect.by || !checks?.history?.some((entry) => entry.effectId === effect.id)) effectProblems.push(`${card.reference} ${effect.id}`)
+      }
       // Ticket 06: every order says whether the reviewer read it, and how many records.
       const review = views[position].checks?.review
       if (!review || !["reviewed", "not_reviewed"].includes(review.status) || !(review.recordsRead > 0)) reviewProblems.push(card.reference)
@@ -264,6 +274,8 @@ async function main(): Promise<void> {
     throw new Error(`Order API has no reviewer status or records-read count for: ${reviewProblems.join(", ")}`)
   }
   console.log(`Reviewer: ${reviewed} of ${overview.visible.length} orders reviewed; the rest read "not reviewed yet".`)
+  if (effectProblems.length) throw new Error(`Effect events without a version, text, committer or history entry: ${effectProblems.join(", ")}`)
+  console.log(`Effect events: ${effectCount} committed change(s) across the orders, each with a version and a history entry.`)
   if (callProblems.length) throw new Error(`Calls without a calls list, tier, transcript or a cost below the operator's, or to a customer-side contact outside a pickup-readiness call: ${callProblems.join(", ")}`)
   if (digestOff.length) {
     const delivered = Date.parse((latest as { deliveredAt?: string } | undefined)?.deliveredAt ?? "")

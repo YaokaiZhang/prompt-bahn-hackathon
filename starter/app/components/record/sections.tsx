@@ -75,6 +75,7 @@ export function ThreadMessages({ thread }: { thread: ThreadView }) {
       {message.internal && <Pill tone="warn">Internal</Pill>}
       {message.author.kind === "agent" && <Pill tone="accent">Agent</Pill>}
       {cited.has(message.id) && <CitedTag />}
+      {message.supersededBy && <a className="superseded-tag" href={`#${recordAnchor(message.supersededBy)}`} title={`A committed change (${message.supersededBy}) wrote a newer version of this; kept as history`}>Superseded</a>}
       {message.otherOrder && <Pill>Filed on <OrderLink order={message.otherOrder} /></Pill>}
       <time dateTime={message.at}>{fmtDateTime(message.at)}</time>
     </div>

@@ -435,6 +435,18 @@ ul, ol { padding: 0; list-style: none; }
 .proposal-history li { display: grid; grid-template-columns: 96px 150px minmax(0, 1fr); gap: 10px; font-size: 13.5px; color: var(--body); }
 .proposal-history-at { color: var(--muted); }
 .proposal-history-by { font-weight: 600; color: var(--brown); }
+/* Effect events (ticket 09): committed changes over the snapshot, and the order's history. */
+.effect-list { list-style: none; display: grid; gap: 8px; margin: 8px 0 0; padding: 0; }
+.effect { padding: 12px 16px; border-radius: var(--r-md); background: var(--green-bg); scroll-margin-top: calc(var(--bar-h) + 16px); }
+.effect:target { box-shadow: inset 0 0 0 2px var(--ink); }
+.effect-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 13.5px; }
+.effect-version { font-weight: 600; color: var(--ink); }
+.effect-at { color: var(--muted); }
+.effect-text { margin: 6px 0 0; font-size: 14.5px; line-height: 1.45; color: var(--ink); max-width: 72ch; overflow-wrap: anywhere; }
+.effect-supersedes { display: block; margin-top: 4px; font-size: 13.5px; color: var(--muted); }
+.proposal-history li.is-effect .proposal-history-by { color: var(--green-ink); }
+.superseded-tag { padding: 1px 8px; border-radius: 999px; background: var(--sand-50); color: var(--muted); font-size: 12.5px; font-weight: 600; text-decoration: line-through; text-decoration-color: var(--sand-200); }
+.superseded-tag:hover { color: var(--ink); }
 .policy-link { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; color: var(--body); font-size: 14px; }
 .policy-link span:last-child { text-decoration: underline; text-decoration-color: var(--sand-200); text-underline-offset: 3px; }
 .policy-link:hover span:last-child { text-decoration-color: var(--ink); }

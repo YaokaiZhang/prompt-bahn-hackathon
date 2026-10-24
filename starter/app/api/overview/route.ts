@@ -29,7 +29,8 @@ export async function GET(request: NextRequest) {
   const [{ snapshotAt, bundles }, engine] = await Promise.all([loadBoardBundles(), getEngine()])
   const state = await engine.state()
   const orders = new Map(state.orders.map((order) => [order.id, order]))
-  const all = bundles.map((bundle) => {
+  // The board reads each order with its effect events applied, like the order page (ADR 0002).
+  const all = (await engine.overlaidAll(bundles)).map((bundle) => {
     const card = buildBoardCard(bundle)
     const order = orders.get(card.id)
     if (order) {

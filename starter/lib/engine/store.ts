@@ -6,6 +6,7 @@
 // `postgres.ts` (with a `cr_` table in `schema.ts`). Times cross the port as ISO strings.
 
 import type { BriefingItem } from "./briefing"
+import type { EffectEvent } from "./effects"
 import type { StoredCallEvent } from "./calls"
 import type { StoredProposalEvent } from "./proposals"
 
@@ -23,6 +24,10 @@ export interface EngineStore {
   readProposalEvents(): Promise<StoredProposalEvent[]>
   /** Appends events in one go (a batch approval is all or nothing). */
   appendProposalEvents(events: StoredProposalEvent[]): Promise<void>
+  /** Every effect event (ticket 09), in the order they were appended. Append-only: never updated or deleted (except by reset). */
+  readEffects(): Promise<EffectEvent[]>
+  /** Appends effect events in one go. */
+  appendEffects(events: EffectEvent[]): Promise<void>
   /** Every stored call event (ticket 10), oldest first within each call. */
   readCallEvents(): Promise<StoredCallEvent[]>
   /**
