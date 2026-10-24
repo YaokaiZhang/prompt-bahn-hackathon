@@ -176,7 +176,7 @@ test("when the audio model fails, the ear, the checker and text to speech comple
   assert.ok(ended.transcript.filter((line) => line.path).every((line) => line.path === "fallback"))
 })
 
-test("an unresolved tier-2 call ends politely as a handover with the open question and a next step (ticket 14 picks it up)", async () => {
+test("an unresolved tier-2 call ends politely as a handover with the open question and a next step", async () => {
   const checker = scriptedChecker([{
     heard: "The customer wants a different address now, I need to talk to someone.", claims: ["Customer asked the driver for a different delivery address"],
     next: "handover", reply: "Thank you. A colleague from the control room will call you back shortly to settle this. Goodbye.",
@@ -194,9 +194,10 @@ test("an unresolved tier-2 call ends politely as a handover with the open questi
     question: "May the driver deliver to the new address the customer gave?",
     nextStep: "Confirm the address with the customer, then call the driver back.",
     summary: "The customer asked the driver to deliver to a different address.",
+    closed: null,
   })
   assert.match(ended.transcript.filter((line) => line.by === "agent").at(-1)!.text, /colleague .* call you back/)
-  assert.equal(row.callLines.find((line) => line.line === "driver")?.status, "needs_person")
+  assert.equal(row.callLines.find((line) => line.line === "driver")?.status, "handover")
   assert.equal(row.group, "needs_action")
 })
 

@@ -4,7 +4,7 @@
 // tier, the state and the cost meter (model cost plus phone time, against what the
 // same call would cost an operator). The order page re-reads while a call runs.
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type FormEvent } from "react"
 import type { BlockedCall, Call, CallLineView, CallState } from "@/lib/engine/calls"
 import type { TurnCheck, TurnPath } from "@/lib/engine/voice-agent"
 import type { Tone } from "@/lib/present/types"
@@ -113,9 +113,57 @@ function Transcript({ call }: { call: Call }) {
   </ol>
 }
 
+/**
+ * A tier-3 handover (ticket 14): what the agent could not settle, and the operator's
+ * way to close it by recording what they learned (committed as the call's result).
+ */
+function HandoverView({ call }: { call: Call }) {
+  const handover = call.handover!
+  const closed = handover.closed
+  const [writing, setWriting] = useState(false)
+  const [draft, setDraft] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    setBusy(true)
+    setError(null)
+    const response = await fetch("/api/calls", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "recordHandoverResult", callId: call.id, result: draft }) })
+    const data = await response.json().catch(() => null) as { error?: string } | null
+    setBusy(false)
+    if (!response.ok) { setError(data?.error ?? "The result was not saved"); return }
+    setWriting(false)
+    window.dispatchEvent(new Event(CLOCK_EVENT))
+  }
+  return <section className={`call-handover-box${closed ? " is-closed" : ""}`} aria-label="Handover">
+    <h4 className="call-handover-title">{closed ? "Handover closed" : "Handed over to you"}</h4>
+    <dl className="call-check call-handover">
+      <dt>Summary</dt><dd>{handover.summary}</dd>
+      <dt>Open question</dt><dd>{handover.question}</dd>
+      <dt>Next step</dt><dd>{handover.nextStep}</dd>
+      {closed && <><dt>You learned</dt><dd>{closed.result}<span className="call-line-meta">Recorded {demoTime(closed.at)} as the call&apos;s result</span></dd></>}
+    </dl>
+    {!closed && !writing && <div className="proposal-actions">
+      <button type="button" className="btn btn-primary btn-s" onClick={() => setWriting(true)}>Record what you learned</button>
+    </div>}
+    {!closed && writing && <form className="call-handover-form" onSubmit={submit}>
+      <label className="proposal-label" htmlFor={`${call.id}-result`}>What you learned. It is saved as the call&apos;s result and closes the handover.</label>
+      <textarea id={`${call.id}-result`} value={draft} onChange={(event) => setDraft(event.target.value)} rows={3} autoFocus
+        placeholder="For example: called the customer, deliver to the booked address; told the driver." />
+      <div className="proposal-actions">
+        <button className="btn btn-primary btn-s" type="submit" disabled={busy || !draft.trim()}>{busy ? "Saving…" : "Save and close the handover"}</button>
+        <button className="btn btn-tertiary btn-s" type="button" onClick={() => setWriting(false)} disabled={busy}>Cancel</button>
+      </div>
+    </form>}
+    {error && <p className="call-ring-error" role="alert">{error}</p>}
+  </section>
+}
+
 function CallCard({ call }: { call: Call }) {
   const live = call.state !== "ended"
-  const outcome = call.outcome ? OUTCOME_LABEL[call.outcome] : null
+  const handedOver = !!call.handover && !call.handover.closed
+  const outcome = call.outcome === "handover" && call.handover ? (handedOver ? { label: "Handed over", tone: "warn" as Tone } : { label: "Handover closed", tone: "ok" as Tone })
+    : call.outcome ? OUTCOME_LABEL[call.outcome] : null
   const name = call.callee.name ? call.callee.name.split(",")[0] : call.callee.handle
   return <article className={`call${live ? " call-running" : ""}`} id={call.id} aria-label={`${call.line === "site" ? "Site" : "Driver"} call to ${name}`}>
     <div className="call-head">
@@ -132,13 +180,10 @@ function CallCard({ call }: { call: Call }) {
     </div>
     <p className="call-reason">{call.reason}</p>
     {live && call.answerer === "live" && call.state === "ringing" && <p className="call-reason tone-accent">Ringing on the {PHONE_NAME[call.line]} page (Phone, {call.line === "site" ? "Site" : "Driver"} persona). It waits there while another live call is on that phone.</p>}
-    {call.summary && <p className="call-summary">{call.summary}{call.callbackAt && call.outcome === "callback" ? ` Callback at ${demoTime(call.callbackAt)}.` : ""}</p>}
-    {call.handover && <dl className="call-check call-handover" aria-label="Handover">
-      <dt>Open question</dt><dd>{call.handover.question}</dd>
-      <dt>Next step</dt><dd>{call.handover.nextStep}</dd>
-    </dl>}
+    {call.summary && !call.handover && <p className="call-summary">{call.summary}{call.callbackAt && call.outcome === "callback" ? ` Callback at ${demoTime(call.callbackAt)}.` : ""}</p>}
+    {call.handover && <HandoverView call={call} />}
     <CostMeter call={call} />
-    {live ? <Transcript call={call} /> : <More label={`Transcript (${call.transcript.length} lines)`}><Transcript call={call} /></More>}
+    {live || handedOver ? <Transcript call={call} /> : <More label={`Transcript (${call.transcript.length} lines)`}><Transcript call={call} /></More>}
   </article>
 }
 
@@ -172,7 +217,7 @@ export function CallsBlock({ orderId, calls = [], lines = [], blocked = [], comp
   if (compact) {
     return <div className="checks-block"><h3>Calls</h3><ul className="checks-list">
       {lines.filter((line) => line.latest || line.status !== "done").map((line) => <li className="check" key={line.line}>
-        <Icon name="phone" className={line.status === "calling" ? "tone-accent" : "tone-neutral"} />
+        <Icon name="phone" className={line.status === "calling" ? "tone-accent" : line.status === "handover" ? "tone-warn" : "tone-neutral"} />
         <div><div className="check-title">{line.text || (line.latest?.summary ?? "")}</div>
           {line.latest && <div className="check-detail">Tier {line.latest.tier} · {eur(line.latest.cost.totalEur)} against {eur(line.latest.cost.operatorEur)} for an operator</div>}</div>
       </li>)}

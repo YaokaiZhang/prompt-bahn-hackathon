@@ -903,8 +903,15 @@ details.more > :not(summary) { margin-top: 10px; }
 .call-check dt { font-weight: 600; color: var(--brown); }
 .call-check dd { margin: 0; color: var(--body); }
 .call-check .call-line-meta { display: inline; margin-left: 6px; }
-.call-handover { margin: 8px 0 0 32px; background: var(--orange-bg); }
-@media (max-width: 720px) { .call-handover { margin-left: 0; } .call-check { grid-template-columns: 64px minmax(0, 1fr); } }
+.call-handover { grid-template-columns: 104px minmax(0, 1fr); margin: 6px 0 0; background: var(--orange-bg); }
+.call-handover-box { margin: 12px 0 0 32px; max-width: 72ch; }
+.call-handover-box.is-closed .call-handover { background: var(--green-bg); }
+.call-handover-title { font-size: 14px; font-weight: 700; color: var(--ink); }
+.call-handover-form { margin-top: 10px; }
+.call textarea { display: block; width: 100%; max-width: 72ch; padding: 12px 16px; border: 0; border-radius: var(--r-md); background: var(--sand-50); font: inherit; font-size: 15px; line-height: 1.45; color: var(--ink); resize: vertical; transition: background-color 0.18s var(--ease), box-shadow 0.18s var(--ease); }
+.call textarea:hover { box-shadow: inset 0 0 0 1px var(--sand-200); }
+.call textarea:focus { outline: 0; box-shadow: inset 0 0 0 2px var(--ink); }
+@media (max-width: 720px) { .call-check { grid-template-columns: 64px minmax(0, 1fr); } .call-handover { grid-template-columns: 92px minmax(0, 1fr); } }
 .call-play { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: var(--r-pill); background: var(--sand-100); color: var(--ink); transition: background-color 0.18s var(--ease); }
 .call-play:hover { background: var(--sand-200); }
 .call-play[aria-pressed="true"] { background: var(--ink); color: var(--birch); }
@@ -918,7 +925,7 @@ details.more > :not(summary) { margin-top: 10px; }
   .call { padding: 14px; }
   .call-head { grid-template-columns: 20px minmax(0, 1fr); }
   .call-pills { grid-column: 1 / -1; justify-content: flex-start; }
-  .call-reason, .call-summary, .call-meter, .call-transcript, .call .more { margin-left: 0; }
+  .call-reason, .call-summary, .call-meter, .call-transcript, .call .more, .call-handover-box { margin-left: 0; }
   .call-line { grid-template-columns: 36px minmax(0, 1fr) 30px; row-gap: 2px; }
   .call-line-at { grid-column: 1; grid-row: 1; }
   .call-line-by { grid-column: 2; grid-row: 1; }

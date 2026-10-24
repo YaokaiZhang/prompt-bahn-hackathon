@@ -7,7 +7,8 @@ type Source = { id: string; order_id?: string; plan_id?: string; active_plan_id?
   link_state?: string; candidate_order_ids?: string[]; linked_order_ids?: string[];
   contact_name?: string | null; contact_handle?: string | null }
 type Related = { id: string; details: Source }
-type SmokeCall = { id: string; state: string; line?: string; callee?: { contactType: string }; tier: number; transcript: { wallAt: string }[]; cost: { totalEur: number; operatorEur: number } }
+type SmokeCall = { id: string; state: string; line?: string; callee?: { contactType: string }; tier: number; transcript: { wallAt: string }[]; cost: { totalEur: number; operatorEur: number }
+  outcome?: string | null; handover?: { question: string; nextStep: string; summary: string; closed: unknown } | null }
 type OrderResponse = { order: { id: string }; items: { vehicle: { syntheticVin: string | null } }[];
   related: Record<string, Related[]> }
 
@@ -242,6 +243,11 @@ async function main(): Promise<void> {
         if (customerSideCall || ![1, 2, 3].includes(call.tier) || !call.transcript?.length || !(call.cost?.operatorEur > 0) || !(call.cost.totalEur <= call.cost.operatorEur)) {
           callProblems.push(`${card.reference} ${call.id}`)
         }
+        // Ticket 14: a handover is tier 3 with its open question, next step and summary; an open one holds Needs action.
+        if (call.outcome === "handover" && (call.tier !== 3 || !call.handover?.question || !call.handover.nextStep || !call.handover.summary)) {
+          callProblems.push(`${card.reference} ${call.id} (handover without tier 3, question, next step or summary)`)
+        }
+        if (call.handover && !call.handover.closed && recordGroup !== "needs_action") callProblems.push(`${card.reference} ${call.id} (open handover outside Needs action)`)
       }
       const moved = (calls ?? []).some((call) => call.state !== "ended" || Date.parse(call.transcript.at(-1)?.wallAt ?? "") >= overviewReadAt - 2_000)
       if (moved) movedByCalls += 1

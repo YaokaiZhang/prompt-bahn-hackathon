@@ -87,11 +87,11 @@ export type ProposalSignal = {
 /**
  * What grouping needs from the order's calls (ticket 10, lib/engine/calls.ts): one
  * entry per call line. A call running, a callback scheduled or due keeps the order
- * In progress; `needs_person` (a handover, no answer after every attempt) sends it
- * to Needs action. `carried`: call proposals a running call or callback speaks for.
+ * In progress; an open tier-3 `handover` (ticket 14) or `needs_person` (no answer
+ * after every attempt) sends it to Needs action, the handover first in the reason. `carried`: call proposals a running call or callback speaks for.
  */
 export type CallSignal = {
-  lines: { status: "to_call" | "calling" | "callback" | "callback_due" | "needs_person" | "done" | "on_request"; text: string }[]
+  lines: { status: "to_call" | "calling" | "callback" | "callback_due" | "handover" | "needs_person" | "done" | "on_request"; text: string }[]
   carried: Set<string>
 }
 
@@ -125,9 +125,10 @@ export function verdictFor(evaluation: Evaluation, review: ReviewSignal | null =
   const decisions = rules.filter((row) => row.outcome === "fail" && row.firstAction === "show_person")
   const forOperator = work.proposals.filter((proposal) => proposal.waitingOn === "operator")
   const lines = work.calls?.lines ?? []
+  const handovers = lines.filter((line) => line.status === "handover")
   const forPerson = lines.filter((line) => line.status === "needs_person")
-  if (decisions.length || forOperator.length || forPerson.length) {
-    const reason = [...forOperator.map(waitingText), ...forPerson.map((line) => line.text), ...decisions.map((row) => row.detail)].join(" ")
+  if (decisions.length || forOperator.length || handovers.length || forPerson.length) {
+    const reason = [...handovers.map((line) => line.text), ...forOperator.map(waitingText), ...forPerson.map((line) => line.text), ...decisions.map((row) => row.detail)].join(" ")
     return { group: "needs_action", reason, rules, planned, urgency }
   }
   const carried = work.calls?.carried ?? new Set<string>()
