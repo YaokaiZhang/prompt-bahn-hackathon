@@ -1,0 +1,54 @@
+{
+  "reference": "CD-420516",
+  "origin": "hand-written",
+  "note": "HAND-WRITTEN from docs/PRD.md §6.5, not a model reply. Covers: a valid finding on the first try. `npm run review:eval` with OPENROUTER_API_KEY overwrites this file with recorded replies.",
+  "model": null,
+  "recordedAt": null,
+  "caseFileHash": null,
+  "turns": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_516_1",
+            "type": "function",
+            "function": {
+              "name": "submit_findings",
+              "arguments": {
+                "summary": "The saved pickup route and the site's own answer disagree on who holds the keys; ask the site's stock control.",
+                "findings": [
+                  {
+                    "title": "Pickup key holder unknown: the customer's note points to the side gate and reception, the site says neither",
+                    "conflict": [
+                      { "record_id": "note-x7b4b75e5977108cd", "field": "body", "quote": "Use the side gate for vehicle collection." },
+                      { "record_id": "msg-x96d66b17e32a5df4", "field": "body", "quote": "reception has the keys" },
+                      { "record_id": "msg-x5d8006558b9e7cc6", "field": "body", "quote": "Reception does not have the keys for this car. The side gate is only for vehicle entry, not a collection desk." },
+                      { "record_id": "ep-xf77895617a67a311", "field": "last_confirmed_source", "quote": "MANAGED_SITE_PROFILE" },
+                      { "record_id": "site-001", "field": "pickup_access_note", "quote": "Use the booked collection bay" }
+                    ],
+                    "ask": {
+                      "role": "site",
+                      "contact_type": "third_party_site",
+                      "contact_record_id": "ep-xf77895617a67a311",
+                      "contact_quote": "site-001@example.test",
+                      "name": "Adrian Alderbrook, site desk at Velantora Helsinki"
+                    },
+                    "who_pays": "The site does not pay Bahn; cus-005 Auvelloria Motor Collection pays and is not contacted.",
+                    "policy_row": "site-routine",
+                    "question": "For CD-420516, the Volvo V60: who in stock control holds the keys, and at which desk should our driver collect the car in the selected slot on 26 Oct, 09:00 to 12:00?",
+                    "why": "The contact is still CONFIRMED only from the site profile, while the site's own reply refutes both saved routes; no driver can be sent until a key holder and desk are named."
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "finishReason": "tool_calls",
+      "model": "hand-written",
+      "usage": { "promptTokens": 14200, "completionTokens": 640, "cachedTokens": 0, "cacheWriteTokens": 5100, "reasoningTokens": 310, "cost": 0.0213 }
+    }
+  ]
+}

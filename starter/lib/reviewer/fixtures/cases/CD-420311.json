@@ -1,0 +1,53 @@
+{
+  "reference": "CD-420311",
+  "origin": "hand-written",
+  "note": "HAND-WRITTEN from docs/PRD.md §6.5, not a model reply. Covers: a valid driver finding that does not treat a home city as a current location or a quote as a booking. `npm run review:eval` with OPENROUTER_API_KEY overwrites this file with recorded replies.",
+  "model": null,
+  "recordedAt": null,
+  "caseFileHash": null,
+  "turns": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_311_1",
+            "type": "function",
+            "function": {
+              "name": "submit_findings",
+              "arguments": {
+                "summary": "The only flight quote that reaches Munich in time leaves from Pori, the driver's home city, but their previous duty is planned to end in Helsinki; nothing is booked.",
+                "findings": [
+                  {
+                    "title": "Positioning quote starts from Pori, but the previous duty ends in Helsinki",
+                    "conflict": [
+                      { "record_id": "travel-xf2bdef20786d3ba8", "field": "from_city", "quote": "Pori" },
+                      { "record_id": "travel-xf2bdef20786d3ba8", "field": "status", "quote": "AVAILABLE_QUOTE" },
+                      { "record_id": "asg-x7fd46f1afa73cdef", "field": "positioning.planned_release_city", "quote": "Helsinki" },
+                      { "record_id": "asg-x7fd46f1afa73cdef", "field": "positioning.assessment", "quote": "POSITIONING_NOT_EVIDENCED" }
+                    ],
+                    "ask": {
+                      "role": "driver",
+                      "contact_type": "driver",
+                      "contact_record_id": "asg-x7fd46f1afa73cdef",
+                      "contact_quote": "drv-232",
+                      "name": "Driver drv-232, assigned to CD-420311"
+                    },
+                    "who_pays": "The driver does not pay Bahn; cus-006 Norvessia Autotalot pays for the order.",
+                    "policy_row": "driver-routine",
+                    "question": "For the CD-420311 pickup in Munich on 26 Oct at 11:00: after your current duty ends in Helsinki, where will you travel from, Helsinki or Pori?",
+                    "why": "The only quote that arrives before the slot leaves from Pori, and no positioning is booked; travel cannot be planned until the start city is known."
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "finishReason": "tool_calls",
+      "model": "hand-written",
+      "usage": { "promptTokens": 15900, "completionTokens": 560, "cachedTokens": 5100, "cacheWriteTokens": 0, "reasoningTokens": 240, "cost": 0.0182 }
+    }
+  ]
+}
