@@ -161,6 +161,13 @@ test("the call layer's own guard: a customer-side pickup contact takes only a pi
   const now = "2026-10-21T09:00:00Z"
   // A pickup-readiness topic (contact not confirmed) is called.
   assert.equal(orderCalls(bundle, plannedCall(["R5"]), [], [], now).blocked.length, 0)
+  // R6 (promise not set by the customer) reaches the pickup place only as a readiness question,
+  // never as a question about the delivery promise, which stays the customer's (ADR 0001).
+  const r6 = orderCalls(bundle, plannedCall(["R6"]), [], [], now)
+  assert.equal(r6.blocked.length, 0)
+  const topic = r6.lines[0].open.find((row) => row.id === "rule:R6")
+  assert.match(topic?.title ?? "", /ready/i)
+  assert.doesNotMatch(topic?.title ?? "", /promise/i)
   // Any other topic for the same customer-given person is blocked: propose only.
   const other = orderCalls(bundle, plannedCall(["R12"]), [], [], now)
   assert.equal(other.blocked.length, 1)

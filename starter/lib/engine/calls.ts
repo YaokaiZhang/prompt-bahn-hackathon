@@ -604,12 +604,21 @@ export type OrderCalls = {
   carried: Set<string>
 }
 
+/**
+ * A call topic's title per rule: what the call asks the callee about. R6 (the delivery
+ * promise was not set by the customer) asks the pickup place only whether the car will be
+ * ready in the booked slot (call-script.ts "ready"); the promise itself stays the
+ * customer's and is never discussed on a call (ADR 0001).
+ */
 const RULE_TOPIC_TITLE: Record<string, string> = {
-  R1: "Signed release", R4: "Contact confirmed only from the site profile", R5: "Contact not confirmed", R6: "Delivery promise not from the customer",
+  R1: "Signed release", R4: "Contact confirmed only from the site profile", R5: "Contact not confirmed", R6: "Car ready in the booked pickup slot",
   NEXT: "Next check due", R10: "Tracking is stale", R12: "ETA after the promise",
 }
 
-/** The rules whose site call is a pickup-readiness call (release, contact, car ready). */
+/**
+ * The rules whose site call is a pickup-readiness call (release, contact, car ready). R6 stays:
+ * its question is the readiness one, which keeps the 18 planned site calls the user approved.
+ */
 const PICKUP_READINESS_RULES = new Set(["R1", "R4", "R5", "R6", "NEXT"])
 
 /**
