@@ -168,27 +168,42 @@ async function main(): Promise<void> {
   // The board and the order record must agree on whether an order needs a person.
   const overviewResponse = await appFetch(`${base}/api/overview`)
   if (!overviewResponse.ok) throw new Error("Overview did not load")
-  const overview = await overviewResponse.json() as { visible: { id: string; reference: string; attention: unknown[] }[] }
+  const overview = await overviewResponse.json() as {
+    total: number; groupCounts: Record<string, number>
+    visible: { id: string; reference: string; attention: unknown[]; verdict?: { group: string } }[]
+  }
+  const groupTotal = Object.values(overview.groupCounts ?? {}).reduce((sum, count) => sum + count, 0)
+  if (groupTotal !== overview.total || overview.visible.length !== overview.total) {
+    throw new Error(`Group counts add up to ${groupTotal}, not ${overview.total} orders`)
+  }
   const disagreements: string[] = []
+  const groupDisagreements: string[] = []
   for (let index = 0; index < overview.visible.length; index += 10) {
     const cards = overview.visible.slice(index, index + 10)
     const views = await Promise.all(cards.map(async (card) => {
       const detailResponse = await appFetch(`${base}/api/orders/${card.id}`)
       if (!detailResponse.ok) throw new Error(`Order API returned ${detailResponse.status} for ${card.id}`)
-      const detail = await detailResponse.json() as { view: { attention: unknown[] } }
-      return detail.view.attention
+      const detail = await detailResponse.json() as { view: { attention: unknown[] }; checks: { group: string } | null }
+      return detail
     }))
     cards.forEach((card, position) => {
-      const recordAttention = views[position]
+      const recordAttention = views[position].view.attention
+      const recordGroup = views[position].checks?.group
+      if (!card.verdict || card.verdict.group !== recordGroup) {
+        groupDisagreements.push(`${card.reference} (queue ${card.verdict?.group ?? "none"}, order ${recordGroup ?? "none"})`)
+      }
       if ((card.attention.length > 0) !== (recordAttention.length > 0)) {
         disagreements.push(`${card.reference} (board ${card.attention.length}, record ${recordAttention.length})`)
       }
     })
   }
+  if (groupDisagreements.length) {
+    throw new Error(`Queue and order API disagree on the group: ${groupDisagreements.join(", ")}`)
+  }
   if (disagreements.length) {
     throw new Error(`Board and record disagree on "needs a person": ${disagreements.join(", ")}`)
   }
-  console.log(`Verified ${order.id}: ${orderPlans.length} plans, ${(body.related.transport_points ?? []).length} points, ${(body.related.transport_segments ?? []).length} segments. Board and record agree on "needs a person" for ${overview.visible.length} orders.`)
+  console.log(`Verified ${order.id}: ${orderPlans.length} plans, ${(body.related.transport_points ?? []).length} points, ${(body.related.transport_segments ?? []).length} segments. Board and record agree on "needs a person" and on the group for ${overview.visible.length} orders (${Object.entries(overview.groupCounts).map(([group, count]) => `${group} ${count}`).join(", ")}).`)
 }
 
 main().catch((error: unknown) => {

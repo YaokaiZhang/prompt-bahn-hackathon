@@ -3,7 +3,20 @@
 // They are reading aids; the raw records remain in the API for anyone who needs
 // the source fields.
 
+import type { Group, PlannedAction, RuleResult, Urgency } from "@/lib/engine/checks"
+
 export type Tone = "danger" | "warn" | "accent" | "ok" | "neutral"
+
+/** The engine's verdict on one order, as the queue and the order page read it. */
+export type OrderChecks = {
+  /** The demo clock the rules ran at. */
+  now: string
+  group: Group
+  reason: string
+  rules: RuleResult[]
+  planned: PlannedAction[]
+  urgency: Urgency
+}
 
 export type Row = Record<string, unknown>
 
@@ -89,6 +102,8 @@ export type BoardCard = {
   decisive: KeyDate | null
   work: WorkLine[]
   updatedAt: string
+  /** Group, reason and urgency from the engine; set on the home queue, absent on entity pages. */
+  verdict?: { group: Group; reason: string; urgent: boolean; urgency: string | null }
 }
 
 export type Overview = {
@@ -98,6 +113,10 @@ export type Overview = {
   attentionCounts: Record<string, number>
   visible: BoardCard[]
   query: string
+  /** Orders per group across all orders (not only the search matches). */
+  groupCounts: Record<Group, number>
+  /** The demo clock the groups were computed at. */
+  now: string
 }
 
 export type Fact = { label: string; value: string; hint?: string | null; tone?: Tone; mono?: boolean; href?: string | null }

@@ -11,6 +11,8 @@
 // the compiler point at every switch that misses a new command.
 
 import type { Bundle } from "@/lib/present/bundle"
+import { compareUrgency, GROUPS, verdictFor, type Group, type Verdict } from "./checks"
+import { buildFleet } from "./rules"
 import type { EngineStore } from "./store"
 
 /** The snapshot as the engine reads it: one bundle per order. */
@@ -20,10 +22,27 @@ export type Command =
   | { type: "advanceClock"; minutes: number }
   | { type: "reset" }
 
+/**
+ * One order as the engine reads it at `now`. `group`, `reason`, `rules` (every
+ * strong and weak check with its outcome, first action and source records),
+ * `planned` (agent work the rules asked for) and `urgency` come from the rules
+ * (ticket 03). The "checked / passed / couldn't check" lists are `rules`, all of
+ * them / outcome "pass" / outcome "unknown".
+ */
 export type OrderState = {
   id: string
   reference: string
   status: string
+} & Verdict
+
+export type GroupCounts = Record<Group, number>
+
+export type { FirstAction, Group, Outcome, PlannedAction, RuleId, RuleResult, SourceRef, Urgency } from "./checks"
+export { GROUPS }
+
+/** The Needs action group, most urgent first (urgent, then soonest deadline, then reference). */
+export function rankNeedsAction<T extends Pick<OrderState, "group" | "urgency" | "reference">>(orders: T[]): T[] {
+  return orders.filter((row) => row.group === "needs_action").sort(compareUrgency)
 }
 
 export type EngineState = {
@@ -31,6 +50,8 @@ export type EngineState = {
   now: string
   snapshotAt: string
   orders: OrderState[]
+  /** Orders per group; always adds up to the number of orders. */
+  groupCounts: GroupCounts
 }
 
 export type Engine = {
@@ -62,6 +83,22 @@ function isoOf(value: Date | string): string {
 export function createEngine({ snapshot, store }: EngineDeps): Engine {
   const start = isoOf(snapshot.snapshotAt)
   const bundles = new Map(snapshot.bundles.map((bundle) => [bundle.order.id, bundle]))
+  const fleet = buildFleet(snapshot.bundles)
+  // Rules re-run only when the time read changes (load, clock move); effect
+  // events (ticket 09) must clear this too.
+  let last: { at: string; orders: OrderState[] } | null = null
+
+  function ordersAt(at: string): OrderState[] {
+    if (last?.at === at) return last.orders
+    const orders = snapshot.bundles.map((bundle) => ({
+      id: bundle.order.id,
+      reference: bundle.order.reference,
+      status: bundle.order.status,
+      ...verdictFor(bundle, { now: at, fleet }),
+    }))
+    last = { at, orders }
+    return orders
+  }
 
   async function clock(): Promise<string> {
     return (await store.readClock()) ?? start
@@ -69,15 +106,9 @@ export function createEngine({ snapshot, store }: EngineDeps): Engine {
 
   async function state(now?: Date | string): Promise<EngineState> {
     const at = now === undefined ? await clock() : isoOf(now)
-    return {
-      now: at,
-      snapshotAt: start,
-      orders: snapshot.bundles.map((bundle) => ({
-        id: bundle.order.id,
-        reference: bundle.order.reference,
-        status: bundle.order.status,
-      })),
-    }
+    const orders = ordersAt(at)
+    const groupCounts = Object.fromEntries(GROUPS.map((group) => [group, orders.filter((row) => row.group === group).length])) as GroupCounts
+    return { now: at, snapshotAt: start, orders, groupCounts }
   }
 
   async function apply(command: Command): Promise<EngineState> {
