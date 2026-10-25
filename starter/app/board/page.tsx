@@ -1,29 +1,19 @@
 "use client"
 
-// The pipeline board (spec .scratch/publishing): every order, one lane per stage from
-// unpublished to done. Within a lane: Problem, then Fixed, review it, then
-// In progress, then Normal, each by when the order was created. The state is a small tag;
-// a normal order carries none.
+// The Overview (spec .scratch/publishing): every order, one filter per stage from
+// unpublished to done, in the same queue and preview as Needs action.
+// Within a stage: Blocked, then Fixed, review it, then In progress, then Normal, each by
+// when the order was created. The state is a small tag; a normal order carries none.
 
-import { useMemo, useState } from "react"
+import type { BoardCard } from "@/lib/present/types"
 import { PIPELINE, pipelineColumn } from "@/lib/present/labels"
-import { BoardHead, BoardSwitch, byStateThenOrderTime, Lanes, SearchField, type Column } from "../components/columns"
-import { Shell } from "../components/shell"
-import { useOverview } from "../components/use-overview"
+import { byStateThenOrderTime } from "../components/columns"
+import { QueueBoard, type QueueFilter } from "../components/queue"
 
-export default function PipelineBoard() {
-  const [search, setSearch] = useState("")
-  const { overview, error } = useOverview(search)
-  const columns: Column[] = useMemo(() => PIPELINE.map(({ key, label }) => ({
-    key, label,
-    cards: (overview?.visible ?? []).filter((card) => pipelineColumn(card.displayLane) === key).sort(byStateThenOrderTime),
-  })), [overview])
-  return <Shell section="orders" snapshotAt={overview?.snapshotAt ?? null}><main className="board-page">
-    <BoardHead title="Pipeline">
-      <SearchField value={search} onChange={setSearch} />
-      <BoardSwitch current="pipeline" />
-    </BoardHead>
-    {error && <p className="queue-error" role="alert">{error}. Check that the local database is running and seeded.</p>}
-    <Lanes columns={columns} loading={!overview && !error} />
-  </main></Shell>
+const FILTERS: QueueFilter[] = PIPELINE.map(({ key, label }) => ({ key, label, empty: `No order is at ${label.toLowerCase()}.` }))
+
+const place = (card: BoardCard) => pipelineColumn(card.displayLane)
+
+export default function OverviewBoard() {
+  return <QueueBoard board="overview" filters={FILTERS} place={place} sort={byStateThenOrderTime} tagged />
 }

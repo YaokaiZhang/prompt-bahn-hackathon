@@ -212,7 +212,7 @@ A warm, near-monochrome sand-and-asphalt ramp, with four signal hues used only f
 
 ### Secondary
 - **Pickup Orange** (orange): the pickup pin, the marketplace stage dot. Its text-safe shade **Rust** (orange-ink) and fill **Peach Wash** (orange-bg) mark risk and warnings; internal notes use Peach Wash as their ground.
-- **Delivery Red** (red): the delivery pin and the cancelled stage dot. **Brick** (red-ink) and **Blush Wash** (red-bg) mark critical items and the Needs-action filter.
+- **Delivery Red** (red): the delivery pin and the cancelled stage dot. **Brick** (red-ink) and **Blush Wash** (red-bg) mark critical items and the Blocked filter.
 
 ### Tertiary
 - **Live Teal** (teal): live work, the moving stage, tracked leg progress and ETA. **Deep Teal** (teal-ink) and **Glacier Wash** (teal-bg) for text and fills.
@@ -261,7 +261,7 @@ A warm, near-monochrome sand-and-asphalt ramp, with four signal hues used only f
 
 A fixed 72px top bar on birch (wordmark, a "Control Room" label behind a hairline, a pill nav in a sand track, the snapshot clock right-aligned) sits over a full-height workspace with a 32px gutter.
 
-The Not normal board (`/`) is a main area and a rail. Problem fills the main area as a grid of situation cards (auto-fill, min 380px, 12px gap); Fixed, review it and In progress sit in a sticky 300–360px rail beside it, In progress as one tonal list of two-line rows. Section heads are a 20px bold label and its count: no rule, strip or tint under them; the grouping is the layout. The Pipeline (`/board`) is five tonal Sand 50 lanes (20px radius) with sticky heads and compact birch tiles. Under 1100px the rail drops below the main area and the lanes scroll sideways with snap.
+The two order boards, Needs action (`/`) and Overview (`/board`), are one queue-and-preview layout (`app/components/queue.tsx`). Left, a minmax(380px, 460px) column: the display title (the chosen filter's name), the board switch, search, filter pills with counts (Needs action: Blocked, Fixed, review it, In progress; Overview: one per stage), then the scrolling queue. Right, one Sand 50 panel previews the selected order: a 220px car picture beside the pills, car name and route summary; the situation card in birch with its steps; then the evidence those steps act on (each proposal waiting for a yes with its script, what approving will do and the records that disagree; the call; the rewrites; failed and couldn't-check rules; open items). Every step can be taken from the preview; its "open" steps jump to that evidence inside the panel, and only "Open the order" and the sticky "Whole record" pill leave for the order page. J and K move through the queue.
 
 List-and-detail screens (the support inbox, the Briefing) are a two-column grid: a left column of minmax(380px, 460px) (inbox minmax(340px, 420px)) holding the display title, tools and a scrolling stack of cards, and a right column that is one large scrolling sand panel. The gap is 20px. Each column scrolls on its own with contained overscroll; the page itself does not scroll on these screens.
 
@@ -301,13 +301,14 @@ Soft, confident pills in Bahn's two-tone pair.
 
 ### Chips
 - **Pill:** 26px tall, 13px semibold, Sand 50 ground. Tone variants use the signal wash with the signal ink. A stage pill leads with an 8px stage dot.
-- **Filter:** 30px stage filters with a count in lighter weight. Pressed inverts to asphalt with a Sand 200 count. The Needs-action filter rests in Blush Wash with Brick text when not pressed.
+- **Filter:** 32px filters with a count in lighter weight. Pressed inverts to asphalt with a Sand 200 count. The Blocked filter rests in Blush Wash with Brick text when not pressed.
 
 ### Cards / Containers
-- **Situation card** (`app/components/situation.tsx`): 24px radius, Sand 50 (birch inside the Briefing's sand panel), padding 18px 22px 20px. A muted line with the car and reference, the deadline right-aligned (Brick when urgent); a 21px 800-weight headline saying what is wrong; one or two 15.5px sentences of situation and suggestion; then one asphalt primary pill for the suggested step and an outlined "Choose another step" pill that opens a small birch menu. The text is a deterministic shortening of the engine's words (`lib/present/situation.ts`). On the order page it leads the record at headline size (`sit-lead`). Used on the board, in the Briefing and on the order page.
-- **Pipeline tile:** 14px radius, birch on the Sand 50 lane, padding 10px 12px. Car name 14.5px bold with a 20px state tag right only when the order is not normal (Urgent, Problem, Fixed, review it, In progress); reference and route in Muted Umber.
+- **Situation card** (`app/components/situation.tsx`): 24px radius, Sand 50 (birch inside the queue preview and the Briefing's sand panel), padding 18px 22px 20px. A muted line with the car and reference, the deadline right-aligned (Brick when urgent); a 21px 800-weight headline saying what is wrong; one or two 15.5px sentences of situation and suggestion; then one asphalt primary pill for the suggested step and an outlined "Choose another step" pill that opens a small birch menu. The text is a deterministic shortening of the engine's words (`lib/present/situation.ts`). It leads the queue preview and the order page at headline size (`sit-lead`), and appears in the Briefing. A typed answer, handover result or instruction to the agent opens a text field in the card itself.
+- **Queue card:** 18px radius, Sand 50, padding 14px 18px. Car name 16px bold; right of it the deadline (Brick when urgent) on Needs action, or on the Overview the 20px state tag when the order is not normal (Urgent, Blocked, Fixed, review it, In progress). Then reference and route in Muted Umber, then the situation headline in its tone with an icon, up to two lines; a quiet order shows its deciding date instead. The selected card inverts to asphalt.
+- **Order tile** (entity pages): 14px radius, padding 10px 12px. Car name 14.5px bold and its stage; reference and route in Muted Umber.
 - **Outlined pill** (`btn-quiet`): transparent with a 1.5px Sand 200 inset ring; the secondary action beside an asphalt primary.
-- **Preview panel:** one 24px Sand 50 panel; content rises in over 0.28s on each selection; a sticky action bar holds "Open order" and the keyboard hint.
+- **Preview panel:** one 24px Sand 50 panel; content rises in over 0.28s on each selection; a sticky action bar holds "Whole record", "Next" and the keyboard hint.
 - **Inset block:** birch on sand, 16px radius, 16px to 20px padding; route stops and the open-items list.
 - **Record panel:** Sand 50, 24px radius, 8px 24px 12px padding; rows divided by Sand 100 hairlines.
 - **Folded record:** 16px Sand 50 row with icon, title, count and chevron; opens to birch with an inset hairline and the chevron rotates 90 degrees.

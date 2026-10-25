@@ -52,8 +52,8 @@ const STAGE_TEXT = (publication: Publication): string => {
   return "Already past the market: a driver is on it, or it is finished."
 }
 
-/** The order's publishing state and, when Solved, the rewrites to approve. */
-export function PublishingBlock({ orderId, publication, group, calls, reviewed }: { orderId: string; publication: Publication; group: string; calls: Call[]; reviewed: boolean }) {
+/** The order's publishing state and, when Solved, the rewrites to approve. `bare`: the situation card above holds the buttons. */
+export function PublishingBlock({ orderId, publication, group, calls, reviewed, bare = false }: { orderId: string; publication: Publication; group: string; calls: Call[]; reviewed: boolean; bare?: boolean }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const act = (action: "confirm" | "publish") => {
@@ -71,9 +71,9 @@ export function PublishingBlock({ orderId, publication, group, calls, reviewed }
     {pending.length > 0 && <>
       <p className="publishing-note">The agent&apos;s calls settled {pending.length === 1 ? "this point" : `these ${pending.length} points`}. Check each rewrite against the call, then approve to publish the order to drivers.</p>
       <ol className="rewrites">{pending.map((change) => <Rewrite key={change.effectId} change={change} call={calls.find((call) => call.id === change.call?.id) ?? null} />)}</ol>
-      <div className="publishing-actions">
+      {!bare && <div className="publishing-actions">
         <button type="button" className="btn btn-primary btn-s" disabled={busy} onClick={() => act("confirm")}><Icon name="check" />Approve and publish</button>
-      </div>
+      </div>}
     </>}
     {canPublish && <div className="publishing-actions">
       <button type="button" className="btn btn-tertiary btn-s" disabled={busy} onClick={() => act("publish")}><Icon name="offer" />Publish now</button>

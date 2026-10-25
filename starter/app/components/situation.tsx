@@ -2,7 +2,7 @@
 
 // The situation card (ui-revision): what is wrong, in a bold headline; one or two
 // sentences of situation and suggestion; the suggested step as the one primary button
-// and "Choose another step" for the rest. Used on the Not normal board, in the Briefing
+// and "Choose another step" for the rest. Used in the queue preview, in the Briefing
 // and at the top of the order page. Steps reuse the existing API actions and then fire
 // CLOCK_EVENT ("engine state changed"), which every page that shows engine state hears.
 
@@ -34,10 +34,11 @@ async function run(step: Step, orderId: string): Promise<void> {
 /** Sends what the operator typed for an answer or a handover. */
 async function submit(step: Step, text: string): Promise<void> {
   if (step.do === "answer") await sendProposalAction({ action: step.command, proposalId: step.proposalId, answer: text })
+  if (step.do === "instruct") await sendProposalAction({ action: "instruct", proposalId: step.proposalId, text })
   if (step.do === "handover") await post("/api/calls", { action: "recordHandoverResult", callId: step.callId, result: text }, "The result was not saved")
 }
 
-const needsText = (step: Step) => step.do === "answer" || step.do === "handover"
+const needsText = (step: Step): step is Extract<Step, { prompt: string }> => "prompt" in step
 
 /** "Overdue 2 d", "Due in 3 h": the order's earliest deadline against the demo clock. */
 export function dueText(dueAt: string | null | undefined, now: string | null | undefined): string | null {
@@ -55,14 +56,14 @@ type Props = {
   reference?: string | null
   due?: string | null
   urgent?: boolean
-  /** On the order page: open steps jump within the page. */
+  /** On the order page and in the queue preview: open steps jump to the evidence shown below the card. */
   samePage?: boolean
   /** The order page's lead card: larger type, no link on the headline. */
   lead?: boolean
 }
 
 export function SituationCard({ orderId, situation, car, reference, due, urgent = false, samePage = false, lead = false }: Props) {
-  const [writing, setWriting] = useState<Step | null>(null)
+  const [writing, setWriting] = useState<Extract<Step, { prompt: string }> | null>(null)
   const [draft, setDraft] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
@@ -96,7 +97,7 @@ export function SituationCard({ orderId, situation, car, reference, due, urgent 
     try { await submit(writing, draft); setWriting(null) } catch (cause) { setError(cause instanceof Error ? cause.message : "Nothing changed") } finally { setBusy(false) }
   }
 
-  const stepHref = (step: Step) => step.do === "open" ? (samePage ? `#${step.anchor}` : `${href}#${step.anchor}`) : href
+  const stepHref = (step: Step) => step.do === "open" ? (samePage && !step.full ? `#${step.anchor}` : `${href}#${step.anchor}`) : href
   const button = (step: Step, primary: boolean) => step.do === "open"
     ? <Link key={step.label} className={`btn btn-s ${primary ? "btn-primary" : "btn-quiet"}`} href={stepHref(step)}>{step.label}</Link>
     : <button key={step.label} type="button" className={`btn btn-s ${primary ? "btn-primary" : "btn-quiet"}`} disabled={busy} onClick={() => void act(step)}>{busy && primary ? "Working…" : step.label}</button>
@@ -110,9 +111,9 @@ export function SituationCard({ orderId, situation, car, reference, due, urgent 
     <h3 className="sit-head">{lead ? situation.headline : <Link href={href}>{situation.headline}</Link>}</h3>
     {situation.body && <p className="sit-body">{situation.body}</p>}
     {writing ? <form className="sit-form" onSubmit={send}>
-      <label className="sr-only" htmlFor={`${orderId}-sit-text`}>{writing.do === "answer" || writing.do === "handover" ? writing.prompt : ""}</label>
+      <label className="sr-only" htmlFor={`${orderId}-sit-text`}>{writing.prompt}</label>
       <textarea id={`${orderId}-sit-text`} rows={3} autoFocus value={draft} onChange={(event) => setDraft(event.target.value)}
-        placeholder={writing.do === "answer" || writing.do === "handover" ? writing.prompt : ""} />
+        placeholder={writing.prompt} />
       <div className="sit-actions">
         <button type="submit" className="btn btn-s btn-primary" disabled={busy || !draft.trim()}>{busy ? "Saving…" : "Save"}</button>
         <button type="button" className="btn btn-s btn-quiet" disabled={busy} onClick={() => setWriting(null)}>Cancel</button>

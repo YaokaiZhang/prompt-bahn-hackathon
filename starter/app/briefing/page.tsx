@@ -108,7 +108,7 @@ function OrderRef({ orderId, reference }: { orderId: string; reference: string }
   return <Link className="ref-link" href={`/orders/${encodeURIComponent(orderId)}`}>{reference}</Link>
 }
 
-/** The order's situation card as it stands now; a line when it is no longer a Problem. */
+/** The order's situation card as it stands now; a line when it is no longer Blocked. */
 function OrderSituation({ orderId, reference, card, now }: { orderId: string; reference: string; card: BoardCard | null; now: string | null }) {
   if (card?.situation && card.verdict?.group === "needs_action") {
     return <SituationCard orderId={orderId} situation={card.situation} car={card.vehicle} reference={card.reference}
@@ -146,8 +146,8 @@ function Digest({ item, cards, now }: { item: DigestItem; cards: Map<string, Boa
     <p className="digest-move"><Icon name="arrow" size={15} /><span><Prose segments={prose.firstMove} /></span></p>
 
     {changes && (changes.newNeedsAction.length > 0 || changes.leftNeedsAction.length > 0 || changes.cameDue.length > 0) && <dl className="digest-changes">
-      {changes.newNeedsAction.length > 0 && <div><dt>New problems since {since}</dt><dd>{changes.newNeedsAction.map((row, index) => <span key={row.orderId}>{index ? ", " : ""}<OrderRef {...row} /></span>)}</dd></div>}
-      {changes.leftNeedsAction.length > 0 && <div><dt>Problems cleared</dt><dd>{changes.leftNeedsAction.map((row, index) => <span key={row.orderId}>{index ? ", " : ""}<OrderRef {...row} /></span>)}</dd></div>}
+      {changes.newNeedsAction.length > 0 && <div><dt>Newly blocked since {since}</dt><dd>{changes.newNeedsAction.map((row, index) => <span key={row.orderId}>{index ? ", " : ""}<OrderRef {...row} /></span>)}</dd></div>}
+      {changes.leftNeedsAction.length > 0 && <div><dt>No longer blocked</dt><dd>{changes.leftNeedsAction.map((row, index) => <span key={row.orderId}>{index ? ", " : ""}<OrderRef {...row} /></span>)}</dd></div>}
       {changes.cameDue.length > 0 && <div><dt>Came due</dt><dd>{changes.cameDue.map((row, index) => <span key={`${row.title}-${row.reference}-${index}`}>{index ? ", " : ""}{row.title}{row.orderId && row.reference ? <> on <OrderRef orderId={row.orderId} reference={row.reference} /></> : null} at {time(row.at)}</span>)}</dd></div>}
     </dl>}
 
@@ -158,7 +158,7 @@ function Digest({ item, cards, now }: { item: DigestItem; cards: Map<string, Boa
       </li>)}</ol> : <p className="empty-line">Nothing needs you.</p>}
     </section>
 
-    {facts.needsActionBy.length > 0 && <More label="Problems by cause">
+    {facts.needsActionBy.length > 0 && <More label="Blocked, by cause">
       <ul className="digest-causes">{facts.needsActionBy.map((cause) => <li key={cause.label}><span>{cause.label}</span><b>{cause.count}</b></li>)}</ul>
     </More>}
     {prose.note && <p className="digest-note">{prose.note}</p>}

@@ -94,7 +94,7 @@ export function useBriefingFeed(enabled: boolean): BriefingFeed {
 export function itemSummary(item: BriefingItem): string {
   if (item.kind === "push") return item.text
   const { counts } = item.facts
-  return `${counts.needs_action} ${counts.needs_action === 1 ? "problem" : "problems"} · ${counts.urgent} urgent · ${counts.in_progress} in progress`
+  return `${counts.needs_action} blocked · ${counts.urgent} urgent · ${counts.in_progress} in progress`
 }
 
 export function BriefingToasts({ feed }: { feed: BriefingFeed }) {

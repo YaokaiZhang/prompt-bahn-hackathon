@@ -931,31 +931,84 @@ details.more > :not(summary) { margin-top: 10px; }
 }
 
 
-/* ── The two order boards (spec .scratch/publishing): Not normal (/) and Pipeline (/board) ── */
-.board-page { padding: 8px var(--gutter) 48px; }
-.board-head { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 20px; }
-.board-head h1 { font-size: 44px; margin-right: auto; }
-.board-search { flex: 0 1 380px; height: 44px; }
+/* ── The two order boards: a queue and the selected order beside it ────────── */
+.home { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(380px, 460px) minmax(0, 1fr); gap: 20px; padding: 8px var(--gutter) 24px; }
+.queue { display: flex; flex-direction: column; min-height: 0; }
+.queue-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.queue-head h1 { font-size: clamp(30px, 2.6vw, 44px); }
 .board-switch { display: inline-flex; gap: 2px; padding: 4px; border-radius: var(--r-pill); background: var(--sand-50); }
-.board-switch a { display: inline-flex; align-items: center; height: 36px; padding: 0 16px; border-radius: var(--r-pill); font-size: 14.5px; font-weight: 600; color: var(--brown); text-decoration: none; transition: background-color 0.18s var(--ease), color 0.18s var(--ease); }
+.board-switch a { display: inline-flex; align-items: center; height: 32px; padding: 0 14px; border-radius: var(--r-pill); font-size: 14px; font-weight: 600; color: var(--brown); text-decoration: none; transition: background-color 0.18s var(--ease), color 0.18s var(--ease); }
 .board-switch a:hover { color: var(--ink); background: var(--sand-100); }
 .board-switch a[aria-current="page"] { background: var(--birch); color: var(--ink); box-shadow: 0 1px 3px rgba(18, 17, 14, 0.1); }
-.board-batch { margin-bottom: 16px; border-radius: var(--r-lg); background: var(--sand-50); }
+.queue-tools { display: grid; gap: 12px; margin-top: 18px; }
+.queue-batch { justify-self: start; }
+.filters { display: flex; flex-wrap: wrap; gap: 4px; }
+.filter { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 0; border-radius: var(--r-pill); background: var(--sand-50); font-size: 14px; font-weight: 600; color: var(--brown); white-space: nowrap; transition: background-color 0.18s var(--ease), color 0.18s var(--ease); }
+.filter:hover { background: var(--sand-100); color: var(--ink); }
+.filter em { font-style: normal; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
+.filter[aria-pressed="true"] { background: var(--ink); color: var(--birch); }
+.filter[aria-pressed="true"] em { color: var(--sand-200); }
+.filter.need[aria-pressed="false"] { background: var(--red-bg); color: var(--red-ink); }
+.filter.need[aria-pressed="false"] em { color: var(--red-ink); }
+.queue-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin: 16px -6px 0; padding: 0 6px 24px; }
+.queue-list ol { display: grid; gap: 8px; }
+.queue-note { padding: 18px 4px; font-size: 15px; color: var(--muted); }
+.queue-error { margin-top: 12px; padding: 12px 16px; border-radius: var(--r-sm); background: var(--red-bg); color: var(--red-ink); font-size: 14px; }
 
-/* A heading and its count. No rule under it: the grouping is the layout. */
-.lane-head { display: flex; align-items: baseline; gap: 10px; min-height: 38px; padding: 0 2px; }
-.lane-head h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); }
-.lane-head em { font-style: normal; font-size: 20px; font-weight: 500; color: var(--muted); }
-.lane-head .lane-action { margin-left: auto; align-self: center; }
-.lane-empty { padding: 4px 2px; font-size: 16px; color: var(--muted); }
+.qcard { display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; width: 100%; padding: 14px 18px 15px; border-radius: 18px; background: var(--sand-50); color: var(--ink); text-decoration: none; transition: background-color 0.2s var(--ease), color 0.2s var(--ease); }
+.qcard:hover { background: var(--sand-100); }
+.qcard[aria-current="true"] { background: var(--ink); color: var(--birch); }
+.qcard-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.qcard-car { flex: 1; min-width: 0; font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qcard-due { flex: none; font-size: 14px; font-weight: 600; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.qcard-due.is-urgent { color: var(--red-ink); }
+.qcard-meta { font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qcard-date { color: var(--body); }
+.qcard-date b { font-weight: 600; }
+.qcard-why { display: flex; align-items: flex-start; gap: 7px; margin-top: 5px; font-size: 15px; font-weight: 600; line-height: 1.35; }
+.qcard-why span { min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.qcard-why .icon { flex: none; margin-top: 2px; }
+.qcard[aria-current="true"] .qcard-meta, .qcard[aria-current="true"] .qcard-date, .qcard[aria-current="true"] .qcard-due { color: var(--sand-200); }
+.qcard[aria-current="true"] .qcard-due.is-urgent, .qcard[aria-current="true"] .qcard-why.tone-danger { color: #ff8e9d; }
+.qcard[aria-current="true"] .qcard-why.tone-warn { color: #ffa27e; }
+.qcard[aria-current="true"] .qcard-why.tone-accent { color: #85cdd9; }
+.qcard[aria-current="true"] .qcard-why.tone-ok, .qcard[aria-current="true"] .qcard-why.tone-neutral { color: var(--sand-200); }
+@media (min-width: 901px) { .qcard[aria-current="true"] .state-tag { background: rgba(255, 254, 247, 0.14); color: var(--birch); } }
+.qcard-skeleton { height: 96px; border-radius: 18px; background: linear-gradient(90deg, var(--sand-50), var(--birch), var(--sand-50)); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
 
-/* Not normal: Needs action is the main area; the rail holds what waits on a yes and what the agent is doing. */
-.triage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); gap: 28px 32px; align-items: start; margin-top: 28px; }
-.triage-side { display: grid; gap: 28px; position: sticky; top: calc(var(--bar-h) + 12px); max-height: calc(100dvh - var(--bar-h) - 24px); overflow-y: auto; overscroll-behavior: contain; padding-bottom: 12px; }
-.sits { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 12px; margin-top: 12px; }
-.sits-side { grid-template-columns: minmax(0, 1fr); gap: 8px; }
-.sit-skeleton, .tile-skeleton { height: 190px; border-radius: var(--r-lg); background: linear-gradient(90deg, var(--sand-50), var(--birch), var(--sand-50)); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
-.tile-skeleton { height: 58px; border-radius: 14px; }
+/* The selected order: who and where, the situation card with its steps, then the evidence they act on. */
+.preview { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scroll-padding-top: 16px; border-radius: var(--r-lg); background: var(--sand-50); }
+.preview-inner { padding: 20px 24px 0; animation: rise 0.28s var(--ease); }
+.preview-empty { display: grid; place-content: center; justify-items: center; gap: 12px; height: 100%; padding: 40px; text-align: center; color: var(--muted); }
+.preview-empty b { font-size: 17px; color: var(--ink); }
+.preview-top { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px; align-items: center; }
+.preview .photo { aspect-ratio: 16 / 10; height: auto; border-radius: var(--r-md); }
+.preview-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.preview-title { margin-top: 8px; font-size: clamp(26px, 2.2vw, 34px); }
+.preview-who .route-summary { margin-top: 10px; padding: 8px 16px; }
+.preview .photo-note { right: 8px; bottom: 8px; height: 22px; padding: 0 8px; font-size: 12px; }
+.preview .sit { margin-top: 16px; background: var(--birch); }
+.preview .sit-lead { padding: 22px 26px 24px; }
+.preview .sit-lead .sit-head { font-size: clamp(22px, 2vw, 28px); }
+.preview .sit-lead .sit-body { font-size: 17px; }
+.preview-quiet { margin-top: 18px; padding: 20px 24px; border-radius: var(--r-lg); background: var(--birch); }
+.preview-story { font-size: 21px; font-weight: 600; line-height: 1.25; letter-spacing: -0.01em; max-width: 40ch; }
+.preview-detail { margin-top: 6px; font-size: 16px; color: var(--body); max-width: 60ch; }
+.preview-body { padding: 8px 4px 0; }
+.preview-body #attention { margin-top: 20px; }
+.checks-compact .proposal-script { margin: 8px 0 0; }
+.checks-compact .proposal-will { margin-top: 8px; }
+.preview-actions { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 20px -24px 0; padding: 12px 24px 16px; background: var(--sand-50); box-shadow: 0 -10px 16px -12px rgba(18, 17, 14, 0.18); }
+.preview-actions .hint { margin-left: auto; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 6px; background: var(--birch); box-shadow: inset 0 0 0 1px var(--sand-200); font-size: 12px; font-weight: 600; color: var(--brown); }
+.preview .batch { animation: rise 0.28s var(--ease); }
+
+@media (max-height: 760px) and (min-width: 901px) {
+  .queue-head h1 { font-size: 34px; }
+  .queue-tools { gap: 8px; margin-top: 12px; }
+  .queue-tools .field { height: 42px; }
+  .queue-list { margin-top: 12px; }
+}
 
 /* The situation card: what is wrong, why and what to do. */
 .sit { display: flex; flex-direction: column; height: 100%; padding: 18px 22px 20px; border-radius: var(--r-lg); background: var(--sand-50); }
@@ -988,28 +1041,9 @@ details.more > :not(summary) { margin-top: 10px; }
 .sit-lead .sit-head { margin-top: 0; font-size: clamp(24px, 2.6vw, 32px); font-weight: 700; line-height: 1.18; max-width: 34ch; }
 .sit-lead .sit-body { font-size: 18px; line-height: 1.45; max-width: 60ch; }
 .sit-lead .sit-actions { padding-top: 20px; }
-.sits-side .sit { padding: 16px 18px 18px; }
-.sits-side .sit-head { font-size: 17px; }
-.sits-side .sit-body { font-size: 14.5px; }
 
 /* In progress in the rail: one row per order, the agent's work in a line. */
-.work-rows { display: grid; margin-top: 8px; border-radius: var(--r-md); background: var(--sand-50); padding: 4px 0; }
-.work-row { display: grid; gap: 2px; padding: 10px 16px; color: var(--ink); text-decoration: none; border-top: 1px solid var(--sand-100); transition: background-color 0.18s var(--ease); }
-.work-rows li:first-child .work-row { border-top: 0; }
-.work-row:hover { background: var(--sand-100); }
-.work-top { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 14.5px; }
-.work-top b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
-.work-ref { flex: none; font-size: 13.5px; color: var(--muted); }
-.work-due { margin-left: auto; flex: none; font-size: 13.5px; font-weight: 600; color: var(--muted); white-space: nowrap; }
-.work-due.is-urgent { color: var(--red-ink); }
-.work-what { font-size: 14px; color: var(--teal-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Pipeline: tonal lanes, compact tiles, the state as a small tag. */
-.lanes { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-top: 24px; align-items: start; }
-.lane { min-width: 0; padding: 6px 8px 8px; border-radius: 20px; background: var(--sand-50); }
-.lane .lane-head { position: sticky; top: var(--bar-h); z-index: 2; padding: 6px 8px 4px; background: var(--sand-50); border-radius: 14px; }
-.lane .lane-head h2, .lane .lane-head em { font-size: 15px; }
-.lane ol { display: grid; gap: 6px; margin-top: 4px; }
 .tile { display: grid; gap: 2px; padding: 10px 12px 11px; border-radius: 14px; background: var(--birch); color: var(--ink); text-decoration: none; transition: box-shadow 0.18s var(--ease); }
 .tile:hover { box-shadow: inset 0 0 0 1px var(--sand-200); }
 .tile-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -1024,23 +1058,28 @@ details.more > :not(summary) { margin-top: 10px; }
 .cards .tile { background: var(--sand-50); }
 .cards .tile:hover { background: var(--sand-100); box-shadow: none; }
 
-@media (max-width: 1100px) {
-  .triage { grid-template-columns: minmax(0, 1fr); }
-  .triage-side { position: static; max-height: none; overflow: visible; }
-  .lanes { grid-template-columns: repeat(5, minmax(260px, 84vw)); overflow-x: auto; scroll-snap-type: x mandatory; }
-  .lane .lane-head { position: static; }
+@media (max-width: 1180px) {
+  .home { grid-template-columns: minmax(340px, 400px) minmax(0, 1fr); }
+  .preview-top { grid-template-columns: 160px minmax(0, 1fr); }
 }
 @media (max-width: 900px) {
-  .board-head h1, .mail-list-head h1 { font-size: 34px; }
-  .board-head h1 { flex-basis: 100%; }
-  .board-search { flex: 1 1 100%; order: 3; }
-  .triage { margin-top: 20px; }
+  .home { display: block; padding-top: 8px; }
+  .queue-head h1 { font-size: 34px; }
+  .queue-list { overflow: visible; }
+  .preview { display: none; }
+  /* On a phone the batch takes the queue's place: the preview panel shows, the list hides. */
+  .home.batching .preview { display: block; margin-top: 16px; overflow: visible; }
+  .home.batching .queue-list { display: none; }
+  .qcard[aria-current="true"] { background: var(--sand-50); color: var(--ink); }
+  .qcard[aria-current="true"] .qcard-meta, .qcard[aria-current="true"] .qcard-date, .qcard[aria-current="true"] .qcard-due { color: var(--muted); }
+  .qcard[aria-current="true"] .qcard-why.tone-danger, .qcard[aria-current="true"] .qcard-due.is-urgent { color: var(--red-ink); }
+  .qcard[aria-current="true"] .qcard-why.tone-warn { color: var(--orange-ink); }
+  .qcard[aria-current="true"] .qcard-why.tone-accent { color: var(--teal-ink); }
   .sit { padding: 16px 18px 18px; border-radius: 20px; }
   .sit-head { font-size: 19px; }
   .sit-long { display: none; }
   .sit-short { display: inline; }
   .sit-actions .btn-s { padding: 0 14px; }
   .sit-lead { padding: 20px 20px 22px; }
-  .lane { scroll-snap-align: start; }
   .sit-menu { position: fixed; left: var(--gutter); right: var(--gutter); top: auto; bottom: 16px; }
 }
