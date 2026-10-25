@@ -18,7 +18,7 @@
 
 import type { Bundle } from "@/lib/present/bundle"
 import {
-  agentTurn, calleeEvent, DEFAULT_RATES, foldCall, newCallHeader, refuseInput, tier2Said,
+  agentTurn, calleeEvent, DEFAULT_RATES, foldCall, newCallHeader, promptsFor, refuseInput, tier2Said,
   type Answerer, type Call, type CalleeInput, type CallHeader, type CostRates, type OrderCalls, type StoredCallEvent,
 } from "./calls"
 import { simulatedPerson, type SimulatedPerson, type Talked } from "./simulated-person"
@@ -250,7 +250,11 @@ export function createCallRunner(deps: CallRunnerDeps): CallRunner {
       text: `${header.answerer === "live" ? "Ringing live" : "Calling"} ${header.callee.name ?? header.callee.handle} (${header.callee.handle}) about ${bundle.order.reference}.`,
       data: { header, seconds: 0 },
     }
-    return store.appendCallEvents([event])
+    if (!(await store.appendCallEvents([event]))) return false
+    // A live call's prompts are spoken while it rings (one after the other, not awaited), so
+    // answering and each key press play at once instead of waiting a second or two for a new voice reading.
+    if (header.answerer === "live" && speech) void promptsFor(header).reduce((done: Promise<unknown>, text) => done.then(() => speech.speak(text)), Promise.resolve())
+    return true
   }
 
   async function phone(persona: PhonePersona): Promise<PhoneView> {
@@ -266,7 +270,8 @@ export function createCallRunner(deps: CallRunnerDeps): CallRunner {
       const events = (await eventsByCall()).get(view.current.id)
       if (!events) continue
       const seconds = (wall() - new Date(view.ringingSince ?? view.current.lastWallAt).getTime()) / 1000
-      if (await calleeStep(events, { type: "no_answer" }, Math.round(Math.min(120, seconds) * 10) / 10)) changed = true
+      if (busy(view.current.id)) continue
+      if (await onCall(view.current.id, () => calleeStep(events, { type: "no_answer" }, Math.round(Math.min(120, seconds) * 10) / 10))) changed = true
     }
     return changed
   }
@@ -284,7 +289,8 @@ export function createCallRunner(deps: CallRunnerDeps): CallRunner {
       }
     }
     // Calls are independent: take their turns side by side, so one slow prompt holds up no other call.
-    const steps = [...(await eventsByCall()).values()].map(async (events) => {
+    // A call busy with a turn (the phone's input, a voice turn, a prompt still being spoken) is left for the next round.
+    const steps = [...(await eventsByCall()).values()].map((events) => busy(events[0].callId) ? false : onCall(events[0].callId, async () => {
       const call = foldCall(events, rates)
       if (call.state === "ended") return false
       if (call.state === "tier2") return call.expecting?.type === "speech" && call.answerer === "simulated" ? talkStep(events) : false
@@ -294,11 +300,36 @@ export function createCallRunner(deps: CallRunnerDeps): CallRunner {
       const wait = (call.expecting.type === "ring" ? reply.seconds : call.lastSeconds) * 1000 * pace
       if (wall() < new Date(call.lastWallAt).getTime() + wait) return false
       return calleeStep(events, reply.input, reply.seconds)
-    })
+    }))
     return (await Promise.all(steps)).some(Boolean) || changed
   }
 
-  // One runner step at a time in this process; (callId, seq) keeps processes apart.
+  // One turn at a time per call in this process; (callId, seq) keeps processes apart, and
+  // keeps a hang-up (which waits for nothing) from crossing a turn: the later write is refused.
+  const calls = new Map<string, Promise<unknown>>()
+  const busy = (callId: string) => calls.has(callId)
+  function onCall<T>(callId: string, work: () => Promise<T>): Promise<T> {
+    const run = (calls.get(callId) ?? Promise.resolve()).then(work)
+    const tail = run.catch(() => {})
+    calls.set(callId, tail)
+    void tail.then(() => { if (calls.get(callId) === tail) calls.delete(callId) })
+    return run
+  }
+
+  /** The callee's move on a live call; re-read and retried when another write took its step first. */
+  async function liveInput(callId: string, input: CalleeInput): Promise<Call> {
+    for (let attempt = 0; ; attempt++) {
+      const events = (await eventsByCall()).get(callId)
+      if (!events) throw new Error(`No call ${callId}`)
+      const call = foldCall(events, rates)
+      const behind = queuedBehind([...(await read()).values()].flat(), call)
+      if (behind) throw new Error(behind)
+      const seconds = Math.min(120, Math.max(0, (wall() - new Date(call.lastWallAt).getTime()) / 1000))
+      if (await calleeStep(events, input, Math.round(seconds * 10) / 10) || attempt >= 4) return foldCall((await eventsByCall()).get(callId)!, rates)
+    }
+  }
+
+  // Runner rounds and call starts one at a time in this process.
   let queue: Promise<unknown> = Promise.resolve()
   function serial<T>(work: () => Promise<T>): Promise<T> {
     const run = queue.then(work)
@@ -329,17 +360,9 @@ export function createCallRunner(deps: CallRunnerDeps): CallRunner {
       if (!(await startLine(bundle, header))) throw new Error(`${header.callId} was started by someone else`)
       return (await read()).get(orderId)!.find((call) => call.id === header.callId)!
     }),
-    input: (callId, input) => serial(async () => {
-      const events = (await eventsByCall()).get(callId)
-      if (!events) throw new Error(`No call ${callId}`)
-      const call = foldCall(events, rates)
-      const behind = queuedBehind([...(await read()).values()].flat(), call)
-      if (behind) throw new Error(behind)
-      const seconds = Math.min(120, Math.max(0, (wall() - new Date(call.lastWallAt).getTime()) / 1000))
-      await calleeStep(events, input, Math.round(seconds * 10) / 10)
-      return foldCall((await eventsByCall()).get(callId)!, rates)
-    }),
-    voice: (callId, clip) => serial(async () => {
+    // A hang-up does not wait for the agent's turn in progress: it ends the call now, and that turn's write is refused.
+    input: (callId, input) => input.type === "hang_up" ? liveInput(callId, input) : onCall(callId, () => liveInput(callId, input)),
+    voice: (callId, clip) => onCall(callId, async () => {
       const events = (await eventsByCall()).get(callId)
       if (!events) throw new Error(`No call ${callId}`)
       const behind = queuedBehind([...(await read()).values()].flat(), foldCall(events, rates))

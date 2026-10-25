@@ -69,6 +69,8 @@ export const CALLBACK_OPTIONS: KeyOption[] = Object.entries(CALLBACK_MINUTES).ma
 
 export const RETRY_PREFIX = "Sorry, I didn't catch that. "
 export const CLOSING = "Thank you, that's all I needed. Goodbye."
+/** Said in the keypad voice before tier 2: the voice assistant that takes over sounds different. */
+export const TRANSFER_LINE = "Thank you. I'm putting you through to our voice assistant now. It will sound a little different, and you can answer it in your own words."
 export const HANDOVER_LINE = "Thank you. This needs a proper conversation, so a colleague from the control room will follow up with you. Goodbye."
 export const callbackLine = (local: string) => `No problem. I'll call you back at ${local}. Goodbye.`
 

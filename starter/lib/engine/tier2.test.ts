@@ -233,6 +233,43 @@ test("tier 2 takes only speech or a hang-up; a hang-up hands the call over", asy
   await assert.rejects(engine.apply({ type: "voiceTurn", callId: call.id, audio: testClip() }), /not listening/)
 })
 
+test("a hang-up during a slow voice turn ends the call at once; the turn's reply is dropped", async () => {
+  let release = () => {}
+  const held = new Promise<void>((resolve) => { release = resolve })
+  const slow = scriptedVoice(["Thanks, noted."])
+  const voice = { ...slow, async reply(input: Parameters<typeof slow.reply>[0]) { await held; return slow.reply(input) } }
+  const engine = await engineWith({ voice: createVoiceAgent({ voice, ear: scriptedEar(["The ferry is late."]), checker: scriptedChecker([]) }) })
+  const call = (await toTier2(engine))!
+  const turn = engine.apply({ type: "voiceTurn", callId: call.id, audio: testClip() })
+  await engine.apply({ type: "callEvent", callId: call.id, input: { type: "hang_up" } })
+  assert.equal((await engine.phone("driver")).current, null, "the phone is free before the agent has answered")
+  release()
+  await assert.rejects(turn, /moved on/)
+  const ended = (await order(engine, "CD-420437")).calls[0]
+  assert.equal(ended.outcome, "handover")
+  assert.ok(!ended.transcript.some((line) => line.text === "Thanks, noted."), "nothing is said after the hang-up")
+})
+
+test("the phone's moves do not wait for a background call whose prompt is still being spoken", async () => {
+  let release = () => {}
+  const held = new Promise<void>((resolve) => { release = resolve })
+  const speech = scriptedSpeech()
+  // Background calls' greetings name their order; CD-420437's own prompts go through at once.
+  const slow = { ...speech, async speak(text: string) { if (/order CD-/.test(text) && !text.includes("CD-420437")) await held; return speech.speak(text) } }
+  const engine = await engineWith({ speech: slow })
+  const id = (await order(engine, "CD-420437")).id
+  await engine.apply({ type: "startCall", orderId: id, line: "driver", live: true })
+  const call = (await engine.phone("driver")).current!
+  let roundDone = false
+  const round = engine.apply({ type: "runCalls" }).then(() => { roundDone = true })
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  await engine.apply({ type: "callEvent", callId: call.id, input: { type: "answer" } })
+  assert.equal((await engine.phone("driver")).current?.expecting?.type, "key", "answered and greeted while the round still waits")
+  assert.equal(roundDone, false, "a background greeting is still being spoken")
+  release()
+  await round
+})
+
 test("a failed check gives a safe reply and records nothing; the turn limit hands the call over", async () => {
   const failing = { async chat(): Promise<never> { throw new Error("OpenRouter 500") } }
   const engine = await engineWith({ voice: createVoiceAgent({ voice: scriptedVoice(["Sure, I'll tell the customer you're late."]), ear: scriptedEar(["one", "two"]), checker: failing, maxTurns: 2 }) })

@@ -34,7 +34,7 @@ import { endpointContactType, pickupCallAllowed } from "./contacts"
 import { CONTACT_TYPE_LABEL, isCustomerSide, type ContactType } from "@/lib/reviewer/policy"
 import {
   AVAILABLE_OPTIONS, CALLBACK_MINUTES, CALLBACK_OPTIONS, CALLBACK_QUESTION, callbackLine, CLOSING, greeting, HANDOVER_LINE,
-  questionsFor, RETRY_PREFIX, type KeyOption, type OptionEffect, type Question, type Topic,
+  questionsFor, RETRY_PREFIX, TRANSFER_LINE, type KeyOption, type OptionEffect, type Question, type Topic,
 } from "./call-script"
 import type { PlannedAction, RuleId, SourceRef } from "./checks"
 import type { DueItem } from "./due"
@@ -238,6 +238,11 @@ function optionsFor(header: CallHeader, ask: string): { text: string; options: K
   if (ask === "callback_time") return { text: CALLBACK_QUESTION, options: CALLBACK_OPTIONS }
   const question = header.questions[Number(ask.slice(1))]
   return question ? { text: question.text, options: question.options } : null
+}
+
+/** The fixed prompts a call may say, in the order it would say them: generated while it rings, they are ready when it is answered. */
+export function promptsFor(header: CallHeader): string[] {
+  return [optionsFor(header, "available")!.text, ...header.questions.map((question) => question.text), CLOSING, TRANSFER_LINE]
 }
 
 /** The call as it stands, from its events (oldest first). */
@@ -520,7 +525,7 @@ function hungUp(call: Call): AgentStep {
 
 function escalate(call: Call, why: string, tier2: boolean): AgentStep[] {
   const move: AgentStep = { kind: "tier", tier: 2, text: `Moved to tier 2: ${why}.` }
-  if (tier2) return [move, { kind: "opener" }]
+  if (tier2) return [{ kind: "said", text: TRANSFER_LINE }, move, { kind: "opener" }]
   return [move, { kind: "said", text: HANDOVER_LINE }, ending(call, "handover", HANDOVER_LINE, { escalation: why })]
 }
 
