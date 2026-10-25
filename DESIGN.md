@@ -190,7 +190,7 @@ The Control Room lives inside Bahn's own visual world: the bahn.com vehicle tran
 
 Type carries the brand. One wide, heavy, uppercase display cut names the page and the car, and nothing else. Everything an operator reads to decide (reasons, dates, routes, counts) is set in a friendly humanist sans with tabular figures, at sizes that stay legible on a daylight laptop and on a projector. Colour is semantic and rare: orange and red belong to the route's two ends and to risk; teal means live work; green means delivered. The ground stays quiet so those signals can be found at a glance.
 
-Density is medium. Lists are stacks of rounded sand cards separated by small gaps, the selected item inverts to asphalt, and detail opens in a large sand panel beside the list, not in a modal.
+Density is medium. Headlines say what is wrong; secondary labels and descriptions that repeat what the layout already says are left out. Lists are stacks of rounded sand cards separated by small gaps, the selected item inverts to asphalt, and detail opens in a large sand panel beside the list, not in a modal. No coloured strips or underline bars mark groups.
 
 The tokens are defined as custom properties in `starter/app/globals.css`, the fonts load through next/font in `starter/app/layout.tsx`, and the signature pieces live in `starter/app/components/shell.tsx`, `starter/app/components/card.tsx`, `starter/app/components/route-line.tsx` and `starter/app/components/record/header.tsx`.
 
@@ -259,7 +259,11 @@ A warm, near-monochrome sand-and-asphalt ramp, with four signal hues used only f
 
 ## Layout
 
-A fixed 72px top bar on birch (wordmark, a "Control Room" label behind a hairline, a pill nav in a sand track, the snapshot clock right-aligned) sits over a full-height workspace with a 32px gutter. List-and-detail screens (the order queue, the support inbox) are a two-column grid: a left column of minmax(380px, 460px) (inbox minmax(340px, 420px)) holding the display title, tools and a scrolling stack of cards, and a right column that is one large scrolling sand panel. The gap is 20px. Each column scrolls on its own with contained overscroll; the page itself does not scroll on these screens.
+A fixed 72px top bar on birch (wordmark, a "Control Room" label behind a hairline, a pill nav in a sand track, the snapshot clock right-aligned) sits over a full-height workspace with a 32px gutter.
+
+The Not normal board (`/`) is a main area and a rail. Needs action fills the main area as a grid of situation cards (auto-fill, min 380px, 12px gap); Confirm before publishing and In progress sit in a sticky 300–360px rail beside it, In progress as one tonal list of two-line rows. Section heads are a 20px bold label and its count: no rule, strip or tint under them; the grouping is the layout. The Pipeline (`/board`) is five tonal Sand 50 lanes (20px radius) with sticky heads and compact birch tiles. Under 1100px the rail drops below the main area and the lanes scroll sideways with snap.
+
+List-and-detail screens (the support inbox, the Briefing) are a two-column grid: a left column of minmax(380px, 460px) (inbox minmax(340px, 420px)) holding the display title, tools and a scrolling stack of cards, and a right column that is one large scrolling sand panel. The gap is 20px. Each column scrolls on its own with contained overscroll; the page itself does not scroll on these screens.
 
 Record pages (order, customer, driver, place) are a single centred column, max 1180px, with sections 56px apart and blocks 28px apart. Inside panels, birch inset blocks sit on sand with 16px to 20px padding; lists of cards are separated by 6px to 8px gaps.
 
@@ -300,7 +304,9 @@ Soft, confident pills in Bahn's two-tone pair.
 - **Filter:** 30px stage filters with a count in lighter weight. Pressed inverts to asphalt with a Sand 200 count. The Needs-action filter rests in Blush Wash with Brick text when not pressed.
 
 ### Cards / Containers
-- **Queue card:** 18px radius, Sand 50, padding 14px 18px 15px, 8px apart. Car name 16px bold with the stage dot and label right; reference, customer, route and decisive date in Muted Umber; the first reason in its tone colour with a stroke icon. Hover Sand 100. Selected inverts to asphalt with birch text, Sand 200 metadata and on-dark signal tints.
+- **Situation card** (`app/components/situation.tsx`): 24px radius, Sand 50 (birch inside the Briefing's sand panel), padding 18px 22px 20px. A muted line with the car and reference, the deadline right-aligned (Brick when urgent); a 21px 800-weight headline saying what is wrong; one or two 15.5px sentences of situation and suggestion; then one asphalt primary pill for the suggested step and an outlined "Choose another step" pill that opens a small birch menu. The text is a deterministic shortening of the engine's words (`lib/present/situation.ts`). On the order page it leads the record at headline size (`sit-lead`). Used on the board, in the Briefing and on the order page.
+- **Pipeline tile:** 14px radius, birch on the Sand 50 lane, padding 10px 12px. Car name 14.5px bold with a 20px state tag right only when the order is not normal (Urgent, Needs action, Confirm, In progress); reference and route in Muted Umber.
+- **Outlined pill** (`btn-quiet`): transparent with a 1.5px Sand 200 inset ring; the secondary action beside an asphalt primary.
 - **Preview panel:** one 24px Sand 50 panel; content rises in over 0.28s on each selection; a sticky action bar holds "Open order" and the keyboard hint.
 - **Inset block:** birch on sand, 16px radius, 16px to 20px padding; route stops and the open-items list.
 - **Record panel:** Sand 50, 24px radius, 8px 24px 12px padding; rows divided by Sand 100 hairlines.

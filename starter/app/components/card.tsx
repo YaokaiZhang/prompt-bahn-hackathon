@@ -1,59 +1,32 @@
 "use client"
 
 import Link from "next/link"
-import type { KeyboardEvent, MouseEvent } from "react"
 import { laneLabel } from "@/lib/present/labels"
-import { fmtDateTime, fmtRange, fmtWeekday } from "@/lib/present/time"
 import type { Group } from "@/lib/engine/checks"
 import type { BoardCard } from "@/lib/present/types"
 import { GROUP_LABEL, groupTone } from "./checks"
-import { Icon } from "./icons"
 
 /**
- * One order in a queue: car, stage, reference, customer, route, the date that decides the
- * next step, and why it needs a person. `tagged` (the pipeline board, whose column is the
- * stage): a small state tag instead of the stage, and the reason only when it is not normal.
+ * One order as a compact tile: car, then reference and route. On the pipeline board
+ * (`tagged`, the column is the stage) a small state tag shows when the order is not
+ * normal; quiet orders carry no tag. Elsewhere (entity pages) the stage shows instead.
  */
-export function OrderCard({ card, current = false, onSelect, tagged = false }: { card: BoardCard; current?: boolean; onSelect?: (id: string) => void; tagged?: boolean }) {
-  // On the home queue the engine's verdict says why; elsewhere the starter's open items do.
+export function OrderTile({ card, tagged = false }: { card: BoardCard; tagged?: boolean }) {
   const verdict = card.verdict
-  const why = verdict
-    ? { tone: groupTone(verdict.group, verdict.urgent), short: verdict.group === "needs_action" && verdict.urgent ? `Urgent · ${verdict.reason}` : verdict.reason }
-    : card.attention[0]
-  const more = verdict ? 0 : card.attention.length - 1
-  const quiet = tagged && (!verdict || verdict.group === "normal" || verdict.group === "done")
-  const icon = !verdict || verdict.group === "needs_action" ? "alert" : verdict.group === "in_progress" ? "waiting" : "check"
-  const date = card.decisive
-  const select = (event: MouseEvent<HTMLAnchorElement> | KeyboardEvent<HTMLAnchorElement>) => {
-    if (!onSelect || event.metaKey || event.ctrlKey || event.shiftKey) return
-    if (window.matchMedia("(max-width: 900px)").matches) return
-    event.preventDefault()
-    onSelect(card.id)
-  }
-  return <Link
-    className="qcard" href={`/orders/${card.id}`} onClick={select} aria-current={current ? "true" : undefined}
-    aria-label={`${card.vehicle}, ${card.reference}, ${laneLabel(card.displayLane)}${why ? `, ${why.short}` : ""}`}
-  >
-    <span className="qcard-top">
-      <span className="qcard-car">{card.vehicle}</span>
-      {!tagged && <span className="qcard-stage"><span className={`stage-dot stage-${card.displayLane}`} />{laneLabel(card.displayLane)}</span>}
+  const tag = tagged && verdict && verdict.group !== "normal" && verdict.group !== "done" ? verdict : null
+  return <Link className="tile" href={`/orders/${card.id}`}
+    aria-label={`${card.vehicle}, ${card.reference}, ${tag ? GROUP_LABEL[tag.group] : laneLabel(card.displayLane)}`}>
+    <span className="tile-top">
+      <span className="tile-car">{card.vehicle}</span>
+      {tag && <StateTag group={tag.group} urgent={tag.urgent} />}
+      {!tagged && <span className="tile-stage"><span className={`stage-dot stage-${card.displayLane}`} />{laneLabel(card.displayLane)}</span>}
     </span>
-    {tagged && verdict && verdict.group !== "done" && <span className="qcard-tags"><StateTag group={verdict.group} urgent={verdict.urgent} /></span>}
-    <span className="qcard-meta">{card.reference} · {card.customer}</span>
-    <span className="qcard-meta">{card.from.city} → {card.to.city}{date ? <> · <span className="qcard-date">{date.label.toLowerCase()} <b>{dateText(date.start, date.end, date.zone)}</b>{date.note ? `, ${date.note}` : ""}</span></> : null}</span>
-    {why && !quiet && <span className={`qcard-why tone-${why.tone}`}><Icon name={icon} size={14} /><span>{why.short}{more > 0 ? ` · +${more} more` : ""}</span></span>}
+    <span className="tile-meta">{card.reference} · {card.from.city} → {card.to.city}</span>
   </Link>
 }
 
-function dateText(start: string, end: string | null, zone: string | null): string {
-  const day = fmtWeekday(start, zone)
-  const from = fmtDateTime(start, zone, false).split(" ").pop() ?? ""
-  if (!end) return `${day} ${from}`
-  const to = fmtDateTime(end, zone, false).split(" ").pop() ?? ""
-  return fmtWeekday(end, zone) === day ? `${day} ${from}–${to}` : fmtRange(start, end, zone)
-}
-
-/** The small state tag on a pipeline card: Needs action, Confirm before publishing, In progress or Normal. */
+/** The small state tag on a pipeline tile: Urgent, Needs action, Confirm before publishing or In progress. */
 export function StateTag({ group, urgent = false }: { group: Group; urgent?: boolean }) {
-  return <span className={`state-tag state-${group} tone-${groupTone(group, urgent)}`}>{urgent && group === "needs_action" ? "Urgent · " : ""}{GROUP_LABEL[group]}</span>
+  const label = urgent && group === "needs_action" ? "Urgent" : group === "solved" ? "Confirm" : GROUP_LABEL[group]
+  return <span className={`state-tag state-${group} tone-${groupTone(group, urgent)}`} title={GROUP_LABEL[group]}>{label}</span>
 }

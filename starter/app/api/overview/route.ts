@@ -4,6 +4,7 @@ import { getEngine } from "@/lib/engine/server"
 import { buildBoardCard } from "@/lib/present/board"
 import { LANE_ORDER } from "@/lib/present/labels"
 import { loadBoardBundles } from "@/lib/present/load"
+import { situationFor } from "@/lib/present/situation"
 import type { BoardCard, Overview, Tone } from "@/lib/present/types"
 
 export const runtime = "nodejs"
@@ -38,6 +39,7 @@ export async function GET(request: NextRequest) {
       card.displayLane = order.publication.lane
       const first = order.urgency.reasons[0]
       card.verdict = { group: order.group, reason: order.reason, urgent: order.urgency.urgent, urgency: first?.text ?? null, dueAt: order.urgency.dueAt }
+      card.situation = situationFor(order)
     }
     return card
   })

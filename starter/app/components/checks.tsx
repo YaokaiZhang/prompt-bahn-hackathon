@@ -69,8 +69,11 @@ function plannedText(action: PlannedAction): string {
   return action.kind === "site_call" ? `Routine site call to ${who ?? "the pickup site"}` : "Routine driver call to the assigned driver"
 }
 
-/** What the engine checked on one order: its group and why, planned agent work, and each rule with its source records. */
-export function ChecksPanel({ orderId, checks, compact = false }: { orderId: string; checks: OrderChecks; compact?: boolean }) {
+/**
+ * What the engine checked on one order: its group and why, planned agent work, and each rule with its source records.
+ * `led`: the situation card above already says what is wrong and what to do, so the head only counts the checks.
+ */
+export function ChecksPanel({ orderId, checks, compact = false, led = false }: { orderId: string; checks: OrderChecks; compact?: boolean; led?: boolean }) {
   const samePage = !compact
   // Urgency ranks Needs action; on other groups it would read as a second verdict.
   const urgent = checks.group === "needs_action" && checks.urgency.urgent
@@ -80,19 +83,18 @@ export function ChecksPanel({ orderId, checks, compact = false }: { orderId: str
   const list = (rules: RuleResult[]) => <ul className="checks-list">{rules.map((rule) => <RuleItem key={rule.id} orderId={orderId} rule={rule} samePage={samePage} />)}</ul>
   return <section className={`checks${compact ? " checks-compact" : ""}`} id="checks" aria-label="What the system checked">
     <div className="checks-head">
-      <GroupPill group={checks.group} urgent={urgent} />
-      {urgent && <Pill tone="danger">Urgent</Pill>}
-      <span className="checks-count">Checked {checks.rules.length} rules · {passed.length} passed{unknown.length ? ` · ${unknown.length} couldn't check` : ""}{failed.length ? ` · ${failed.length} didn't pass` : ""}</span>
+      <h2 className="checks-title">Checks</h2>
+      {!led && <GroupPill group={checks.group} urgent={urgent} />}
+      <span className="checks-count">{checks.rules.length} rules · {passed.length} passed{unknown.length ? ` · ${unknown.length} couldn't check` : ""}{failed.length ? ` · ${failed.length} didn't pass` : ""}</span>
     </div>
-    <p className={`checks-reason tone-${groupTone(checks.group, urgent)}`}>{checks.reason}</p>
-    {urgent && <p className="checks-urgency">{checks.urgency.reasons.map((reason) => reason.text).join(" · ")}</p>}
+    {!led && <p className={`checks-reason tone-${groupTone(checks.group, urgent)}`}>{checks.reason}</p>}
     {checks.publication && <PublishingBlock orderId={orderId} publication={checks.publication} group={checks.group} calls={checks.calls ?? []} reviewed={checks.review?.status === "reviewed"} />}
     {checks.planned.length > 0 && <div className="checks-block">
       <h3>Planned agent work</h3>
       <ul className="checks-list">{checks.planned.map((action) => <li className="check" key={action.kind}>
         <Icon name={action.kind === "reviewer_pass" ? "bot" : "phone"} className="tone-accent" />
         <div>
-          <div className="check-title">{plannedText(action)}<span className="check-kind">planned, not started</span></div>
+          <div className="check-title">{plannedText(action)}</div>
           <div className="check-detail">{action.ruleIds.map((id) => checks.rules.find((rule) => rule.id === id)?.detail ?? id).join(" ")}</div>
         </div>
       </li>)}</ul>
@@ -104,8 +106,6 @@ export function ChecksPanel({ orderId, checks, compact = false }: { orderId: str
       shown={new Set((checks.proposals ?? []).map((proposal) => proposal.findingId).filter((id): id is string => !!id))} />}
     {failed.length > 0 && <div className="checks-block"><h3>Didn&apos;t pass</h3>{list(failed)}</div>}
     {unknown.length > 0 && <div className="checks-block"><h3>Couldn&apos;t check</h3>{list(unknown)}</div>}
-    {passed.length > 0 && (compact
-      ? <More label={`Passed (${passed.length})`}>{list(passed)}</More>
-      : <div className="checks-block"><h3>Passed</h3>{list(passed)}</div>)}
+    {passed.length > 0 && <More label={`Passed (${passed.length})`}>{list(passed)}</More>}
   </section>
 }

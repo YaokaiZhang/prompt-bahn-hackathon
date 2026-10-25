@@ -3,25 +3,28 @@
 // The Briefing inbox (ticket 13), styled like the support inbox: digests at 09:00,
 // 12:00 and 16:00 on the demo clock and urgent pushes, newest first. Every count
 // comes from the rule checks; the model only writes the opener and first move.
+// Each order a digest or push names shows as the board's situation card, as it stands now.
 
 import Link from "next/link"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type { DigestItem, PushItem } from "@/lib/engine/engine"
 import type { Group } from "@/lib/engine/checks"
-import type { BriefingView } from "@/lib/present/types"
+import type { BoardCard, BriefingView } from "@/lib/present/types"
 import { fmtDateTime } from "@/lib/present/time"
 import { BRIEFING_EVENT, itemSummary, Prose } from "../components/briefing"
-import { GROUP_LABEL, GroupPill, groupTone } from "../components/checks"
+import { GROUP_LABEL } from "../components/checks"
 import { useClockVersion } from "../components/demo-clock"
 import { Icon } from "../components/icons"
 import { Shell } from "../components/shell"
-import { Pill } from "../components/ui"
+import { dueText, SituationCard } from "../components/situation"
+import { More } from "../components/ui"
+import { useOverview } from "../components/use-overview"
 
 const time = (iso: string) => new Date(iso).toISOString().slice(11, 16)
 const stamp = (iso: string) => `${fmtDateTime(iso, null, false)} UTC`
 
 const PUSH_LABEL: Record<PushItem["reason"], string> = {
-  action_due: "Action due within 2 h", promise_at_risk: "Promise at risk today", pickup_unready: "Pickup not ready", handover: "Handover",
+  action_due: "action due within 2 h", promise_at_risk: "promise at risk today", pickup_unready: "pickup not ready", handover: "handover",
 }
 
 export default function BriefingPage() {
@@ -30,6 +33,10 @@ export default function BriefingPage() {
   const [selected, setSelected] = useState<string | null>(null)
   const [showList, setShowList] = useState(true)
   const clockVersion = useClockVersion()
+  // The orders as the board reads them, for the situation cards.
+  const { overview } = useOverview("")
+  const cards = useMemo(() => new Map((overview?.visible ?? []).map((card) => [card.id, card])), [overview])
+  const now = overview?.now ?? null
 
   useEffect(() => {
     const controller = new AbortController()
@@ -72,19 +79,17 @@ export default function BriefingPage() {
     <section className="mail-list" aria-label="Briefing items">
       <header className="mail-list-head">
         <h1 className="display">Briefing</h1>
-        <p>{view ? `${view.unread ? `${view.unread} unread` : "All read"} · digests at 09:00, 12:00 and 16:00, urgent pushes as they happen` : "Loading"}</p>
-        {view && view.unread > 0 && <button type="button" className="btn-link briefing-readall" onClick={() => markRead()}>Mark all read</button>}
+        {view && view.unread > 0 && <p>{view.unread} unread · <button type="button" className="btn-link" onClick={() => markRead()}>Mark all read</button></p>}
       </header>
       {error && <p className="queue-error" role="alert">{error}.</p>}
-      {view && !view.items.length && <p className="empty">Nothing yet. The first digest arrives at 09:00 demo time.</p>}
+      {view && !view.items.length && <p className="empty">The first digest arrives at 09:00.</p>}
       <ul className="mail-rows">{view?.items.map((entry) => <li key={entry.id}>
         <button type="button" className={`mail-row${entry.read ? "" : " unread"}`} onClick={() => choose(entry.id)} aria-current={entry.id === selected ? "true" : undefined}>
           <span className="mail-row-top">
-            <span className="mail-row-who">{!entry.read && <span className="unread-dot" aria-label="Unread" />}{entry.kind === "digest" ? "Digest" : "Urgent push"}</span>
+            <span className="mail-row-who">{!entry.read && <span className="unread-dot" aria-label="Unread" />}{entry.kind === "digest" ? entry.title : `${entry.reference} · ${PUSH_LABEL[entry.reason]}`}</span>
             <span className="mail-row-when">{time(entry.at)}</span>
           </span>
-          <span className="mail-row-subject">{entry.title}{entry.kind === "push" && <Pill tone="danger">{PUSH_LABEL[entry.reason]}</Pill>}</span>
-          <span className="mail-row-preview">{itemSummary(entry)}</span>
+          <span className="mail-row-preview">{entry.kind === "push" ? (cards.get(entry.orderId)?.situation?.headline ?? entry.text) : itemSummary(entry)}</span>
         </button>
       </li>)}</ul>
     </section>
@@ -93,7 +98,7 @@ export default function BriefingPage() {
       {view && view.items.length > 0 && !item && <p className="empty">Choose an item.</p>}
       {item && <article>
         <button type="button" className="mail-back btn btn-tertiary btn-s" onClick={() => setShowList(true)}><Icon name="chevron" size={13} style={{ transform: "rotate(180deg)" }} /> All items</button>
-        {item.kind === "digest" ? <Digest item={item} /> : <Push item={item} />}
+        {item.kind === "digest" ? <Digest item={item} cards={cards} now={now} /> : <Push item={item} card={cards.get(item.orderId) ?? null} now={now} />}
       </article>}
     </section>
   </main></Shell>
@@ -103,96 +108,70 @@ function OrderRef({ orderId, reference }: { orderId: string; reference: string }
   return <Link className="ref-link" href={`/orders/${encodeURIComponent(orderId)}`}>{reference}</Link>
 }
 
+/** The order's situation card as it stands now; a line when it is no longer in Needs action. */
+function OrderSituation({ orderId, reference, card, now }: { orderId: string; reference: string; card: BoardCard | null; now: string | null }) {
+  if (card?.situation && card.verdict?.group === "needs_action") {
+    return <SituationCard orderId={orderId} situation={card.situation} car={card.vehicle} reference={card.reference}
+      due={dueText(card.verdict.dueAt, now)} urgent={card.verdict.urgent} />
+  }
+  const group = card?.verdict?.group
+  return <p className="digest-gone"><OrderRef orderId={orderId} reference={reference} />{group ? ` is ${GROUP_LABEL[group].toLowerCase()} now.` : ""}</p>
+}
+
 const COUNT_TILES: { key: Group | "urgent" | "couldnt_check"; label: string }[] = [
   { key: "needs_action", label: GROUP_LABEL.needs_action },
+  { key: "urgent", label: "Urgent" },
   { key: "in_progress", label: GROUP_LABEL.in_progress },
-  { key: "solved", label: GROUP_LABEL.solved },
+  { key: "solved", label: "Confirm" },
   { key: "normal", label: GROUP_LABEL.normal },
   { key: "done", label: GROUP_LABEL.done },
-  { key: "urgent", label: "Urgent" },
   { key: "couldnt_check", label: "Couldn't fully check" },
 ]
 
-function Digest({ item }: { item: DigestItem }) {
+function Digest({ item, cards, now }: { item: DigestItem; cards: Map<string, BoardCard>; now: string | null }) {
   const { facts, prose } = item
   const changes = facts.changes
+  const since = facts.since ? time(facts.since) : "the last digest"
   return <>
     <header className="mail-head">
       <h2>{item.title}</h2>
-      <div className="hero-pills">
-        <Pill>{facts.slot} demo time</Pill>
-        <Pill tone={prose.source === "model" ? "neutral" : "warn"}>{prose.source === "model" ? "Prose by the model" : "Template text"}</Pill>
-      </div>
-      <dl className="mail-facts">
-        <div><dt>From</dt><dd>Control Room rule checks</dd></div>
-        <div><dt>Arrived</dt><dd>{stamp(item.at)}</dd></div>
-        <div><dt>Covers</dt><dd>{facts.counts.total} orders{facts.since ? `, changes since ${time(facts.since)}` : ""}</dd></div>
-      </dl>
+      <p className="mail-meta">{facts.slot} · counts from the rule checks{prose.source === "model" ? " · prose by the model" : ""}</p>
     </header>
+
+    <dl className="digest-counts">{COUNT_TILES.map((tile) => <div key={tile.key} className={(tile.key === "needs_action" || tile.key === "urgent") && facts.counts[tile.key] ? "tone-danger" : ""}>
+      <dt>{tile.label}</dt><dd>{facts.counts[tile.key]}</dd>
+    </div>)}</dl>
 
     <p className="digest-prose"><Prose segments={prose.opener} /></p>
+    <p className="digest-move"><Icon name="arrow" size={15} /><span><Prose segments={prose.firstMove} /></span></p>
 
-    <section className="digest-block" aria-label="Counts">
-      <h3>Counts</h3>
-      <dl className="digest-counts">{COUNT_TILES.map((tile) => <div key={tile.key} className={tile.key === "needs_action" ? "tone-danger" : tile.key === "urgent" && facts.counts.urgent ? "tone-danger" : ""}>
-        <dt>{tile.label}</dt><dd>{facts.counts[tile.key]}</dd>
-      </div>)}</dl>
-      {facts.needsActionBy.length > 0 && <>
-        <h4>Needs action by cause</h4>
-        <ul className="digest-causes">{facts.needsActionBy.map((cause) => <li key={cause.label}><span>{cause.label}</span><b>{cause.count}</b></li>)}</ul>
-      </>}
-      <p className="digest-note">Every number here comes from the rule checks at {facts.slot}. {prose.note ?? "The model wrote only the prose, through placeholders."}</p>
+    {changes && (changes.newNeedsAction.length > 0 || changes.leftNeedsAction.length > 0 || changes.cameDue.length > 0) && <dl className="digest-changes">
+      {changes.newNeedsAction.length > 0 && <div><dt>New since {since}</dt><dd>{changes.newNeedsAction.map((row, index) => <span key={row.orderId}>{index ? ", " : ""}<OrderRef {...row} /></span>)}</dd></div>}
+      {changes.leftNeedsAction.length > 0 && <div><dt>Left Needs action</dt><dd>{changes.leftNeedsAction.map((row, index) => <span key={row.orderId}>{index ? ", " : ""}<OrderRef {...row} /></span>)}</dd></div>}
+      {changes.cameDue.length > 0 && <div><dt>Came due</dt><dd>{changes.cameDue.map((row, index) => <span key={`${row.title}-${row.reference}-${index}`}>{index ? ", " : ""}{row.title}{row.orderId && row.reference ? <> on <OrderRef orderId={row.orderId} reference={row.reference} /></> : null} at {time(row.at)}</span>)}</dd></div>}
+    </dl>}
+
+    <section className="digest-block" aria-label={GROUP_LABEL.needs_action}>
+      <h3>{GROUP_LABEL.needs_action} <span className="count">{facts.needsAction.length}</span></h3>
+      {facts.needsAction.length ? <ol className="digest-sits">{facts.needsAction.map((line) => <li key={line.orderId}>
+        <OrderSituation orderId={line.orderId} reference={line.reference} card={cards.get(line.orderId) ?? null} now={now} />
+      </li>)}</ol> : <p className="empty-line">Nothing needs you.</p>}
     </section>
 
-    <section className="digest-block" aria-label="Suggested first move">
-      <h3>Suggested first move</h3>
-      <p className="digest-move"><Icon name="arrow" size={15} /><span><Prose segments={prose.firstMove} /></span></p>
-    </section>
-
-    <section className="digest-block" aria-label="Urgent">
-      <h3>Urgent <span className="count">{facts.urgent.length}</span></h3>
-      {facts.urgent.length ? <ul className="digest-lines">{facts.urgent.map((line) => <li key={line.orderId}>
-        <span className="digest-line-head"><OrderRef {...line} /><GroupPill group={line.group} urgent /></span>
-        {line.reasons.map((reason, index) => <span key={index} className="digest-line-why">{reason.text}{reason.at ? <em> · {fmtDateTime(reason.at, null, true)}</em> : null}</span>)}
-      </li>)}</ul> : <p className="empty-line">Nothing is urgent.</p>}
-    </section>
-
-    {changes && <section className="digest-block" aria-label="Since the last digest">
-      <h3>Since {facts.since ? time(facts.since) : "the last digest"}</h3>
-      <dl className="digest-changes">
-        <div><dt>Joined Needs action</dt><dd>{changes.newNeedsAction.length ? changes.newNeedsAction.map((row, index) => <span key={row.orderId}>{index ? ", " : ""}<OrderRef {...row} /></span>) : "None"}</dd></div>
-        <div><dt>Left Needs action</dt><dd>{changes.leftNeedsAction.length ? changes.leftNeedsAction.map((row, index) => <span key={row.orderId}>{index ? ", " : ""}<OrderRef {...row} /></span>) : "None"}</dd></div>
-        <div><dt>Came due</dt><dd>{changes.cameDue.length ? changes.cameDue.map((row, index) => <span key={`${row.title}-${row.reference}-${index}`}>{index ? ", " : ""}{row.title}{row.orderId && row.reference ? <> on <OrderRef orderId={row.orderId} reference={row.reference} /></> : null} at {time(row.at)}</span>) : "Nothing"}</dd></div>
-      </dl>
-    </section>}
-
-    <section className="digest-block" aria-label="Needs action">
-      <h3>Needs action <span className="count">{facts.needsAction.length}</span></h3>
-      {facts.needsAction.length ? <ul className="digest-lines">{facts.needsAction.map((line) => <li key={line.orderId}>
-        <span className="digest-line-head"><OrderRef {...line} />{line.urgent && <Pill tone={groupTone("needs_action", true)}>Urgent</Pill>}</span>
-        <span className="digest-line-why">{line.reason}</span>
-      </li>)}</ul> : <p className="empty-line">No order needs a decision.</p>}
-    </section>
+    {facts.needsActionBy.length > 0 && <More label="Needs action by cause">
+      <ul className="digest-causes">{facts.needsActionBy.map((cause) => <li key={cause.label}><span>{cause.label}</span><b>{cause.count}</b></li>)}</ul>
+    </More>}
+    {prose.note && <p className="digest-note">{prose.note}</p>}
   </>
 }
 
-function Push({ item }: { item: PushItem }) {
+function Push({ item, card, now }: { item: PushItem; card: BoardCard | null; now: string | null }) {
   return <>
     <header className="mail-head">
       <h2>{item.title}</h2>
-      <div className="hero-pills">
-        <Pill tone="danger" dot>{PUSH_LABEL[item.reason]}</Pill>
-        <Pill>Template text, sent at once</Pill>
-      </div>
-      <dl className="mail-facts">
-        <div><dt>Order</dt><dd><OrderRef orderId={item.orderId} reference={item.reference} /></dd></div>
-        <div><dt>Sent</dt><dd>{stamp(item.at)}</dd></div>
-        {item.dueAt && <div><dt>Deadline</dt><dd>{fmtDateTime(item.dueAt)}</dd></div>}
-      </dl>
+      <p className="mail-meta">{stamp(item.at)} · {PUSH_LABEL[item.reason]}{item.dueAt ? ` · deadline ${fmtDateTime(item.dueAt)}` : ""}</p>
     </header>
     <p className="digest-prose">{item.text}</p>
-    <p className="digest-note">One push per order and reason: this order will not be pushed again for “{PUSH_LABEL[item.reason].toLowerCase()}”.</p>
-    <Link className="btn btn-primary btn-s push-open" href={`/orders/${encodeURIComponent(item.orderId)}`}>Open {item.reference}</Link>
+    <div className="push-card"><OrderSituation orderId={item.orderId} reference={item.reference} card={card} now={now} /></div>
   </>
 }
-

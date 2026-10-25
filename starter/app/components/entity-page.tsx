@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { use, useEffect, useState } from "react"
 import type { EntityKind, EntityList, EntityView } from "@/lib/present/types"
-import { OrderCard } from "./card"
+import { OrderTile } from "./card"
 import { Icon } from "./icons"
 import { Shell, type Section } from "./shell"
 import { Empty, FactList, SectionHead } from "./ui"
@@ -35,7 +35,6 @@ export function EntityPage({ kind, params }: { kind: EntityKind; params: Promise
     {!error && !view && <p className="queue-note" aria-busy="true">Loading…</p>}
     {view && <>
       <header className="entity-head">
-        <p className="entity-kind">{view.kindLabel}</p>
         <h1 className="display">{view.title}</h1>
         {view.subtitle && <p className="entity-intro">{view.subtitle}</p>}
       </header>
@@ -47,7 +46,7 @@ export function EntityPage({ kind, params }: { kind: EntityKind; params: Promise
         {view.cards.length === 0 && <Empty>No order in this snapshot involves this {index.noun}.</Empty>}
         <ul className="cards">{view.cards.map((card) => <li key={card.id}>
           {view.roles[card.id] && <p className="card-role">{view.roles[card.id]}</p>}
-          <OrderCard card={card} />
+          <OrderTile card={card} />
         </li>)}</ul>
       </section>
     </>}
@@ -69,18 +68,16 @@ export function EntityIndex({ kind }: { kind: EntityKind }) {
   const index = INDEX[kind]
   const needle = query.trim().toLowerCase()
   const items = (list?.items ?? []).filter((item) => !needle || item.title.toLowerCase().includes(needle) || (item.subtitle ?? "").toLowerCase().includes(needle))
-  const involved = (list?.items ?? []).filter((item) => item.count > 0).length
   return <Shell section={SECTION[kind]}><main className="page">
     <header className="entity-head">
       <h1 className="display">{index.label}</h1>
-      <p className="entity-intro">{list ? `${list.items.length} in the snapshot, ${involved} with at least one order.` : "Loading the snapshot"}</p>
     </header>
-    <div className="index-tools"><label className="field"><span className="sr-only">Filter {index.label.toLowerCase()}</span><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Filter ${index.label.toLowerCase()} by name or place`} /></label></div>
+    <div className="index-tools"><label className="field"><span className="sr-only">Filter {index.label.toLowerCase()}</span><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Filter ${list ? list.items.length : ""} ${index.label.toLowerCase()} by name or place`} /></label></div>
     {error && <p className="queue-error" role="alert">{error}.</p>}
     {list && items.length === 0 && <p className="empty">Nothing matches “{query}”.</p>}
     <div className="index">{items.map((item) => <div className="index-row" key={item.id}>
       <div><Link href={item.href}>{item.title}</Link>{item.subtitle && <small>{item.subtitle}</small>}</div>
-      <span className="index-count">{item.count ? <><b>{item.count}</b> {item.count === 1 ? "order" : "orders"}</> : "no orders"}</span>
+      <span className="index-count">{item.count ? <><b>{item.count}</b> {item.count === 1 ? "order" : "orders"}</> : ""}</span>
     </div>)}</div>
   </main></Shell>
 }
