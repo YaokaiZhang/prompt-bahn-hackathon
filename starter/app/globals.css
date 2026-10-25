@@ -827,12 +827,6 @@ details.more > :not(summary) { margin-top: 10px; }
 .call-pills { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .call-reason, .call-summary { margin: 8px 0 0 32px; font-size: 14.5px; color: var(--body); max-width: 72ch; }
 .call-summary { font-weight: 600; color: var(--ink); }
-.call-meter { margin: 12px 0 0 32px; padding: 12px 16px; border-radius: var(--r-sm); background: var(--sand-50); max-width: 72ch; }
-.call-meter-row { display: flex; flex-wrap: wrap; gap: 6px 28px; }
-.call-meter-figure { display: grid; gap: 3px; }
-.call-meter-label { font-size: 13px; font-weight: 600; color: var(--muted); }
-.call-meter-figure b { font-size: 20px; font-weight: 700; color: var(--ink); }
-.call-meter-parts { margin-top: 8px; font-size: 13px; color: var(--muted); }
 .call-transcript { list-style: none; margin: 10px 0 0 32px; padding: 0; max-height: 360px; overflow-y: auto; overscroll-behavior: contain; }
 .call .more .call-transcript { margin-left: 0; }
 .call .more { margin: 10px 0 0 32px; }
@@ -870,7 +864,7 @@ details.more > :not(summary) { margin-top: 10px; }
   .call { padding: 14px; }
   .call-head { grid-template-columns: 20px minmax(0, 1fr); }
   .call-pills { grid-column: 1 / -1; justify-content: flex-start; }
-  .call-reason, .call-summary, .call-meter, .call-transcript, .call .more, .call-handover-box { margin-left: 0; }
+  .call-reason, .call-summary, .call-transcript, .call .more, .call-handover-box { margin-left: 0; }
   .call-line { grid-template-columns: 36px minmax(0, 1fr) 30px; row-gap: 2px; }
   .call-line-at { grid-column: 1; grid-row: 1; }
   .call-line-by { grid-column: 2; grid-row: 1; }
