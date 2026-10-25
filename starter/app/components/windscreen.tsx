@@ -65,8 +65,8 @@ export function Windscreen({ eyebrow, title, hint, label, choices, angles, going
       let deg = Math.atan2(dx, -dy) * 180 / Math.PI
       if (dy > 0) deg = Math.sign(dx || 1) * 90
       target = Math.max(-80, Math.min(80, deg))
-      el.style.setProperty("--px", `${(0.5 - event.clientX / window.innerWidth) * 40}px`)
-      el.style.setProperty("--py", `${(0.5 - event.clientY / window.innerHeight) * 20}px`)
+      el.style.setProperty("--px", `${(0.5 - event.clientX / window.innerWidth) * 50}px`)
+      el.style.setProperty("--py", `${(0.5 - event.clientY / window.innerHeight) * 28}px`)
     }
     const onLeave = () => { target = 0 }
     const tick = () => {

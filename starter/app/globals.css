@@ -1140,9 +1140,11 @@ p.rewrite-new { margin-top: 6px; max-width: 72ch; }
 
 /* Windscreen landing: the persona picker and the Operator's start page (design: operator-landing.html) */
 .ws { --r: min(28vw, 38vh, 340px); --cy: 30px; position: fixed; inset: 0; z-index: 50; overflow: hidden; background: var(--ink); color: var(--birch); font-family: var(--font-display); }
-.ws-parallax { position: absolute; inset: 0; overflow: hidden; }
-.ws-scene { position: absolute; inset: -6%; background: url(/landing/windscreen.jpg) center / cover no-repeat; transform: translate(var(--px, 0px), var(--py, 0px)); animation: ws-drift 16s ease-in-out infinite alternate; will-change: transform; }
-@keyframes ws-drift { 0% { transform: translate(calc(var(--px, 0px) - 14px), var(--py, 0px)) scale(1.04); } 100% { transform: translate(calc(var(--px, 0px) + 18px), calc(var(--py, 0px) - 8px)) scale(1.14); } }
+/* The pointer moves the wrapper; the scene only drifts. Kept apart so the parallax never waits on the animation. */
+.ws-parallax { position: absolute; inset: 0; transform: translate(var(--px, 0px), var(--py, 0px)); transition: transform 0.25s ease-out; }
+/* The image is 928 px square: as little zoom as the drift and parallax need, so it stays sharp. */
+.ws-scene { position: absolute; inset: -60px; background: url(/landing/windscreen.jpg) center / cover no-repeat; animation: ws-drift 16s ease-in-out infinite alternate; will-change: transform; }
+@keyframes ws-drift { 0% { transform: translate(-14px, 0) scale(1); } 100% { transform: translate(18px, -8px) scale(1.05); } }
 .ws-sheen { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
 .ws-sheen::before { content: ""; position: absolute; top: -10%; bottom: -10%; left: -30%; width: 22%; background: linear-gradient(90deg, transparent, rgba(255, 254, 247, 0.22), transparent); transform: skewX(-18deg); animation: ws-sweep 9s ease-in-out infinite; }
 @keyframes ws-sweep { 0%, 20% { left: -30%; } 80%, 100% { left: 120%; } }
@@ -1187,5 +1189,5 @@ p.rewrite-new { margin-top: 6px; max-width: 72ch; }
 .ws.is-driving .ws-toast { opacity: 1; }
 .ws-toast:empty { visibility: hidden; }
 
-@media (prefers-reduced-motion: reduce) { .ws-scene, .ws-sheen::before, .ws-choice { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .ws-scene, .ws-sheen::before, .ws-choice { animation: none; } .ws-parallax { transform: none; } }
 @media (max-width: 640px) { .ws-choice { height: 40px; padding: 0 14px; } .ws-mirror { display: none; } }
