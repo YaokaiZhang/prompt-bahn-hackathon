@@ -6,10 +6,12 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import type { Engine, OrderState } from "./engine"
-import { scriptedChecker, scriptedEar, scriptedPerson, scriptedSpeech, scriptedVoice, testClip } from "./call-testing"
+import type { ModelGateway } from "@/lib/reviewer/gateway"
+import { checkJson, jobGateway, scriptedChecker, scriptedEar, scriptedPerson, scriptedSpeech, scriptedVoice, testClip } from "./call-testing"
 import { createVoiceAgent } from "./voice-agent"
 import { demoAnswerer } from "./phone"
-import { testEngine } from "./testing"
+import { modelCallee } from "./simulated-person"
+import { eachStore, testEngine } from "./testing"
 import type { CallOptions } from "./call-runner"
 
 async function order(engine: Engine, reference: string): Promise<OrderState> {
@@ -57,8 +59,9 @@ async function toTier2(engine: Engine) {
   return (await engine.phone("driver")).current
 }
 
-test("a reported problem moves the live call to tier 2: the voice agent greets the driver and waits for speech", async () => {
-  const engine = await engineWith({ voice: createVoiceAgent({ voice: scriptedVoice([]), ear: scriptedEar([]), checker: scriptedChecker([]) }) })
+test("a reported problem moves the live call to tier 2: the voice agent opens with what it knows and one question, then waits for speech", async () => {
+  const checker = scriptedChecker([])
+  const engine = await engineWith({ voice: createVoiceAgent({ voice: scriptedVoice([]), ear: scriptedEar([]), checker }) })
   const call = await toTier2(engine)
   assert.ok(call, "the call is still on the phone")
   assert.equal(call.state, "tier2")
@@ -68,7 +71,15 @@ test("a reported problem moves the live call to tier 2: the voice agent greets t
   assert.equal(opener.by, "agent")
   assert.equal(opener.tier, 2)
   assert.ok(opener.audioId, "the opener is spoken")
-  assert.match(opener.text, /what('s| is) happening/i)
+  assert.equal(opener.text, "About order CD-420437: you told me there is a problem on the keypad. What exactly is holding you up?")
+  assert.equal(opener.cost > 0.0005, true, "writing the opener goes on the meter, with its speech")
+  assert.equal(checker.calls.length, 0, "the opener uses up no turn check")
+  const brief = checker.openers[0].messages.at(-1)!.content as string
+  assert.match(brief, /CD-420437/)
+  assert.match(brief, /"Can you still deliver within the promised window\?" No\./, "what was said on the keypad")
+  assert.match(brief, /Moved to tier 2: Driver cannot deliver within the promised window\./, "why it escalated")
+  assert.match(brief, /Latest ETA on record: 15:58/)
+  assert.ok(!/hold the talk button/i.test(opener.text), "no generic instructions")
 
   const row = await order(engine, "CD-420437")
   assert.equal(row.group, "in_progress")
@@ -245,4 +256,135 @@ test("without a voice agent a reported problem still ends as a handover", async 
   const [ended] = (await order(engine, "CD-420437")).calls
   assert.equal(ended.outcome, "handover")
   assert.ok(ended.path.includes("tier2"))
+})
+
+// -- Simulated calls talk too ------------------------------------------------------
+// A background call that escalates goes to the same voice agent. A model plays the
+// callee in text (`modelCallee`); one fake gateway answers the opener, the callee and
+// the checker by job. No ear, no audio model, no speech at tier 2.
+
+const FLAT = "I've got a flat tyre outside Lahti. Roadside help is on its way, so I should be moving again in about an hour."
+const STILL_TODAY = "Yes, it's only a short drive after that, I'd say I'm there by half past three."
+const OFFICE = "The customer just called me, they want the car at their office instead of at home. I can't decide that, someone has to sort it with them."
+const SIM_OPENER = "About order CD-420806: you said there's a problem on the road. What has happened?"
+
+/** CD-420806's background driver call: "now is fine", then "2, there is a problem". Nobody else escalates. */
+function simulated(gateway: ModelGateway, talk = true) {
+  const ear = scriptedEar([])
+  const voiceModel = scriptedVoice([])
+  const speech = scriptedSpeech()
+  const person = scriptedPerson({ "CD-420806": [["answer", "1", "2"]] })
+  const calls: CallOptions = {
+    person: talk ? { ...person, talk: modelCallee(gateway) } : person, speech,
+    voice: createVoiceAgent({ voice: voiceModel, ear, checker: gateway }),
+  }
+  return { calls, ear, voiceModel, speech }
+}
+
+eachStore("a simulated escalation is talked through at tier 2: the callee answers in text, Haiku checks each turn, and the call ends resolved", async (engine) => {
+  await engine.apply({ type: "runCalls" })
+
+  const row = await order(engine, "CD-420806")
+  const [call] = row.calls
+  assert.equal(call.answerer, "simulated")
+  assert.deepEqual(call.path, ["ringing", "answered", "availability", "tier1", "tier2", "ended"])
+  assert.equal(call.outcome, "resolved")
+  assert.equal(call.tier, 2, "settled by the agent, no person needed")
+  const tier2 = call.transcript.filter((line) => line.tier === 2)
+  assert.deepEqual(tier2.map((line) => [line.by, line.check ? "check" : line.text]), [
+    ["system", "Moved to tier 2: Driver reports a problem."],
+    ["agent", SIM_OPENER],
+    ["callee", FLAT], ["system", "check"], ["agent", "I'm sorry to hear that. Will you still reach the customer today?"],
+    ["callee", STILL_TODAY], ["system", "check"], ["agent", "Thank you, I've noted all of that. Goodbye."],
+    ["system", call.summary],
+  ])
+  assert.ok(tier2.filter((line) => line.path).every((line) => line.path === "text"), "the checker wrote every reply")
+  assert.ok(tier2.every((line) => !line.audioId), "no audio at tier 2")
+  assert.deepEqual(call.claims.slice(-2), ["Flat tyre outside Lahti; roadside help on the way", "Expects to arrive around 15:30 local"])
+  assert.match(call.summary ?? "", /Flat tyre outside Lahti/)
+  assert.ok(row.effects.some((event) => event.type === "eta_reported"), "the time the driver gave is a reported ETA")
+  // On the meter: the opener and two checks ($0.001 each); the callee's own model is not the agent's cost.
+  assert.equal(Math.round(tier2.reduce((sum, line) => sum + line.cost, 0) * 1e6) / 1e6, 0.003)
+  assert.ok(tier2.filter((line) => line.by === "callee").every((line) => line.cost === 0))
+}, { calls: () => simulated(jobGateway({
+  "call-opener": [SIM_OPENER],
+  "call-callee": [FLAT, STILL_TODAY],
+  "call-check": [
+    checkJson({ heard: FLAT, claims: ["Flat tyre outside Lahti; roadside help on the way"], reply: "I'm sorry to hear that. Will you still reach the customer today?" }),
+    checkJson({
+      heard: STILL_TODAY, claims: ["Flat tyre outside Lahti; roadside help on the way", "Expects to arrive around 15:30 local"],
+      // A question left before the goodbye is dropped: nobody could answer it.
+      eta: { local: "15:30", claim: "Expects to arrive around 15:30 local" }, next: "resolved", reply: "Thank you, I've noted all of that. Is there anything else? Goodbye.",
+      summary: "Flat tyre outside Lahti; expects to arrive around 15:30 local.",
+    }),
+  ],
+})).calls })
+
+test("the simulated callee reads the order's records and the conversation; the checker reads its words; nothing is spoken or transcribed", async () => {
+  const gateway = jobGateway({
+    "call-opener": [SIM_OPENER],
+    "call-callee": [FLAT],
+    "call-check": [checkJson({ heard: FLAT, claims: ["Flat tyre outside Lahti"], next: "resolved", reply: "Thank you, noted. Goodbye.", summary: "Flat tyre outside Lahti." })],
+  })
+  const sim = simulated(gateway)
+  const engine = await testEngine({ calls: sim.calls })
+  await engine.apply({ type: "runCalls" })
+
+  assert.deepEqual(gateway.calls.map((request) => request.job), ["call-opener", "call-callee", "call-check"])
+  const callee = gateway.calls[1]
+  const system = callee.messages[0].content
+  const persona = Array.isArray(system) ? system.map((part) => part.text).join("\n") : String(system)
+  assert.match(persona, /You play .*the driver delivering this car, on order CD-420806/)
+  assert.match(persona, /You: Pressed 2: No\./, "it knows what it pressed")
+  assert.match(persona, /because: Driver reports a problem/)
+  assert.match(persona, /\] work_assignments/, "the order's records")
+  assert.deepEqual(callee.messages.slice(1), [{ role: "user", content: SIM_OPENER }])
+  const check = JSON.parse(gateway.calls[2].messages[1].content as string) as { person_just_said: string; brief: string }
+  assert.equal(check.person_just_said, FLAT)
+  assert.match(check.brief, /Moved to tier 2: Driver reports a problem\./)
+  assert.equal(sim.ear.heard.length, 0, "no transcription")
+  assert.equal(sim.voiceModel.requests.length, 0, "no audio model")
+  assert.ok(!sim.speech.spoken.includes(SIM_OPENER) && !sim.speech.spoken.includes("Thank you, noted. Goodbye."), "no speech at tier 2")
+})
+
+eachStore("a simulated call the agent cannot settle hands over to a person with the open question; a failed opener falls back to the template", async (engine) => {
+  await engine.apply({ type: "runCalls" })
+
+  const row = await order(engine, "CD-420806")
+  const [call] = row.calls
+  assert.equal(call.outcome, "handover")
+  assert.equal(call.tier, 3)
+  const opener = call.transcript.find((line) => line.tier === 2 && line.by === "agent")!
+  assert.match(opener.text, /^About order CD-420806.* You answered "No" when I asked: Are you still on track with this delivery\? What is the problem with the delivery\?$/)
+  assert.equal(call.transcript.find((line) => line.by === "callee" && line.tier === 2)?.text, OFFICE)
+  assert.deepEqual(call.handover, {
+    question: "May the car be delivered to the customer's office instead of their home?",
+    nextStep: "Confirm the new address with the customer, then call the driver back.",
+    summary: "The customer asked the driver to deliver to their office instead.",
+    closed: null,
+  })
+  assert.deepEqual(call.changes, [OFFICE_CHANGE])
+  assert.equal(row.callLines.find((line) => line.line === "driver")?.status, "handover")
+  assert.equal(row.group, "needs_action")
+}, { calls: () => simulated(jobGateway({
+  "call-callee": [OFFICE],
+  "call-check": [checkJson({
+    heard: OFFICE, claims: ["Customer asked the driver to deliver to their office"], changes: [OFFICE_CHANGE],
+    next: "handover", reply: "Thank you. A colleague from the control room will call you back shortly to settle this. Goodbye.",
+    openQuestion: "May the car be delivered to the customer's office instead of their home?",
+    nextStep: "Confirm the new address with the customer, then call the driver back.",
+    summary: "The customer asked the driver to deliver to their office instead.",
+  })],
+})).calls })
+
+const OFFICE_CHANGE = { title: "Deliver to the customer's office", change: "Deliver the car to the customer's office instead of their home.", claim: "Customer asked the driver to deliver to their office" }
+
+test("a simulated person who cannot talk still ends an escalation as a handover, even with a voice agent", async () => {
+  const gateway = jobGateway({})
+  const engine = await testEngine({ calls: simulated(gateway, false).calls })
+  await engine.apply({ type: "runCalls" })
+  const [call] = (await order(engine, "CD-420806")).calls
+  assert.equal(call.outcome, "handover")
+  assert.match(call.transcript.filter((line) => line.by === "agent").at(-1)!.text, /colleague from the control room will follow up/)
+  assert.equal(gateway.calls.length, 0, "no model was asked")
 })

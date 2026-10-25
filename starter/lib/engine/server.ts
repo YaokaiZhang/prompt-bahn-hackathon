@@ -11,7 +11,7 @@ import { createEngine, type Engine } from "./engine"
 import { createPostgresStore } from "./postgres"
 import { createPostgresProseCache } from "./prose-cache"
 import { demoAnswerer, RING_TIMEOUT_MS, type PhonePersona } from "./phone"
-import { simulatedPerson } from "./simulated-person"
+import { DEMO_SCRIPTS, modelCallee, simulatedPerson } from "./simulated-person"
 import { createDiskAudioStore, openRouterSpeechFromEnv, type AudioStore } from "./speech"
 import { createVoiceAgent, type VoiceAgent } from "./voice-agent"
 import { openRouterTranscriberFromEnv, openRouterVoiceFromEnv } from "./voice-openrouter"
@@ -81,8 +81,9 @@ function startPump(engine: Engine): void {
 
 /**
  * Tier 2 (ticket 12): the audio model answers live calls aloud, the ear transcribes,
- * Haiku (the reviewer's gateway) checks each turn. Needs the key; TIER2_AUDIO_MODEL=off
- * runs the fallback (ear, Haiku, text to speech) only.
+ * Haiku (the reviewer's gateway) writes the opener and checks each turn; simulated
+ * calls skip the audio and talk in text. Needs the key; TIER2_AUDIO_MODEL=off runs the
+ * fallback (ear, Haiku, text to speech) only.
  */
 function voiceAgent(gateway: ModelGateway | null): VoiceAgent | null {
   const ear = openRouterTranscriberFromEnv()
@@ -102,8 +103,10 @@ export function getEngine(): Promise<Engine> {
         briefing: { gateway, cache: createPostgresProseCache(db) },
         // Calls (ticket 10): background calls are answered by the simulated person; demo
         // cases and "ring live" calls ring on the Site/Driver phone page (ticket 11).
+        // At tier 2 a model plays the background callee in text (ticket 12), so a
+        // simulated escalation is talked through rather than handed over at once.
         calls: {
-          person: simulatedPerson(), speech: openRouterSpeechFromEnv(getAudioStore()), pace: 1,
+          person: simulatedPerson(DEMO_SCRIPTS, gateway ? modelCallee(gateway) : undefined), speech: openRouterSpeechFromEnv(getAudioStore()), pace: 1,
           ...(LIVE_DEMO ? { answererFor: demoAnswerer() } : {}),
           phoneOpenSince, ringTimeoutMs: RING_TIMEOUT, voice: voiceAgent(gateway),
         },

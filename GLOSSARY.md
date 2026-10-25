@@ -117,6 +117,14 @@ _Avoid_: Contact (broader), phone task
 **Tier**:
 One level of a call: 1 is fixed keypad questions, 2 is the LLM voice agent, 3 is handover to an operator.
 
+**Opener**:
+The voice agent's first words at tier 2: what it already knows (the order, the keypad answers, why the call escalated), then one specific question.
+_Avoid_: Greeting (tier 1 greets)
+
+**Simulated callee**:
+Who answers a background call: keypad moves from a script at tier 1, and a model playing the person in text at tier 2, answering from the order's records.
+_Avoid_: Bot, fake caller
+
 **Handover**:
 The end of a call that the voice agent couldn't resolve, giving an operator the transcript, a summary, the open question, and a proposed next step.
 _Avoid_: Escalation, transfer

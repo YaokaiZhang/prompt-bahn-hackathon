@@ -78,6 +78,7 @@ const PATH_LABEL: Record<TurnPath, string> = {
   voice: "Audio model",
   replaced: "Checked reply (the audio model's was not allowed)",
   fallback: "Fallback: transcribed, checked, spoken",
+  text: "Checked reply (simulated callee, text only)",
 }
 
 const NEXT_LABEL: Record<TurnCheck["next"], string> = { continue: "Keep talking", resolved: "End: resolved", handover: "End: hand over to a person" }

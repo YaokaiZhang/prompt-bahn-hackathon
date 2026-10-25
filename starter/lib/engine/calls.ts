@@ -7,10 +7,11 @@
 //      ├─decline──> declined ─┐          └─2─> callback_time ──digit──> ended (callback)
 //      └─no answer─> no_answer┴──> ended (callback; "unreachable" after MAX_ATTEMPTS)
 //                                                          └─problem / unclear──> tier2
-//   tier2: the voice agent (ticket 12, voice-agent.ts) takes live calls there: the
-//   callee speaks (push-to-talk), the agent answers aloud, until it ends "resolved" or
-//   "handover". Without a voice agent, or on a simulated call, the call ends politely
-//   as "handover" (a person follows up; ticket 14 makes that a tier-3 handover).
+//   tier2: the voice agent (ticket 12, voice-agent.ts) takes the call there. It opens
+//   with what it knows and one question; then the callee speaks (push-to-talk on a live
+//   call, a model playing them in text on a simulated one) and the agent answers, until
+//   it ends "resolved" or "handover". Without a voice agent, or a simulated callee that
+//   cannot talk, the call ends politely as "handover" (ticket 14: a tier-3 handover).
 //
 // A call is an append-only list of events in the store; `foldCall` reads the current
 // state from them. Two turns alternate:
@@ -336,6 +337,8 @@ export function foldCall(events: StoredCallEvent[], rates: CostRates = DEFAULT_R
 /** One step the agent takes: say something, or record a fact. Speech is added by the layer. */
 export type AgentStep =
   | { kind: "said"; text: string; ask?: string }
+  /** The voice agent's first words at tier 2: written by the call layer once the escalation is logged. */
+  | { kind: "opener" }
   | { kind: "tier"; tier: Tier; text: string }
   | { kind: "callback"; callbackAt: string; text: string }
   | { kind: "ended"; outcome: CallOutcome; text: string; summary: string; claims: string[]; changes: CallChange[]; handover?: HandoverNote }
@@ -446,7 +449,7 @@ function ending(call: Call, outcome: CallOutcome, text: string, extra: { escalat
     : call.path.includes("declined") ? `${name} declined the call.`
     : call.path.includes("no_answer") ? `${name} did not answer.`
     : `${name} was busy and asked for a callback.`
-  // An escalation nobody could talk through (no voice agent, or a simulated callee) is a tier-3 handover too.
+  // An escalation nobody could talk through (no voice agent, or a simulated callee that cannot talk) is a tier-3 handover too.
   const handover: HandoverNote | undefined = outcome === "handover" ? {
     question: `${extra.escalation ?? "The callee needs a conversation"}: what does the order need now?`,
     nextStep: `Call ${name} back (${call.topics.map((topic) => topic.title).join("; ") || "the call's topics"}), then record what you learned.`,
@@ -457,10 +460,10 @@ function ending(call: Call, outcome: CallOutcome, text: string, extra: { escalat
 
 /**
  * The agent's next steps on a call whose turn it is (`expecting` null), as of the
- * demo time `now`. `tier2` is the voice agent's first words when one can take the
- * call over (ticket 12: live calls only); null: an escalation ends the call as a handover.
+ * demo time `now`. `tier2`: a voice agent can take the call over (ticket 12), so an
+ * escalation moves to tier 2 and the agent opens; otherwise it ends as a handover.
  */
-export function agentTurn(call: Call, now: string, tier2: string | null, lastEvent: StoredCallEvent): AgentStep[] {
+export function agentTurn(call: Call, now: string, tier2: boolean, lastEvent: StoredCallEvent): AgentStep[] {
   if (call.state === "ended" || call.expecting) return []
   const next = (from: number): AgentStep[] => {
     const answered = new Set(call.answers.filter((row) => row.ask.startsWith("q") && call.questions[Number(row.ask.slice(1))]?.options.some((option) => option.digit === row.digit)).map((row) => row.ask))
@@ -515,9 +518,9 @@ function hungUp(call: Call): AgentStep {
     handover: { question: latest?.openQuestion ?? "The callee hung up before the problem was settled.", nextStep: latest?.nextStep ?? `Call ${who(call.callee)} back.`, summary } }
 }
 
-function escalate(call: Call, why: string, tier2: string | null): AgentStep[] {
+function escalate(call: Call, why: string, tier2: boolean): AgentStep[] {
   const move: AgentStep = { kind: "tier", tier: 2, text: `Moved to tier 2: ${why}.` }
-  if (tier2) return [move, { kind: "said", text: tier2 }]
+  if (tier2) return [move, { kind: "opener" }]
   return [move, { kind: "said", text: HANDOVER_LINE }, ending(call, "handover", HANDOVER_LINE, { escalation: why })]
 }
 
