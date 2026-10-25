@@ -1,37 +1,29 @@
 "use client"
 
-// The pipeline board (spec .scratch/publishing): every order, one column per stage from
-// unpublished to done. Within a column: Needs action, then Confirm before publishing, then
-// In progress, then Normal, each by when the order was created. The state is a small tag.
+// The pipeline board (spec .scratch/publishing): every order, one lane per stage from
+// unpublished to done. Within a lane: Needs action, then Confirm before publishing, then
+// In progress, then Normal, each by when the order was created. The state is a small tag;
+// a normal order carries none.
 
 import { useMemo, useState } from "react"
 import { PIPELINE, pipelineColumn } from "@/lib/present/labels"
-import { BoardHead, BoardSwitch, byStateThenOrderTime, Columns, SearchField, type Column } from "../components/columns"
+import { BoardHead, BoardSwitch, byStateThenOrderTime, Lanes, SearchField, type Column } from "../components/columns"
 import { Shell } from "../components/shell"
 import { useOverview } from "../components/use-overview"
-
-const EMPTY: Record<(typeof PIPELINE)[number]["key"], string> = {
-  unpublished: "Every order is published.",
-  approval: "No order waits for publication approval.",
-  market: "No order is looking for a driver.",
-  assigned: "No order has a driver yet.",
-  done: "No order is delivered or cancelled.",
-}
 
 export default function PipelineBoard() {
   const [search, setSearch] = useState("")
   const { overview, error } = useOverview(search)
   const columns: Column[] = useMemo(() => PIPELINE.map(({ key, label }) => ({
-    key, label, className: `column-${key}`,
+    key, label,
     cards: (overview?.visible ?? []).filter((card) => pipelineColumn(card.displayLane) === key).sort(byStateThenOrderTime),
-    empty: search ? `No order here matches “${search}”.` : EMPTY[key],
-  })), [overview, search])
+  })), [overview])
   return <Shell section="orders" snapshotAt={overview?.snapshotAt ?? null}><main className="board-page">
-    <BoardHead title="Pipeline" sub={overview ? <><b>{overview.total}</b> orders from unpublished to done</> : "Loading the snapshot"}>
+    <BoardHead title="Pipeline">
+      <SearchField value={search} onChange={setSearch} />
       <BoardSwitch current="pipeline" />
     </BoardHead>
-    <div className="board-tools"><SearchField value={search} onChange={setSearch} /></div>
     {error && <p className="queue-error" role="alert">{error}. Check that the local database is running and seeded.</p>}
-    <Columns columns={columns} tagged loading={!overview && !error} />
+    <Lanes columns={columns} loading={!overview && !error} />
   </main></Shell>
 }

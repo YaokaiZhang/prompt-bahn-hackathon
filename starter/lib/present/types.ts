@@ -12,6 +12,7 @@ import type { BlockedCall, Call, CallLineView } from "@/lib/engine/calls"
 import type { EffectEvent, HistoryEntry } from "@/lib/engine/engine"
 import type { DemandCheck, Publication } from "@/lib/engine/publishing"
 import type { TravelPlan } from "@/lib/engine/travel-planner"
+import type { Situation } from "./situation"
 
 export type Tone = "danger" | "warn" | "accent" | "ok" | "neutral"
 
@@ -171,6 +172,8 @@ export type BoardCard = {
   createdAt: string
   /** Group, reason and urgency from the engine; set on the home queue, absent on entity pages. `dueAt`: the earliest deadline the rules know of. */
   verdict?: { group: Group; reason: string; urgent: boolean; urgency: string | null; dueAt: string | null }
+  /** What is wrong and the step to take (lib/present/situation.ts); set with the verdict on orders that are not normal. */
+  situation?: Situation | null
 }
 
 export type Overview = {

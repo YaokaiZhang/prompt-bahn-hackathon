@@ -1,8 +1,10 @@
 "use client"
 
 // The two order boards (spec .scratch/publishing):
-//   /       orders that are not normal, one column per state, soonest deadline first;
-//   /board  the pipeline: every order from unpublished to done, one column per stage,
+//   /       orders that are not normal: Needs action as situation cards in the main
+//           area, Confirm before publishing and In progress in a rail beside it, each
+//           soonest deadline first;
+//   /board  the pipeline: every order from unpublished to done, one lane per stage,
 //           ranked by state (Needs action > Confirm before publishing > In progress > Normal),
 //           then by when the order was created.
 
@@ -10,10 +12,10 @@ import Link from "next/link"
 import type { ReactNode } from "react"
 import type { Group } from "@/lib/engine/checks"
 import type { BoardCard } from "@/lib/present/types"
-import { OrderCard } from "./card"
+import { OrderTile } from "./card"
 import { Icon } from "./icons"
 
-export type Column = { key: string; label: string; cards: BoardCard[]; empty: string; className?: string }
+export type Column = { key: string; label: string; cards: BoardCard[] }
 
 /** The pipeline's rank of states within a column. */
 const STATE_RANK: Record<Group, number> = { needs_action: 0, solved: 1, in_progress: 2, normal: 3, done: 4 }
@@ -30,13 +32,18 @@ export function byStateThenOrderTime(a: BoardCard, b: BoardCard): number {
   return rank(a) - rank(b) || a.createdAt.localeCompare(b.createdAt) || a.reference.localeCompare(b.reference)
 }
 
-export function Columns({ columns, tagged = false, loading = false }: { columns: Column[]; tagged?: boolean; loading?: boolean }) {
-  return <div className="columns" role="list">
-    {columns.map((column) => <section key={column.key} className={`column ${column.className ?? ""}`} role="listitem" aria-label={column.label}>
-      <header className="column-head"><h2>{column.label}</h2><em>{loading ? "" : column.cards.length}</em></header>
-      {loading ? <ol aria-busy="true">{[0, 1].map((key) => <li className="qcard-skeleton" key={key} />)}</ol>
-        : column.cards.length === 0 ? <p className="column-empty">{column.empty}</p>
-        : <ol>{column.cards.map((card) => <li key={card.id}><OrderCard card={card} tagged={tagged} /></li>)}</ol>}
+/** A heading with its count; the layout says the rest. */
+export function LaneHead({ label, count, children }: { label: string; count: number | null; children?: ReactNode }) {
+  return <header className="lane-head"><h2>{label}</h2><em>{count ?? ""}</em>{children}</header>
+}
+
+/** The pipeline: one tonal lane per stage, compact tiles inside. */
+export function Lanes({ columns, loading = false }: { columns: Column[]; loading?: boolean }) {
+  return <div className="lanes">
+    {columns.map((column) => <section key={column.key} className="lane" aria-label={column.label}>
+      <LaneHead label={column.label} count={loading ? null : column.cards.length} />
+      {loading ? <ol aria-busy="true">{[0, 1, 2].map((key) => <li className="tile-skeleton" key={key} />)}</ol>
+        : <ol>{column.cards.map((card) => <li key={card.id}><OrderTile card={card} tagged /></li>)}</ol>}
     </section>)}
   </div>
 }
@@ -58,9 +65,10 @@ export function SearchField({ value, onChange }: { value: string; onChange: (val
   </label>
 }
 
-export function BoardHead({ title, sub, children }: { title: string; sub: ReactNode; children?: ReactNode }) {
+/** Title, the board switch and the search on one row. */
+export function BoardHead({ title, children }: { title: string; children?: ReactNode }) {
   return <header className="board-head">
-    <div><h1 className="display">{title}</h1><p className="queue-sub">{sub}</p></div>
+    <h1 className="display">{title}</h1>
     {children}
   </header>
 }

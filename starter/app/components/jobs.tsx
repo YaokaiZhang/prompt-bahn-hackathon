@@ -8,9 +8,8 @@ import { useEffect, useState } from "react"
 import type { DriverJob, DriverJobs } from "@/lib/present/types"
 import { fmtDateTime } from "@/lib/present/time"
 import { useClockVersion } from "./demo-clock"
-import { Icon } from "./icons"
 import { TravelPlanView } from "./travel-plan"
-import { More, Pill } from "./ui"
+import { More } from "./ui"
 
 /** How often the job list re-reads the market (ms). */
 const POLL_MS = 5000
@@ -34,15 +33,26 @@ function useJobs(): { jobs: DriverJob[] | null; error: string } {
 
 const slotText = (slot: DriverJob["pickupWindow"]) => slot ? `${fmtDateTime(slot.start, slot.zone, false)}–${fmtDateTime(slot.end, slot.zone).split(" ").slice(2).join(" ")}` : "time to agree"
 
+/** What makes a job demanding, in a few words: "ferry or train · ~15 h driving". */
+function demands(job: DriverJob): string | null {
+  if (!job.check.demanding) return null
+  const parts = [
+    job.check.crossings.length > 0 ? "ferry or train" : null,
+    job.check.driveHours !== null && job.check.driveHours > 12 ? `~${job.check.driveHours} h driving` : null,
+  ].filter(Boolean)
+  return parts.length ? `Demanding: ${parts.join(" · ")}` : "Demanding"
+}
+
 function JobCard({ job }: { job: DriverJob }) {
+  const hard = demands(job)
   return <li className="job">
     <div className="job-head">
       <b>{job.from.city} → {job.to.city}</b>
       {job.fee && <span className="job-fee">{job.fee}</span>}
     </div>
-    <div className="job-meta">{job.reference}{job.car ? ` · ${job.car}` : ""}{job.check.km ? ` · ${job.check.km} km` : ""}</div>
-    <div className="job-meta">Pickup {slotText(job.pickupWindow)} · Deliver by {job.deliveryWindow ? fmtDateTime(job.deliveryWindow.end, job.deliveryWindow.zone) : "time to agree"}</div>
-    {job.check.demanding && <div className="job-tags"><Pill tone="warn">Demanding</Pill>{job.check.crossBorder && <Pill tone="neutral">{job.from.country} → {job.to.country}</Pill>}{job.check.crossings.length > 0 && <Pill tone="neutral">Ferry or train</Pill>}{job.check.driveHours !== null && job.check.driveHours > 12 && <Pill tone="neutral">~{job.check.driveHours} h driving</Pill>}</div>}
+    <div className="job-when">{slotText(job.pickupWindow)} → {job.deliveryWindow ? fmtDateTime(job.deliveryWindow.end, job.deliveryWindow.zone) : "time to agree"}</div>
+    <div className="job-meta">{job.car ? `${job.car} · ` : ""}{job.check.km ? `${job.check.km} km · ` : ""}{job.reference}</div>
+    {hard && <div className="job-hard">{hard}</div>}
     {job.plan && <More label="Suggested travel plan"><TravelPlanView plan={job.plan} /></More>}
   </li>
 }
@@ -50,11 +60,10 @@ function JobCard({ job }: { job: DriverJob }) {
 export function DriverJobsList() {
   const { jobs, error } = useJobs()
   return <section className="phone-jobs" aria-label="Open jobs">
-    <h2><Icon name="offer" />Open jobs{jobs ? ` (${jobs.length})` : ""}</h2>
+    <h2>Open jobs <em>{jobs ? jobs.length : ""}</em></h2>
     {error && <p className="phone-error" role="alert">{error}</p>}
     {!jobs && !error && <p className="phone-queue-why">Loading jobs…</p>}
     {jobs && jobs.length === 0 && <p className="phone-queue-why">No open jobs right now.</p>}
     {jobs && jobs.length > 0 && <ul>{jobs.map((job) => <JobCard key={job.orderId} job={job} />)}</ul>}
-    <p className="phone-queue-why">Travel plans are suggestions with rough prices. Nothing is booked.</p>
   </section>
 }

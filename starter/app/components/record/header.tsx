@@ -2,11 +2,15 @@
 
 import Image from "next/image"
 import Link from "next/link"
+import type { ReactNode } from "react"
 import type { RecordView, Tile } from "@/lib/present/types"
 import { Pill, StagePill } from "../ui"
 
-/** Bahn's image band with an asphalt panel over its foot: the car, its stage and who it is for. */
-export function RecordHero({ view }: { view: RecordView }) {
+/**
+ * Bahn's image band with an asphalt panel over its foot: the car, its stage and who it is for.
+ * `lead`: what the order needs now (the situation card); without it, the record's story.
+ */
+export function RecordHero({ view, lead }: { view: RecordView; lead?: ReactNode }) {
   const { header, story, journey } = view
   const vehicle = header.vehicle
   const photo = vehicle?.illustrationSlug
@@ -14,13 +18,12 @@ export function RecordHero({ view }: { view: RecordView }) {
     <section className={`hero${photo ? "" : " no-photo"}`}>
       {photo && <figure className="hero-photo">
         <Image src={`/car-images/${photo}.webp`} alt={`Illustration of a ${vehicle?.title}`} fill sizes="(max-width: 1180px) 100vw, 1120px" priority />
+        <figcaption className="photo-note" title="Orders with the same model share this picture. It is not a photo or evidence of this car.">Model illustration</figcaption>
       </figure>}
       <div className="hero-card">
         <div className="hero-pills">
           <StagePill lane={header.lane} label={header.laneLabel} />
           <Pill>{header.reference}</Pill>
-          {header.customerReference && <Pill>Customer ref {header.customerReference}</Pill>}
-          {photo && <Pill>Model illustration, not this car</Pill>}
         </div>
         <h1 className="display hero-title">{vehicle ? vehicle.title : "Vehicle not linked"}</h1>
         <p className="hero-facts">
@@ -29,14 +32,14 @@ export function RecordHero({ view }: { view: RecordView }) {
           <span>VIN <b>{vehicle?.vin ?? "none"}</b></span>
           <span>{header.routeKindLabel}{journey.distanceKm ? ` · ${journey.distanceKm} km` : ""}</span>
           {header.tradeIn && <span>Trade-in <b>{header.tradeIn.title}</b></span>}
+          {header.customerReference && <span>Customer ref <b>{header.customerReference}</b></span>}
         </p>
-        <p className="hero-intro">{story.intro}</p>
       </div>
     </section>
-    <div className="story">
+    {lead ? <div className="story">{lead}</div> : <div className="story">
       <p className={`story-headline tone-${story.tone}`}>{story.headline}</p>
       {story.detail && <p className="story-detail">{story.detail}</p>}
-    </div>
+    </div>}
   </>
 }
 

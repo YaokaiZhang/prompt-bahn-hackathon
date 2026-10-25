@@ -18,11 +18,15 @@ const DECISION_TONE: Record<Decision, Tone> = { "acts alone": "accent", "needs a
 const ACTIONS: { type: ActionType; label: string }[] = [{ type: "question", label: "Ask a question or call" }, { type: "change", label: "Change the order" }]
 
 function RuleRow({ rule }: { rule: RuleInfo }) {
-  return <li className="rule-row" id={`rule-${rule.id}`}>
+  return <li className="rule-row rule-row-2" id={`rule-${rule.id}`}>
     <dl><dt>Rule</dt><dd className="rule-name"><span className="rule-id"><Pill>{rule.id}</Pill></span>{rule.title}</dd></dl>
-    <dl><dt>Kind</dt><dd>{rule.strength === "strong" ? "Strong rule" : "Weak signal: never fails, feeds couldn't check"}</dd></dl>
     <dl><dt>First action</dt><dd>{rule.firstAction}</dd></dl>
   </li>
+}
+
+/** The column names, once above a list; each row's own labels show only on a phone. */
+function Cols({ names }: { names: string[] }) {
+  return <div className={`rule-cols${names.length === 2 ? " rule-row-2" : ""}`} aria-hidden="true">{names.map((name) => <span key={name}>{name}</span>)}</div>
 }
 
 export default function RulesPage() {
@@ -32,12 +36,13 @@ export default function RulesPage() {
   return <Shell section="rules"><main className="page rules-page">
     <header className="entity-head">
       <h1 className="display">Rules</h1>
-      <p className="rules-intro">What the agent may do on its own, what needs your yes, and what it only proposes. The contact&apos;s type decides, never the person who answers. Every proposal names the policy row it falls under.</p>
+      <p className="rules-intro">The contact&apos;s type decides what the agent may do alone, what needs your yes, and what it only proposes.</p>
     </header>
 
     <section className="rules-section" aria-labelledby="policy-head">
       <h2 id="policy-head">Approval policy</h2>
-      <p>Who is contacted, the kind of action, and whether the agent acts alone or needs a yes. The agent never contacts the customer side itself, with one exception: a pickup-readiness call to the order&apos;s pickup place or pickup contact. It never calls the paying customer.</p>
+      <p>The agent never contacts the customer side, except for a pickup-readiness call to the pickup place or contact. It never calls the paying customer.</p>
+      <Cols names={["Who is contacted", "Kind of action", "The agent"]} />
       <ol className="rules-list">{POLICY.map((row) => <li className="rule-row" id={row.id} key={row.id}>
         <dl>
           <dt>Who is contacted</dt>
@@ -53,7 +58,7 @@ export default function RulesPage() {
 
     <section className="rules-section" aria-labelledby="matrix-head">
       <h2 id="matrix-head">By contact type</h2>
-      <p>The same table read the other way: each contact type and action, and the row that decides it.</p>
+      <Cols names={["Contact type", ...ACTIONS.map((action) => action.label)]} />
       <ol className="rules-list">{CONTACT_TYPES.map((type) => <li className="rule-row" key={type}>
         <dl><dt>Contact type</dt><dd className="rule-name">{CONTACT_TYPE_LABEL[type]}</dd></dl>
         {ACTIONS.map((action) => {
@@ -67,8 +72,11 @@ export default function RulesPage() {
 
     <section className="rules-section" aria-labelledby="checks-head">
       <h2 id="checks-head">Rule checks</h2>
-      <p>Deterministic checks run on every order at the demo clock. A strong rule that fails takes its first action; weak signals list what couldn&apos;t be checked.</p>
+      <p>Run on every order at the demo clock. A strong rule that fails takes its first action.</p>
+      <Cols names={["Strong rule", "First action"]} />
       <ol className="rules-list">{strong.map((rule) => <RuleRow key={rule.id} rule={rule} />)}</ol>
+      <h3 className="rules-sub">Weak signals never fail; they list what couldn&apos;t be checked.</h3>
+      <Cols names={["Weak signal", "First action"]} />
       <ol className="rules-list">{weak.map((rule) => <RuleRow key={rule.id} rule={rule} />)}</ol>
     </section>
   </main></Shell>

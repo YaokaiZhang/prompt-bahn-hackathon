@@ -16,7 +16,7 @@ export const BRIEFING_EVENT = "control-room:briefing"
 
 const TOASTED_KEY = "briefing-toasted"
 const TOAST_MS = 10_000
-const MAX_TOASTS = 3
+const MAX_TOASTS = 2
 
 // Items already toasted in this browser: `${id}@${deliveredAt}`, so an item delivered
 // again after a reset toasts again. Kept in memory too, for when storage is blocked.
@@ -102,11 +102,12 @@ export function BriefingToasts({ feed }: { feed: BriefingFeed }) {
     {feed.toasts.map((item) => <div key={item.id} className={`toast toast-${item.kind}`}>
       <Icon name={item.kind === "push" ? "alert" : "inbox"} size={16} className={item.kind === "push" ? "tone-danger" : "tone-neutral"} />
       <div className="toast-body">
-        <b>{item.kind === "push" ? "Urgent" : "Briefing"} · {item.title}</b>
-        <span>{itemSummary(item)}</span>
+        <b>{item.title}</b>
+        {item.kind === "digest" && <span>{itemSummary(item)}</span>}
         <span className="toast-links">
-          <Link className="ref-link" href={`/briefing#${encodeURIComponent(item.id)}`} onClick={() => feed.dismiss(item.id)}>Open in Briefing</Link>
-          {item.kind === "push" && <Link className="ref-link" href={`/orders/${encodeURIComponent(item.orderId)}`} onClick={() => feed.dismiss(item.id)}>{item.reference}</Link>}
+          {item.kind === "push"
+            ? <Link className="ref-link" href={`/orders/${encodeURIComponent(item.orderId)}`} onClick={() => feed.dismiss(item.id)}>Open {item.reference}</Link>
+            : <Link className="ref-link" href={`/briefing#${encodeURIComponent(item.id)}`} onClick={() => feed.dismiss(item.id)}>Read the digest</Link>}
         </span>
       </div>
       <button type="button" className="toast-close" aria-label={`Dismiss ${item.title}`} onClick={() => feed.dismiss(item.id)}><Icon name="close" size={14} /></button>

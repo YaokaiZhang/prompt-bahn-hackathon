@@ -59,14 +59,10 @@ function PlayButton({ audioId }: { audioId: string }) {
 
 function CostMeter({ call }: { call: Call }) {
   const { cost } = call
-  const share = cost.operatorEur > 0 ? Math.min(1, cost.totalEur / cost.operatorEur) : 0
   return <div className="call-meter" aria-label="Cost of this call">
     <div className="call-meter-row">
       <span className="call-meter-figure"><span className="call-meter-label">This call</span><b>{eur(cost.totalEur)}</b></span>
       <span className="call-meter-figure"><span className="call-meter-label">Same call by an operator</span><b>{eur(cost.operatorEur)}</b></span>
-    </div>
-    <div className="call-meter-bar" role="img" aria-label={`This call costs ${eur(cost.totalEur)} against ${eur(cost.operatorEur)} for an operator`}>
-      <span style={{ width: `${Math.max(share * 100, 0.8)}%` }} />
     </div>
     <p className="call-meter-parts">
       Model {usd(cost.modelUsd)} · phone {clock(cost.phoneSeconds)} at {eur(cost.rates.phonePerMinuteEur)}/min = {eur(cost.phoneEur)} · ringing {clock(cost.ringSeconds)} · operator at {eur(cost.rates.operatorPerMinuteEur)}/min, one minute at least
@@ -170,12 +166,10 @@ function CallCard({ call }: { call: Call }) {
       <Icon name="phone" className={live ? "tone-accent" : "tone-neutral"} />
       <div>
         <div className="call-title">{call.line === "site" ? "Site call" : "Driver call"} to {name}</div>
-        <div className="call-sub">{call.callee.handle}{call.callee.role ? ` · ${call.callee.role}` : ""} · started {demoTime(call.startedAt)}{call.attempt > 1 ? ` · attempt ${call.attempt}` : ""}</div>
+        <div className="call-sub">{call.callee.handle}{call.callee.role ? ` · ${call.callee.role}` : ""} · {demoTime(call.startedAt)} · tier {call.tier}{call.attempt > 1 ? ` · attempt ${call.attempt}` : ""}{call.answerer === "live" ? " · live phone" : ""}</div>
       </div>
       <div className="call-pills">
-        <Pill tone={live ? "accent" : "neutral"} dot={live}>Tier {call.tier}</Pill>
-        {live ? <Pill tone="accent">{STATE_LABEL[call.state]}</Pill> : outcome && <Pill tone={outcome.tone}>{outcome.label}</Pill>}
-        <Pill>{call.answerer === "live" ? "Live phone" : "Simulated person"}</Pill>
+        {live ? <Pill tone="accent" dot>{STATE_LABEL[call.state]}</Pill> : outcome && <Pill tone={outcome.tone}>{outcome.label}</Pill>}
       </div>
     </div>
     <p className="call-reason">{call.reason}</p>

@@ -7,10 +7,10 @@ import { choosePersona } from "./actions"
 
 export const metadata: Metadata = { title: "Choose a persona · Control Room" }
 
-const ABOUT: Record<Persona, { what: string; lands: string }> = {
-  operator: { what: "Works the order queue, approves proposals and makes customer contact.", lands: "Opens the order queue" },
-  site: { what: "Answers the agent's calls for whichever pickup or delivery place is being called.", lands: "Opens the phone" },
-  driver: { what: "Answers the agent's calls as the driver assigned to the order.", lands: "Opens the phone" },
+const ABOUT: Record<Persona, { what: string }> = {
+  operator: { what: "Works the orders and makes the decisions." },
+  site: { what: "Answers calls to a pickup or delivery place." },
+  driver: { what: "Answers driver calls and sees open jobs." },
 }
 
 /** The persona picker. No password: the demo site sits behind basic auth, and this only decides which screens you see. */
@@ -19,7 +19,6 @@ export default async function PickerPage({ searchParams }: { searchParams: Promi
   return <Shell><main className="picker">
     <header className="picker-head">
       <h1 className="display">Choose a persona</h1>
-      <p>Pick who you are for this demo. You can switch at any time from the top bar.</p>
     </header>
     <form action={choosePersona} className="picker-options">
       {next && <input type="hidden" name="next" value={next} />}
@@ -29,7 +28,7 @@ export default async function PickerPage({ searchParams }: { searchParams: Promi
           <b>{PERSONA_LABEL[persona]}{persona === current && <em>Current</em>}</b>
           <span>{ABOUT[persona].what}</span>
         </span>
-        <span className="picker-go">{ABOUT[persona].lands}<Icon name="arrow" /></span>
+        <Icon name="arrow" className="picker-go" />
       </button>)}
     </form>
     <p className="picker-note">Fictional data. No real phone numbers, customers or bookings.</p>

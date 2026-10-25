@@ -40,7 +40,7 @@ export default function InboxPage() {
     <section className="mail-list" aria-label="Support inbox threads">
       <header className="mail-list-head">
         <h1 className="display">Support inbox</h1>
-        <p>{view ? `${view.open} of ${view.threads.length} open` : "Loading"} · messages that arrived before an order link was certain</p>
+        {view && <p>{view.open} of {view.threads.length} open</p>}
       </header>
       {error && <p className="queue-error" role="alert">{error}.</p>}
       <ul className="mail-rows">{view?.threads.map((item) => {
