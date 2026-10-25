@@ -4,6 +4,7 @@ import type { FirstAction, Group, PlannedAction, RuleResult, SourceRef } from "@
 import type { OrderChecks, Tone } from "@/lib/present/types"
 import { Icon } from "./icons"
 import { CallsBlock } from "./calls"
+import { CloseButton } from "./close"
 import { EffectsBlock } from "./effects"
 import { CompactProposals, ProposalsBlock } from "./proposals"
 import { PublishingBlock } from "./publishing"
@@ -45,6 +46,11 @@ export function sourceHref(orderId: string, source: SourceRef, samePage: boolean
 
 function Sources({ orderId, sources, samePage }: { orderId: string; sources: SourceRef[]; samePage: boolean }) {
   if (!sources.length) return null
+  // Records the operator can close here (a finished order's open records): one row each, with its button.
+  if (sources.every((source) => source.close)) return <ul className="close-list">{sources.map((source) => <li key={`${source.collection}-${source.id}`}>
+    <a className="source-link" href={sourceHref(orderId, source, samePage)} title={`${source.collection} ${source.id}`}>{source.label}<span className="source-id">{source.id}</span></a>
+    <CloseButton orderId={orderId} record={{ collection: source.collection, recordId: source.id }} verb={source.close!} />
+  </li>)}</ul>
   return <span className="check-sources">{sources.map((source) => <a key={`${source.collection}-${source.id}`} className="source-link"
     href={sourceHref(orderId, source, samePage)} title={`${source.collection} ${source.id}`}>{source.label}<span className="source-id">{source.id}</span></a>)}</span>
 }

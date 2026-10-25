@@ -3,7 +3,7 @@
 // `applyEffects` lays the events over a bundle, and the order view, the rules and
 // the reviewer all read that overlaid bundle.
 //
-// Eight types (spec "Our own tables"):
+// Nine types (spec "Our own tables"):
 //   contact_confirmed          endpoint contact_status / last_confirmed_source / last_confirmed_at
 //   contact_changed            endpoint contact name, handle and role
 //   window_changed             the selected pickup slot or the delivery promise (start/end)
@@ -13,6 +13,8 @@
 //   customer_answer_recorded   an attributed claim; the source is the operator's record of the customer
 //   operator_answer_recorded   an attributed note by the operator
 //   cost_approved              an expense approved, or a new cost line
+//   record_closed              an open record (proof, work item, alert, …) closed by the operator
+//                              (lib/present/closing.ts says what each kind writes)
 //
 // Versioning: an effect event writes a new VERSION of the fact it settles (`fact`:
 // "who may sign at delivery", an endpoint's contact, a window). Version 1 is what the
@@ -30,15 +32,17 @@
 
 import { createHash } from "node:crypto"
 import { rows, str, type Bundle, type RelatedRow } from "@/lib/present/bundle"
+import { CLOSING, CLOSING_FIELDS, isClosable, type ClosableCollection } from "@/lib/present/closing"
 import type { Row } from "@/lib/present/types"
 import type { Actor } from "./proposals"
 
 export type EffectType =
   | "contact_confirmed" | "contact_changed" | "window_changed"
   | "call_result_recorded" | "eta_reported" | "customer_answer_recorded" | "operator_answer_recorded" | "cost_approved"
+  | "record_closed"
 
 export const EFFECT_TYPES: EffectType[] = [
-  "contact_confirmed", "contact_changed", "window_changed", "call_result_recorded", "eta_reported", "customer_answer_recorded", "operator_answer_recorded", "cost_approved",
+  "contact_confirmed", "contact_changed", "window_changed", "call_result_recorded", "eta_reported", "customer_answer_recorded", "operator_answer_recorded", "cost_approved", "record_closed",
 ]
 
 export const EFFECT_LABEL: Record<EffectType, string> = {
@@ -50,6 +54,7 @@ export const EFFECT_LABEL: Record<EffectType, string> = {
   customer_answer_recorded: "Customer answer recorded",
   operator_answer_recorded: "Operator answer recorded",
   cost_approved: "Cost approved",
+  record_closed: "Record closed",
 }
 
 /** What an effect event changes: one variant per type. */
@@ -72,6 +77,8 @@ export type Effect =
   | { type: "operator_answer_recorded"; question: string; answer: string }
   /** Approves an existing expense (`expenseId`), or adds a cost line (`amountCents`, `currency`, `kind`). */
   | { type: "cost_approved"; expenseId?: string | null; amountCents?: number | null; currency?: string | null; kind?: string | null; note?: string | null }
+  /** An open record closed by the operator; `label` names it ("proof submitted") and `outcome` says what happened ("accepted"). `closeEffect` builds it. */
+  | { type: "record_closed"; collection: ClosableCollection; recordId: string; label: string; outcome: string }
 
 /** What fact an effect settles, and what it replaces. Optional for writers; the engine fills the defaults. */
 export type Versioning = {
@@ -174,7 +181,29 @@ export function describeEffect(bundle: Bundle, effect: Effect): string {
       }
       return `cost line approved: ${effect.amountCents ?? 0} ${effect.currency ?? "EUR"} cents for ${String(effect.kind ?? "cost").toLowerCase().replace(/_/g, " ")}`
     }
+    case "record_closed":
+      return `${effect.label} ${effect.recordId} ${effect.outcome}`
   }
+}
+
+/** A closable record on the order, with its status (alerts and conversations carry it on the row). */
+function closableRow(bundle: Bundle, collection: ClosableCollection, id: string): { details: Row; status: string | null } | null {
+  if (collection === "alerts") { const row = bundle.alerts.find((alert) => alert.id === id); return row ? { details: row.details, status: row.status } : null }
+  if (collection === "conversations") { const row = bundle.conversations.find((thread) => thread.id === id); return row ? { details: row.details, status: row.status } : null }
+  const row = rowOf(bundle, collection, id)
+  return row ? { details: row.details, status: str(row.details.status) } : null
+}
+
+/** The effect that closes one open record on the order, in the operator's words. Throws when it is not there or not open. */
+export function closeEffect(bundle: Bundle, collection: string, recordId: string): Extract<Effect, { type: "record_closed" }> {
+  if (!isClosable(collection)) throw new Error(`${bundle.order.reference}: ${collection.replace(/_/g, " ")} can't be closed here`)
+  const found = closableRow(bundle, collection, recordId)
+  if (!found) throw new Error(`${bundle.order.reference}: no ${collection.replace(/_/g, " ")} record ${recordId} on this order`)
+  const kind = CLOSING[collection]
+  if (!kind.open(found.details, found.status)) throw new Error(`${bundle.order.reference}: ${recordId} is already closed`)
+  const what = collection.replace(/_/g, " ").replace(/s$/, "")
+  const status = found.status ? ` ${found.status.toLowerCase().replace(/_/g, " ")}` : ""
+  return { type: "record_closed", collection, recordId, label: `${what}${status}`, outcome: kind.done(found.details, found.status) }
 }
 
 /** The history line: the label, what changed, and who approved it. */
@@ -227,6 +256,9 @@ export function checkEffect(bundle: Bundle, effect: Effect): void {
       if (effect.expenseId) must(rowOf(bundle, "expenses", effect.expenseId), `no expense ${effect.expenseId} on this order`)
       else must(typeof effect.amountCents === "number" && effect.amountCents > 0 && effect.kind, "a new cost line needs an amount and a kind")
       return
+    case "record_closed":
+      closeEffect(bundle, effect.collection, effect.recordId)
+      return
   }
 }
 
@@ -249,6 +281,7 @@ export function effectTarget(effect: Effect): { collection: string; id: string }
     case "contact_changed": return { collection: "order_endpoint_details", id: effect.endpointId }
     case "window_changed": return { collection: "time_windows", id: effect.windowId }
     case "cost_approved": return effect.expenseId ? { collection: "expenses", id: effect.expenseId } : null
+    case "record_closed": return { collection: effect.collection, id: effect.recordId }
     default: return null
   }
 }
@@ -272,6 +305,7 @@ const VERSIONED_FIELDS: Record<string, string[]> = {
   order_endpoint_details: ["contact_name", "contact_handle", "contact_role", "contact_status", "last_confirmed_at", "last_confirmed_source", "stated_by", "stated_at"],
   time_windows: ["start_at", "end_at", "source"],
   expenses: ["status"],
+  ...Object.fromEntries(Object.keys(CLOSING).map((collection) => [collection, CLOSING_FIELDS])),
 }
 
 function replaceRow(bundle: Bundle, collection: string, id: string, event: EffectEvent, change: (details: Row) => Row): void {
@@ -318,6 +352,7 @@ function statedBy(event: EffectEvent): string {
     case "customer_answer_recorded": return event.from
     case "operator_answer_recorded": return "operator"
     case "cost_approved": return "operator"
+    case "record_closed": return "operator"
   }
 }
 
@@ -394,6 +429,19 @@ export function applyEffects(snapshot: Bundle, events: EffectEvent[]): Bundle {
           }]
         }
         break
+      case "record_closed": {
+        const kind = CLOSING[event.collection]
+        if (event.collection === "alerts") {
+          bundle.alerts = bundle.alerts.map((alert) => alert.id === event.recordId
+            ? { ...alert, status: "RESOLVED", details: { ...alert.details, ...kind.change(alert.details, alert.status, event.at), status_before: alert.status } } : alert)
+        } else if (event.collection === "conversations") {
+          bundle.conversations = bundle.conversations.map((thread) => thread.id === event.recordId
+            ? { ...thread, status: "CLOSED", details: { ...thread.details, ...kind.change(thread.details, thread.status, event.at), status_before: thread.status } } : thread)
+        } else {
+          replaceRow(bundle, event.collection, event.recordId, event, (details) => ({ ...details, ...kind.change(details, str(details.status), event.at) }))
+        }
+        break
+      }
       default:
         break
     }

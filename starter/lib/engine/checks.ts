@@ -10,7 +10,11 @@ export type Group = "needs_action" | "in_progress" | "solved" | "normal" | "done
 export const GROUPS: Group[] = ["needs_action", "in_progress", "solved", "normal", "done"]
 
 /** A record a rule read, so the UI can link to it. `collection` is the dataset file name. */
-export type SourceRef = { collection: string; id: string; label: string }
+export type SourceRef = {
+  collection: string; id: string; label: string
+  /** The operator's verb when the record can be closed from the app ("Accept", "Mark done"); set on the CLOSE rule's open records. */
+  close?: string
+}
 
 /**
  * What a rule asks for first when it fails (or, for a weak rule, when it plans a call):

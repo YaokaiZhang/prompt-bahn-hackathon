@@ -72,3 +72,19 @@ test("normal and finished orders have no card", () => {
   assert.equal(situationFor({ ...base, group: "normal" }), null)
   assert.equal(situationFor({ ...base, group: "done" }), null)
 })
+
+test("a finished order whose open records can be closed: closing them is the step, the look is another", () => {
+  const proofs = { ...rule("CLOSE", "The order is delivered but 2 records are still open: proof submitted (2)."), sources: [
+    { collection: "proofs", id: "proof-1", label: "Proof submitted", close: "Accept" },
+    { collection: "proofs", id: "proof-2", label: "Proof submitted", close: "Accept" },
+  ] }
+  const situation = situationFor({ ...base, rules: [proofs] })
+  assert.ok(situation)
+  assert.deepEqual(situation.step, { label: "Accept the 2 proofs", do: "close", records: [{ collection: "proofs", recordId: "proof-1" }, { collection: "proofs", recordId: "proof-2" }] })
+  assert.ok(situation.others.some((step) => step.label === "Review the open records"))
+
+  const mixed = { ...proofs, sources: [proofs.sources[0], { collection: "work_items", id: "wi-1", label: "Open work item", close: "Mark done" }] }
+  assert.equal(situationFor({ ...base, rules: [mixed] })?.step?.label, "Close all 2 records")
+  const one = { ...proofs, sources: [{ collection: "work_items", id: "wi-1", label: "Open work item", close: "Mark done" }] }
+  assert.equal(situationFor({ ...base, rules: [one] })?.step?.label, "Mark done: open work item")
+})

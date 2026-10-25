@@ -135,6 +135,10 @@ _Avoid_: Comment, note, feedback
 The append-only record of something committed on an order, layered over the snapshot. A change to the order (a contact confirmed or changed, a window moved, a cost approved) is written only after an operator's yes; the operator's own answers are committed when given. A call result and a reported ETA are written by the agent at once, without a yes, because they are attributed statements (what the person said on the call), not changes to the order. Proposal text is never a fact; an effect event is.
 _Avoid_: Update, change, mutation, operational event (that is the dataset's history)
 
+**Close a record**:
+The operator marks an open record done from the app: accepts a submitted proof (or waives a required one), marks a work item or custody follow-up done, resolves an alert, incident or claim, marks a document received, closes a thread or a stale proposal. Each close is an effect event committed by the operator; the record itself is never edited. Closing a finished order's last open record takes it out of Blocked.
+_Avoid_: Delete, dismiss (a dismissed proposal is the agent's, not a record)
+
 **Snapshot**:
 The fixed dataset as of 2026-10-21T09:00Z. Effect events are layered on top of it, and it is never edited.
 
