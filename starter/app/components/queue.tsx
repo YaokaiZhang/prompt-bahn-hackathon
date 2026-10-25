@@ -59,9 +59,12 @@ export function QueueBoard({ board, filters, place, sort, tagged = false, tools,
     return out
   }, [overview, filters, place, sort])
   const queue = by.get(filter) ?? []
-  const current = queue.find((card) => card.id === selected) ?? queue[0] ?? null
+  // When the selected order leaves the queue (its records closed, say), the next one takes its place.
+  const lastIndex = useRef(0)
+  const current = queue.find((card) => card.id === selected) ?? queue[Math.min(lastIndex.current, queue.length - 1)] ?? null
   const currentId = current?.id ?? null
   const index = current ? queue.indexOf(current) : -1
+  useEffect(() => { if (index >= 0) lastIndex.current = index }, [index])
   const now = overview?.now ?? null
 
   useEffect(() => {

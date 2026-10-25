@@ -333,3 +333,34 @@ test("a delivered order with a gap is not Done; an effect that closes the gap mo
   assert.equal(open.group, "needs_action")
   assert.equal(open.rules.find((rule) => rule.id === "CLOSE")!.outcome, "fail")
 })
+
+// CD-420725: delivered; its only open record is a submitted pickup-photo proof.
+const ORDER_725 = "ord-00725"
+const PROOF_725 = "proof-x01adc3c829defb21"
+
+eachStore("closing an open record: the operator accepts the proof, the overlay marks it approved and the finished order has nothing open", async (engine) => {
+  const before = find((await engine.state()).orders, "CD-420725")
+  const close = before.rules.find((rule) => rule.id === "CLOSE")!
+  assert.equal(close.outcome, "fail")
+  assert.deepEqual(close.sources.map((source) => [source.id, source.close]), [[PROOF_725, "Accept"]])
+
+  const order = find((await engine.apply({ type: "closeRecords", orderId: ORDER_725, records: [{ collection: "proofs", recordId: PROOF_725 }] })).orders, "CD-420725")
+  assert.equal(order.effects.length, 1)
+  const [effect] = order.effects
+  assert.equal(effect.type, "record_closed")
+  assert.equal(effect.by, "operator")
+  assert.match(effect.text, /proof submitted proof-x01adc3c829defb21 accepted/)
+  assert.equal(order.rules.find((rule) => rule.id === "CLOSE")!.outcome, "pass")
+  assert.notEqual(order.group, "needs_action")
+
+  const details = await overlaidRow(engine, ORDER_725, "proofs", PROOF_725)
+  assert.equal(details.status, "APPROVED")
+  assert.equal(details.reviewed_by, "operator")
+  const raw = engine.bundle(ORDER_725)!.related.proofs!.find((row) => row.id === PROOF_725)!
+  assert.equal(raw.details.status, "SUBMITTED", "the snapshot is never edited")
+
+  // Closed once: a second close is refused and writes nothing.
+  await assert.rejects(engine.apply({ type: "closeRecords", orderId: ORDER_725, records: [{ collection: "proofs", recordId: PROOF_725 }] }), /already closed/)
+  await assert.rejects(engine.apply({ type: "closeRecords", orderId: ORDER_725, records: [{ collection: "expenses", recordId: "x" }] }), /can't be closed/)
+  assert.equal(find((await engine.state()).orders, "CD-420725").effects.length, 1)
+})

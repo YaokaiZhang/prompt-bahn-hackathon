@@ -341,6 +341,11 @@ ul, ol { padding: 0; list-style: none; }
 .check-detail { margin-top: 2px; font-size: 14px; color: var(--body); max-width: 70ch; }
 .check-detail b { font-weight: 600; }
 .check-sources { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.close-list { display: grid; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
+.close-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.close-record { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.item-side .close-record { margin-top: 8px; justify-content: flex-end; }
+.close-error { font-size: 13px; color: var(--red-ink); white-space: normal; }
 .source-link { display: inline-block; max-width: 100%; padding: 4px 11px; line-height: 1.35; border-radius: var(--r-pill); background: var(--birch); font-size: 13px; font-weight: 600; color: var(--brown); text-decoration: none; transition: background-color 0.18s var(--ease), color 0.18s var(--ease); }
 .checks-compact .source-link { background: var(--sand-50); }
 .source-link:hover { background: var(--sand-100); color: var(--ink); }

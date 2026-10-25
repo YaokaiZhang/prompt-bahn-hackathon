@@ -16,7 +16,7 @@ import { compareUrgency, GROUPS, verdictFor, type Group, type RuleResult, type V
 import { briefingAsOf, digestFacts, digestTimes, digestTitle, pushId, sendPush, type Briefing, type DigestItem, type PushInput } from "./briefing"
 import { writeProse, type ProseOptions } from "./digest-prose"
 import { becameDue, digestDueItems, dueAsOf, nextCheckItems, nextDueAfter, type DueItem } from "./due"
-import { applyEffects, checkEffect, defaultFact, effectId, effectTarget, effectText, isCustomerStatement, statementsBy, type EffectEvent, type EffectInput, type EffectSpec, type EffectWrite } from "./effects"
+import { applyEffects, checkEffect, closeEffect, defaultFact, effectId, effectTarget, effectText, isCustomerStatement, statementsBy, type EffectEvent, type EffectInput, type EffectSpec, type EffectWrite } from "./effects"
 import {
   answeredBy, answersFor, changeDraft, changeEffect, instructionsFor, nextCheckDrafts, proposalsFor, type OrderProposals, type Proposal, type StoredProposalEvent, type Unreachable,
 } from "./proposals"
@@ -69,6 +69,11 @@ export type Command =
    * re-reviewed.
    */
   | { type: "recordEffect"; effect: EffectWrite }
+  /**
+   * The operator closes open records on an order (accepts a proof, marks a work item done,
+   * resolves an alert …): one `record_closed` effect each, then the order is re-reviewed.
+   */
+  | { type: "closeRecords"; orderId: string; records: { collection: string; recordId: string }[] }
   /**
    * The operator records the customer's answer on an approved customer-side proposal
    * (after making the contact): the proposal becomes answered, the answer goes to the
@@ -842,6 +847,17 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
         }
         const [event] = await commitEffects([{ ...command.effect, by } as EffectInput])
         await rereview(event.orderId)
+        break
+      }
+      case "closeRecords": {
+        if (!command.records.length) throw new Error("Name a record to close")
+        await sync()
+        if (!bundles.get(command.orderId)) throw new Error(`Unknown order ${command.orderId}`)
+        const bundle = bundleOf(command.orderId)
+        await commitEffects(command.records.map((record) => ({
+          ...closeEffect(bundle, record.collection, record.recordId), orderId: command.orderId, by: "operator" as const, source: "operator",
+        })))
+        await rereview(command.orderId)
         break
       }
       case "editScript": {

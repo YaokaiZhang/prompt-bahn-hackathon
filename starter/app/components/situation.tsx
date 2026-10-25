@@ -9,6 +9,7 @@
 import Link from "next/link"
 import { useEffect, useRef, useState, type FormEvent } from "react"
 import type { Situation, Step } from "@/lib/present/situation"
+import { closeRecords } from "./close"
 import { CLOCK_EVENT } from "./demo-clock"
 import { Icon } from "./icons"
 import { sendProposalAction } from "./proposals"
@@ -27,6 +28,7 @@ async function run(step: Step, orderId: string): Promise<void> {
     case "dismiss": await sendProposalAction({ action: "dismiss", proposalId: step.proposalId }); return
     case "ring": await post("/api/calls", { action: "ringLive", orderId, line: step.line }, "The call did not start"); return
     case "confirm": await post("/api/publishing", { action: "confirm", orderId }, "Nothing changed"); return
+    case "close": await closeRecords(orderId, step.records); return
     default: return
   }
 }
