@@ -65,7 +65,7 @@ export function PublishingBlock({ orderId, publication, group, calls, reviewed }
   const canPublish = publication.stage === "unposted" && group === "normal"
   if (publication.stage === "posted" && !pending.length) return null
   return <div className="checks-block publishing" id="publishing">
-    <h3>{pending.length ? "Confirm before publishing" : "Driver market"}</h3>
+    <h3>{pending.length ? "Fixed, review it" : "Driver market"}</h3>
     <p className="publishing-stage"><Icon name="offer" className={publication.stage === "market" ? "tone-accent" : "tone-neutral"} />{STAGE_TEXT(publication)}</p>
     {publication.check?.demanding && <p className="publishing-filter">{publication.check.reasons.map((reason) => <Pill key={reason} tone="warn">{reason}</Pill>)}</p>}
     {pending.length > 0 && <>

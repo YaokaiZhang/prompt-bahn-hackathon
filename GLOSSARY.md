@@ -67,8 +67,9 @@ _Avoid_: Quiet, no alert, OK
 
 ## Order groups
 
-**Needs action**:
-The group of orders waiting on an operator's decision or contact.
+**Problem**:
+The group of orders the agent cannot move forward alone: they wait on an operator's decision or contact.
+_Avoid_: Needs action
 
 **In progress**:
 The group of orders where an agent action is running or waiting on a reply.
@@ -77,7 +78,7 @@ The group of orders where an agent action is running or waiting on a reply.
 The group of orders that are checked normal and not finished.
 
 **Solved**:
-The group of orders not published yet where the agent's calls settled the open points and the operator has not confirmed the call results yet. Shown as the tag "Confirm before publishing"; the order waits in Waiting for publication approval. Orders on the market or on the road are never Solved.
+The group of orders not published yet where the agent's calls settled the open points and the operator has not confirmed the call results yet. Shown as "Fixed, review it", both as its tag and as its pipeline stage. Orders on the market or on the road are never Solved.
 _Avoid_: Done, resolved
 
 **Finished**:
@@ -86,11 +87,11 @@ _Avoid_: Done
 
 ## Publishing
 
-**Confirm before publishing**:
-The state tag of a Solved order; its pipeline stage is Waiting for publication approval. The operator reads each rewrite and the call transcripts; their approval confirms the changes and publishes the order.
+**Fixed, review it**:
+The tag and pipeline stage of a Solved order: the agent fixed it, and the operator checks it before it is published. The operator reads each rewrite and the call transcripts; their approval confirms the changes and publishes the order.
 
 **Pipeline**:
-Every order by stage: Unpublished, Waiting for publication approval, Finding a driver, Driver assigned (booked or moving), Done (delivered or cancelled). Its state (Needs action, Confirm before publishing, In progress, Normal) is a small tag on the card.
+Every order by stage: Unpublished, Fixed, review it, Finding a driver, Driver assigned (booked or moving), Done (delivered or cancelled). Its state (Problem, Fixed, review it, In progress, Normal) is a small tag on the card.
 
 **Rewrite**:
 One call result shown as before (what the records said) and now (what the person said on the call), with the call's transcript.

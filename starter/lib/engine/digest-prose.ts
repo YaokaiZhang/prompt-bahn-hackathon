@@ -109,7 +109,7 @@ export function templateProse(facts: DigestFacts, note: string): DigestProse {
   }
   const changes = facts.changes
   if (changes && (changes.newNeedsAction.length || changes.leftNeedsAction.length)) {
-    opener.push({ text: ` Since ${facts.since ? fmtDue(facts.since, facts.at) : "the last digest"}, ${changes.newNeedsAction.length} joined Needs action and ${changes.leftNeedsAction.length} left it.` })
+    opener.push({ text: ` Since ${facts.since ? fmtDue(facts.since, facts.at) : "the last digest"}, ${changes.newNeedsAction.length} new problems came up and ${changes.leftNeedsAction.length} were cleared.` })
   }
   const first = facts.urgent[0]
   const firstNeed = facts.needsAction[0]
@@ -164,7 +164,7 @@ export function fillProse(text: string, facts: DigestFacts): ProseSegment[] {
 
 // ── The model pass ────────────────────────────────────────────────────────
 
-const SYSTEM = `You write the short prose of an operations digest for a car-delivery control room. You receive digest facts as JSON: counts per group, urgent orders with their reasons, the orders that need action, and what changed since the last digest.
+const SYSTEM = `You write the short prose of an operations digest for a car-delivery control room. You receive digest facts as JSON: counts per group, urgent orders with their reasons, the orders with a problem, and what changed since the last digest.
 
 Write two things:
 - "opener": two or three sentences. Order the urgent items by what to do first and group similar cases (for example several pickups missing a release).

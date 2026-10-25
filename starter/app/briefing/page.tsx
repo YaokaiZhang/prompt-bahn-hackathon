@@ -138,7 +138,7 @@ function Digest({ item }: { item: DigestItem }) {
         <dt>{tile.label}</dt><dd>{facts.counts[tile.key]}</dd>
       </div>)}</dl>
       {facts.needsActionBy.length > 0 && <>
-        <h4>Needs action by cause</h4>
+        <h4>Problems by cause</h4>
         <ul className="digest-causes">{facts.needsActionBy.map((cause) => <li key={cause.label}><span>{cause.label}</span><b>{cause.count}</b></li>)}</ul>
       </>}
       <p className="digest-note">Every number here comes from the rule checks at {facts.slot}. {prose.note ?? "The model wrote only the prose, through placeholders."}</p>
@@ -160,14 +160,14 @@ function Digest({ item }: { item: DigestItem }) {
     {changes && <section className="digest-block" aria-label="Since the last digest">
       <h3>Since {facts.since ? time(facts.since) : "the last digest"}</h3>
       <dl className="digest-changes">
-        <div><dt>Joined Needs action</dt><dd>{changes.newNeedsAction.length ? changes.newNeedsAction.map((row, index) => <span key={row.orderId}>{index ? ", " : ""}<OrderRef {...row} /></span>) : "None"}</dd></div>
-        <div><dt>Left Needs action</dt><dd>{changes.leftNeedsAction.length ? changes.leftNeedsAction.map((row, index) => <span key={row.orderId}>{index ? ", " : ""}<OrderRef {...row} /></span>) : "None"}</dd></div>
+        <div><dt>New problems</dt><dd>{changes.newNeedsAction.length ? changes.newNeedsAction.map((row, index) => <span key={row.orderId}>{index ? ", " : ""}<OrderRef {...row} /></span>) : "None"}</dd></div>
+        <div><dt>Problems cleared</dt><dd>{changes.leftNeedsAction.length ? changes.leftNeedsAction.map((row, index) => <span key={row.orderId}>{index ? ", " : ""}<OrderRef {...row} /></span>) : "None"}</dd></div>
         <div><dt>Came due</dt><dd>{changes.cameDue.length ? changes.cameDue.map((row, index) => <span key={`${row.title}-${row.reference}-${index}`}>{index ? ", " : ""}{row.title}{row.orderId && row.reference ? <> on <OrderRef orderId={row.orderId} reference={row.reference} /></> : null} at {time(row.at)}</span>) : "Nothing"}</dd></div>
       </dl>
     </section>}
 
-    <section className="digest-block" aria-label="Needs action">
-      <h3>Needs action <span className="count">{facts.needsAction.length}</span></h3>
+    <section className="digest-block" aria-label="Problems">
+      <h3>Problems <span className="count">{facts.needsAction.length}</span></h3>
       {facts.needsAction.length ? <ul className="digest-lines">{facts.needsAction.map((line) => <li key={line.orderId}>
         <span className="digest-line-head"><OrderRef {...line} />{line.urgent && <Pill tone={groupTone("needs_action", true)}>Urgent</Pill>}</span>
         <span className="digest-line-why">{line.reason}</span>

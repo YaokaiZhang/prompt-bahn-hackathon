@@ -11,7 +11,7 @@ import { ReviewBlock } from "./review"
 import { More, Pill } from "./ui"
 
 export const GROUP_LABEL: Record<Group, string> = {
-  needs_action: "Needs action", in_progress: "In progress", solved: "Confirm before publishing", normal: "Normal", done: "Finished",
+  needs_action: "Problem", in_progress: "In progress", solved: "Fixed, review it", normal: "Normal", done: "Finished",
 }
 
 export function groupTone(group: Group, urgent = false): Tone {
@@ -72,7 +72,7 @@ function plannedText(action: PlannedAction): string {
 /** What the engine checked on one order: its group and why, planned agent work, and each rule with its source records. */
 export function ChecksPanel({ orderId, checks, compact = false }: { orderId: string; checks: OrderChecks; compact?: boolean }) {
   const samePage = !compact
-  // Urgency ranks Needs action; on other groups it would read as a second verdict.
+  // Urgency ranks Problem; on other groups it would read as a second verdict.
   const urgent = checks.group === "needs_action" && checks.urgency.urgent
   const failed = checks.rules.filter((rule) => rule.outcome === "fail")
   const unknown = checks.rules.filter((rule) => rule.outcome === "unknown")

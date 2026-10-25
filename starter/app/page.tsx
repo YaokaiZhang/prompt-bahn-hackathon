@@ -14,8 +14,8 @@ import { Shell } from "./components/shell"
 import { useOverview } from "./components/use-overview"
 
 const STATES: { group: Group; empty: string }[] = [
-  { group: "needs_action", empty: "No order needs a decision right now." },
-  { group: "solved", empty: "No order waits for publication approval." },
+  { group: "needs_action", empty: "No problem right now." },
+  { group: "solved", empty: "No fixed order waits for your review." },
   { group: "in_progress", empty: "No agent work is planned or running." },
 ]
 

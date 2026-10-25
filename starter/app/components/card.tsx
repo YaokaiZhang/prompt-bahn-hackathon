@@ -53,7 +53,7 @@ function dateText(start: string, end: string | null, zone: string | null): strin
   return fmtWeekday(end, zone) === day ? `${day} ${from}–${to}` : fmtRange(start, end, zone)
 }
 
-/** The small state tag on a pipeline card: Needs action, Confirm before publishing, In progress or Normal. */
+/** The small state tag on a pipeline card: Problem, Fixed, review it, In progress or Normal. */
 export function StateTag({ group, urgent = false }: { group: Group; urgent?: boolean }) {
   return <span className={`state-tag state-${group} tone-${groupTone(group, urgent)}`}>{urgent && group === "needs_action" ? "Urgent · " : ""}{GROUP_LABEL[group]}</span>
 }

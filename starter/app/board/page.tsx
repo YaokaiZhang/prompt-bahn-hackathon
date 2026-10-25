@@ -1,7 +1,7 @@
 "use client"
 
 // The pipeline board (spec .scratch/publishing): every order, one column per stage from
-// unpublished to done. Within a column: Needs action, then Confirm before publishing, then
+// unpublished to done. Within a column: Problem, then Fixed, review it, then
 // In progress, then Normal, each by when the order was created. The state is a small tag.
 
 import { useMemo, useState } from "react"
@@ -12,7 +12,7 @@ import { useOverview } from "../components/use-overview"
 
 const EMPTY: Record<(typeof PIPELINE)[number]["key"], string> = {
   unpublished: "Every order is published.",
-  approval: "No order waits for publication approval.",
+  approval: "No fixed order waits for your review.",
   market: "No order is looking for a driver.",
   assigned: "No order has a driver yet.",
   done: "No order is delivered or cancelled.",
