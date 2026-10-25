@@ -19,7 +19,6 @@ export function OperatorStart() {
   return <Windscreen
     eyebrow="Operator"
     title={<>Hi, <em>Bahner</em>, where do you want to start today?</>}
-    hint="Move your mouse to steer · click a destination"
     label="Start here"
     choices={NAV_LINKS.map((link) => ({
       key: link.section, label: link.label, href: link.href,

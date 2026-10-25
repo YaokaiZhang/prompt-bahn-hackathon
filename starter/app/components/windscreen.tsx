@@ -19,7 +19,7 @@ export type WindscreenChoice = { key: string; label: string; badge?: ReactNode; 
 export function Windscreen({ eyebrow, title, hint, label, choices, angles, goingTo, action, hidden }: {
   eyebrow: string
   title: ReactNode
-  hint: string
+  hint?: string
   /** The accessible name of the choices. */
   label: string
   choices: WindscreenChoice[]
@@ -120,7 +120,7 @@ export function Windscreen({ eyebrow, title, hint, label, choices, angles, going
     <header className="ws-head">
       <div className="ws-brand"><BahnMark /><span>{eyebrow}</span></div>
       <h1>{title}</h1>
-      <p className="ws-hint">{hint}</p>
+      {hint && <p className="ws-hint">{hint}</p>}
     </header>
 
     {action
