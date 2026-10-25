@@ -15,7 +15,7 @@ import { OrderFiles } from "./files"
 export function RouteSection({ view }: { view: RecordView }) {
   if (!view.journey.groups.length) return null
   return <section className="sec" id="journey">
-    <SectionHead title="Route" note={view.journey.plan && !view.journey.plan.active ? "Draft plan, not activated" : <a href="#route">Every stop in detail</a>} />
+    <SectionHead title="Route" note={view.journey.plan && !view.journey.plan.active ? "Draft plan" : null} />
     <Route view={view} />
   </section>
 }
@@ -27,7 +27,7 @@ export function ConversationsSection({ view }: { view: RecordView }) {
   const cited = useCited()
   return <section className="sec" id="conversations">
     <SectionHead title="Conversations" count={threads.length} />
-    {threads.length === 0 && notes.length === 0 && <Empty>No conversation is linked to this order.</Empty>}
+    {threads.length === 0 && notes.length === 0 && <Empty>None</Empty>}
     <div className="rows">
       {threads.map((thread) => <ThreadRow key={thread.id} thread={thread} view={view} />)}
       {notes.map((note) => <div className={`row${cited.has(note.id) ? " is-cited" : ""}`} key={note.id} id={recordAnchor(note.id)}>
@@ -75,7 +75,7 @@ export function ThreadMessages({ thread }: { thread: ThreadView }) {
       {message.internal && <Pill tone="warn">Internal</Pill>}
       {message.author.kind === "agent" && <Pill tone="accent">Agent</Pill>}
       {cited.has(message.id) && <CitedTag />}
-      {message.supersededBy && <a className="superseded-tag" href={`#${recordAnchor(message.supersededBy)}`} title={`A committed change (${message.supersededBy}) wrote a newer version of this; kept as history`}>Superseded</a>}
+      {message.supersededBy && <a className="superseded-tag" href={`#${recordAnchor(message.supersededBy)}`} title="A newer change replaced this">Superseded</a>}
       {message.otherOrder && <Pill>Filed on <OrderLink order={message.otherOrder} /></Pill>}
       <time dateTime={message.at}>{fmtDateTime(message.at)}</time>
     </div>
@@ -90,7 +90,7 @@ export function EvidenceSection({ view }: { view: RecordView }) {
   const total = proofs.length + documents.length + custody.assets.length
   return <section className="sec" id="evidence">
     <SectionHead title="Evidence" count={total} />
-    {total === 0 && <Empty>No proof or document record yet. Any case files on the order are below.</Empty>}
+    {total === 0 && <Empty>None yet</Empty>}
     {total > 0 && <div className="evidence">
       {proofs.map((proof) => <Pill key={proof.id} tone={proof.tone} dot>{proof.kindLabel} · {proof.statusLabel.toLowerCase()}{proof.fileCount ? ` · ${proof.fileCount} files` : ""}</Pill>)}
       {documents.map((document) => <Pill key={document.id} tone={document.tone} dot>{document.kindLabel}{document.medium ? ` (${document.medium})` : ""} · {document.statusLabel.toLowerCase()}</Pill>)}
@@ -106,7 +106,7 @@ export function DecisionsSection({ view }: { view: RecordView }) {
   const { proposals } = view
   return <section className="sec" id="decisions">
     <SectionHead title="Prior agent work" count={proposals.length} />
-    {proposals.length === 0 && <Empty>No agent has proposed anything on this order yet. Your agent's proposals and the human decision on them belong here.</Empty>}
+    {proposals.length === 0 && <Empty>None</Empty>}
     <div className="rows">{proposals.map((proposal) => <ProposalRow key={proposal.id} proposal={proposal} />)}</div>
   </section>
 }
@@ -118,7 +118,7 @@ function ProposalRow({ proposal }: { proposal: ProposalView }) {
       <div className="row-sub">
         {proposal.agent.name} · {proposal.commandLabel.toLowerCase()}
         {proposal.review && <> · {proposal.review.decisionLabel.toLowerCase()} by {proposal.review.reviewer.name}</>}
-        {proposal.execution && <> · execution {proposal.execution.statusLabel.toLowerCase()}{proposal.execution.effects ? `, ${proposal.execution.effects} event${proposal.execution.effects === 1 ? "" : "s"} committed` : ", nothing committed"}</>}
+        {proposal.execution && <> · {proposal.execution.statusLabel.toLowerCase()}</>}
       </div>
     </div>
     <div className="row-side"><When at={proposal.createdAt} withZone={false} /></div>
@@ -137,10 +137,10 @@ export function ProposalCards({ view }: { view: RecordView }) {
         {proposal.review.note && <><dt>Note</dt><dd>{proposal.review.note}</dd></>}
       </dl>}
       {proposal.execution && <dl className="proposal-block">
-        <dt>Execution</dt><dd>{proposal.execution.statusLabel}{proposal.execution.at ? `, attempted ${fmtDateTime(proposal.execution.at)}` : ""} · {proposal.execution.effects ? `${proposal.execution.effects} committed event${proposal.execution.effects === 1 ? "" : "s"} linked` : "no committed event linked"}</dd>
+        <dt>Execution</dt><dd>{proposal.execution.statusLabel}{proposal.execution.at ? `, ${fmtDateTime(proposal.execution.at)}` : ""}</dd>
         {proposal.execution.error && <><dt>Error</dt><dd className="tone-danger">{proposal.execution.error}</dd></>}
       </dl>}
-      <p className="proposal-foot">{proposal.evidenceCount} evidence link{proposal.evidenceCount === 1 ? "" : "s"}{proposal.dependency ? ` · ${proposal.dependency}` : ""}{proposal.superseded ? ` · ${proposal.superseded}` : ""}. Proposal text is never proof that anything changed.</p>
+      {(proposal.dependency || proposal.superseded) && <p className="proposal-foot">{[proposal.dependency, proposal.superseded].filter(Boolean).join(" · ")}</p>}
     </article>)}
     {notifications.length > 0 && <>
       <p className="sub">Internal room activity</p>
@@ -174,7 +174,7 @@ export function ActivitySection({ view }: { view: RecordView }) {
 export function RouteDetails({ view }: { view: RecordView }) {
   const { journey } = view
   return <div>
-    {journey.plan && <p className="rec-note">{journey.plan.statusLabel} plan{journey.plan.version ? ` v${journey.plan.version}` : ""}{journey.plan.active ? "" : ", not activated"}{journey.plan.activatedAt ? `, activated ${fmtDateTime(journey.plan.activatedAt)}` : ""}{journey.otherPlans.length ? ` · ${journey.otherPlans.length} other ${journey.otherPlans.length === 1 ? "plan" : "plans"} kept in the API` : ""}</p>}
+    {journey.plan && <p className="rec-note">{journey.plan.statusLabel} plan{journey.plan.version ? ` v${journey.plan.version}` : ""}{journey.plan.active ? "" : ", not activated"}{journey.plan.activatedAt ? `, activated ${fmtDateTime(journey.plan.activatedAt)}` : ""}</p>}
     {journey.groups.map((group) => {
       const legsFrom = new Map(group.legs.map((leg) => [leg.fromStepId, leg]))
       return <div className="journey-group" key={group.itemId}>
@@ -199,7 +199,7 @@ function StepView({ step, live, last }: { step: JourneyStep; live: boolean; last
       <div className="step-head">
         <span className="step-role">{step.roleLabel}</span>
         <span className="step-name">{step.site ? <Link className="name-link" href={`/sites/${step.site.id}`}>{step.place.name}</Link> : step.place.name}</span>
-        <span className="step-kind">{step.place.kindLabel}{step.site ? "" : " · no managed site profile"}</span>
+        <span className="step-kind">{step.place.kindLabel}</span>
       </div>
       <p className="step-addr">{step.place.addressLine ?? <span className="tone-warn">Street not supplied</span>}{step.place.city ? `, ${step.place.city}` : ""}{step.place.country ? `, ${step.place.country}` : ""}</p>
       <dl className="facts-grid">
@@ -207,24 +207,24 @@ function StepView({ step, live, last }: { step: JourneyStep; live: boolean; last
           <dt>{window.label}</dt>
           <dd><Range start={window.start} end={window.end} zone={window.zone} /><small>{window.sourceLabel}{window.deadline ? ` · outer limit ${fmtDateTime(window.deadline, window.zone)}` : ""}</small></dd>
         </div>)}
-        {step.recorded && <div className="fact tone-ok"><dt>{step.recorded.label}</dt><dd><When at={step.recorded.at} /><small>{step.recorded.actor ? `reported by ${step.recorded.actor}` : "recorded event"}</small></dd></div>}
+        {step.recorded && <div className="fact tone-ok"><dt>{step.recorded.label}</dt><dd><When at={step.recorded.at} />{step.recorded.actor && <small>{step.recorded.actor}</small>}</dd></div>}
         {step.contact && <div className={`fact tone-${step.contact.tone}`}>
           <dt>Contact</dt>
           <dd>{step.contact.name ?? "Not supplied"}{step.contact.role ? ` (${step.contact.role})` : ""} · {step.contact.statusLabel.toLowerCase()}
-            <small>{step.contact.handle ?? "no handle recorded"}{step.contact.confirmedAt ? ` · confirmed ${fmtDateTime(step.contact.confirmedAt)}${step.contact.sourceLabel ? ` via ${step.contact.sourceLabel}` : ""}` : " · no confirmation recorded for this order"}</small>
+            {(step.contact.handle || step.contact.confirmedAt) && <small>{[step.contact.handle, step.contact.confirmedAt ? `confirmed ${fmtDateTime(step.contact.confirmedAt)}` : null].filter(Boolean).join(" · ")}</small>}
           </dd>
         </div>}
         {step.access && <div className={`fact tone-${step.access.tone}`}>
           <dt>Access</dt>
-          <dd>{step.access.statusLabel}<small>{step.access.statedByLabel ? `stated by ${step.access.statedByLabel}` : ""}{step.access.confirmedAt ? ` · confirmed ${fmtDateTime(step.access.confirmedAt)}${step.access.sourceLabel ? ` via ${step.access.sourceLabel}` : ""}` : ""}</small></dd>
+          <dd>{step.access.statusLabel}{step.access.confirmedAt && <small>confirmed {fmtDateTime(step.access.confirmedAt)}</small>}</dd>
         </div>}
-        {step.site?.hours && <div className="fact"><dt>Site hours</dt><dd>{step.site.hours}<small>local time{step.site.advanceNoticeMinutes ? ` · ${step.site.advanceNoticeMinutes} min advance notice` : ""}</small></dd></div>}
+        {step.site?.hours && <div className="fact"><dt>Site hours</dt><dd>{step.site.hours}{step.site.advanceNoticeMinutes ? <small>{step.site.advanceNoticeMinutes} min notice</small> : null}</dd></div>}
         {step.site?.handoverMode && <div className="fact"><dt>Handover</dt><dd>{step.site.handoverMode}{step.site.contactEmail && <small>{step.site.contactEmail}</small>}</dd></div>}
       </dl>
-      {step.access?.instruction && <p className="step-instruction"><b>{step.site?.accessNote === step.access.instruction ? "Order instruction, copied from the site profile." : "Order instruction."}</b> {step.access.instruction}</p>}
-      {step.site?.accessNote && step.site.accessNote !== step.access?.instruction && <p className="step-instruction"><b>Site procedure.</b> {step.site.accessNote}</p>}
-      {step.site?.releaseRule && <p className="step-instruction"><b>Release rule.</b> {step.site.releaseRule}</p>}
-      {step.claims.length > 0 && <div className="step-notes">{step.claims.map((claim) => <p key={claim.id}><Pill tone={claim.tone}>{claim.statusLabel}</Pill> Claim about the {claim.field.toLowerCase()}: {claim.claim}{claim.source ? ` (${claim.source}${claim.confidence ? `, ${claim.confidence}` : ""})` : ""}</p>)}</div>}
+      {step.access?.instruction && <p className="step-instruction">{step.access.instruction}</p>}
+      {step.site?.accessNote && step.site.accessNote !== step.access?.instruction && <p className="step-instruction">{step.site.accessNote}</p>}
+      {step.site?.releaseRule && <p className="step-instruction">{step.site.releaseRule}</p>}
+      {step.claims.length > 0 && <div className="step-notes">{step.claims.map((claim) => <p key={claim.id}><Pill tone={claim.tone}>{claim.statusLabel}</Pill> {claim.claim}{claim.source ? ` (${claim.source})` : ""}</p>)}</div>}
       {step.notes.length > 0 && <div className="step-notes">{step.notes.map((note) => <p key={note}>{note}</p>)}</div>}
       {step.proofs.length > 0 && <div className="step-proofs">{step.proofs.map((proof) => <Pill key={proof.id} tone={proof.tone} dot>{proof.kindLabel} · {proof.statusLabel.toLowerCase()}{proof.fileCount ? ` · ${proof.fileCount} files` : ""}</Pill>)}</div>}
     </div>
@@ -239,18 +239,18 @@ function LegView({ leg, view }: { leg: JourneyLeg; view: RecordView }) {
     <span className="legrow-marker"><Icon name="car" size={15} /></span>
     <div className="legrow-body">
       <div className="legrow-main">
-        {leg.distanceKm != null && <span><b>{leg.distanceKm} km</b> planned</span>}
+        {leg.distanceKm != null && <span><b>{leg.distanceKm} km</b></span>}
         <Pill tone={leg.tone}>{leg.statusLabel}</Pill>
         {assignment
-          ? <span><b><ActorName actor={assignment.driver} /></b>{assignment.driverHome ? `, home base ${assignment.driverHome}` : ""} · {assignment.statusLabel.toLowerCase()}{assignment.fee ? ` · ${assignment.fee}` : ""}</span>
-          : <span>No driver booked for this leg</span>}
+          ? <span><b><ActorName actor={assignment.driver} /></b> · {assignment.statusLabel.toLowerCase()}{assignment.fee ? ` · ${assignment.fee}` : ""}</span>
+          : <span>No driver</span>}
       </div>
-      {assignment?.positioning && <p className="legrow-track">{assignment.positioning}{assignment.priorOrder && <> (<OrderLink order={assignment.priorOrder} />)</>}. A home base or prior duty is not a current location.</p>}
+      {assignment?.positioning && <p className="legrow-track">{assignment.positioning}{assignment.priorOrder && <> (<OrderLink order={assignment.priorOrder} />)</>}</p>}
       {assignment && assignment.steps.length > 0 && <div className="legrow-steps">{assignment.steps.map((step) => <span key={step.id}>
         <Icon name={step.status === "COMPLETED" ? "check" : "chevron"} size={12} className={step.status === "COMPLETED" ? "tone-ok" : undefined} /> {step.title} · <span className={`tone-${step.tone}`}>{step.statusLabel.toLowerCase()}</span>{step.scheduledStart ? ` · ${fmtDateTime(step.scheduledStart)}` : ""}{step.note ? ` · ${step.note}` : ""}
       </span>)}</div>}
-      {tracking && <p className="legrow-track">Driver app: <b>ETA {fmtDateTime(tracking.eta)}</b>{tracking.remainingKm != null ? ` · ${tracking.remainingKm} km remaining` : ""}{tracking.progress != null ? ` · ${Math.round(tracking.progress * 100)}% of the leg` : ""} · {tracking.qualityLabel} signal{age ? `, received ${age.text}` : ""}. Unverified; no map position in this packet.</p>}
-      {leg.inference && <p className="legrow-track">Monitor inference: {leg.inference.note ?? `ETA ${fmtDateTime(leg.inference.eta)}`}</p>}
+      {tracking && <p className="legrow-track"><b>ETA {fmtDateTime(tracking.eta)}</b>{tracking.remainingKm != null ? ` · ${tracking.remainingKm} km left` : ""}{age ? ` · ${age.text}` : ""}</p>}
+      {leg.inference && <p className="legrow-track">{leg.inference.note ?? `ETA ${fmtDateTime(leg.inference.eta)}`}</p>}
     </div>
   </div>
 }

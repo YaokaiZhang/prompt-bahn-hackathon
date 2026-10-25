@@ -183,7 +183,7 @@ eachStore("batch approve shows what approving does per row, then writes changes 
   const change = waiting.find((proposal) => proposal.kind === "change")!
   assert.equal(change.policyRow, "order-change")
   assert.equal(change.decision, "needs a yes")
-  assert.match(change.onApprove ?? "", /Writes the change to the order: Pickup access instruction/)
+  assert.match(change.onApprove ?? "", /Writes this to the order/)
   assert.match(waiting.find((proposal) => proposal.id === customer.id)!.onApprove ?? "", /Hands you the contact/)
   // The change waits for a yes, so CD-420516 now needs action.
   assert.equal(find(state.orders, "CD-420516").group, "needs_action")

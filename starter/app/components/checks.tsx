@@ -1,6 +1,6 @@
 "use client"
 
-import type { FirstAction, Group, PlannedAction, RuleResult, SourceRef } from "@/lib/engine/checks"
+import type { Group, PlannedAction, RuleResult, SourceRef } from "@/lib/engine/checks"
 import type { OrderChecks, Tone } from "@/lib/present/types"
 import { Icon } from "./icons"
 import { CallsBlock } from "./calls"
@@ -20,10 +20,6 @@ export function groupTone(group: Group, urgent = false): Tone {
 
 export function GroupPill({ group, urgent = false }: { group: Group; urgent?: boolean }) {
   return <Pill tone={groupTone(group, urgent)}>{group === "normal" ? <><Icon name="check" size={13} />Checked · Normal</> : GROUP_LABEL[group]}</Pill>
-}
-
-const FIRST_ACTION: Record<FirstAction, string> = {
-  site_call: "routine site call", driver_call: "routine driver call", reviewer_pass: "reviewer pass", show_person: "shown to a person", operator_proposal: "a proposal to you",
 }
 
 /** The folded record section on the order page that holds each collection. */
@@ -46,7 +42,7 @@ export function sourceHref(orderId: string, source: SourceRef, samePage: boolean
 function Sources({ orderId, sources, samePage }: { orderId: string; sources: SourceRef[]; samePage: boolean }) {
   if (!sources.length) return null
   return <span className="check-sources">{sources.map((source) => <a key={`${source.collection}-${source.id}`} className="source-link"
-    href={sourceHref(orderId, source, samePage)} title={`${source.collection} ${source.id}`}>{source.label}<span className="source-id">{source.id}</span></a>)}</span>
+    href={sourceHref(orderId, source, samePage)} title={source.id}>{source.label}</a>)}</span>
 }
 
 const OUTCOME_ICON = { fail: "alert", unknown: "note", pass: "check" } as const
@@ -56,17 +52,17 @@ function RuleItem({ orderId, rule, samePage }: { orderId: string; rule: RuleResu
   return <li className="check" id={`rule-${rule.id}`}>
     <Icon name={OUTCOME_ICON[rule.outcome]} className={`tone-${tone}`} />
     <div>
-      <div className="check-title">{rule.title}{rule.strength === "weak" && <span className="check-kind">weak signal</span>}</div>
-      <div className="check-detail">{rule.detail}{rule.outcome === "fail" && rule.firstAction ? <> First action: <b>{FIRST_ACTION[rule.firstAction]}</b>.</> : null}</div>
+      <div className="check-title">{rule.title}</div>
+      <div className="check-detail">{rule.detail}</div>
       <Sources orderId={orderId} sources={rule.sources} samePage={samePage} />
     </div>
   </li>
 }
 
 function plannedText(action: PlannedAction): string {
-  if (action.kind === "reviewer_pass") return "Reviewer pass over the order's records"
-  const who = action.callee ? `${action.callee.name ?? "the contact"}${action.callee.role ? ` (${action.callee.role})` : ""}, ${action.callee.handle}` : null
-  return action.kind === "site_call" ? `Routine site call to ${who ?? "the pickup site"}` : "Routine driver call to the assigned driver"
+  if (action.kind === "reviewer_pass") return "Reviewer pass"
+  const who = action.callee ? action.callee.name ?? action.callee.handle : null
+  return action.kind === "site_call" ? `Site call to ${who ?? "the pickup site"}` : "Driver call"
 }
 
 /**
@@ -88,15 +84,12 @@ export function ChecksPanel({ orderId, checks, compact = false, led = false }: {
       <span className="checks-count">{checks.rules.length} rules · {passed.length} passed{unknown.length ? ` · ${unknown.length} couldn't check` : ""}{failed.length ? ` · ${failed.length} didn't pass` : ""}</span>
     </div>
     {!led && <p className={`checks-reason tone-${groupTone(checks.group, urgent)}`}>{checks.reason}</p>}
-    {checks.publication && <PublishingBlock orderId={orderId} publication={checks.publication} group={checks.group} calls={checks.calls ?? []} reviewed={checks.review?.status === "reviewed"} bare={compact} />}
+    {checks.publication && <PublishingBlock orderId={orderId} publication={checks.publication} group={checks.group} calls={checks.calls ?? []} bare={compact} />}
     {checks.planned.length > 0 && <div className="checks-block">
-      <h3>Planned agent work</h3>
+      <h3>Planned</h3>
       <ul className="checks-list">{checks.planned.map((action) => <li className="check" key={action.kind}>
         <Icon name={action.kind === "reviewer_pass" ? "bot" : "phone"} className="tone-accent" />
-        <div>
-          <div className="check-title">{plannedText(action)}</div>
-          <div className="check-detail">{action.ruleIds.map((id) => checks.rules.find((rule) => rule.id === id)?.detail ?? id).join(" ")}</div>
-        </div>
+        <div className="check-title">{plannedText(action)}</div>
       </li>)}</ul>
     </div>}
     {/* In the queue preview, what a yes means comes first. */}

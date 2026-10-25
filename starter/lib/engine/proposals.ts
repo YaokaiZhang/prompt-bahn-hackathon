@@ -229,10 +229,10 @@ export function changeEffect(proposal: Pick<ProposalDraft, "change" | "title" | 
 }
 
 function onApproveText(draft: ProposalDraft): string {
-  if (draft.kind === "customer_contact") return `Hands you the contact: you reach ${draft.contact.name} yourself with this script, then record the answer here. The agent does not contact them.`
-  if (draft.kind === "change") return `Writes the change to the order: ${draft.change}`
-  if (draft.kind === "operator_question") return "Puts the question to you in the app."
-  return `The agent calls ${who(draft.contact)} with this script.`
+  if (draft.kind === "customer_contact") return "Hands you the contact to make yourself."
+  if (draft.kind === "change") return "Writes this to the order."
+  if (draft.kind === "operator_question") return "Puts the question to you."
+  return `The agent calls ${draft.contact.name.split(",")[0]}.`
 }
 
 function waitingOn(kind: ProposalKind, status: ProposalStatus): Proposal["waitingOn"] {
