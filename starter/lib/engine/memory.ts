@@ -1,6 +1,7 @@
 import type { BriefingItem } from "./briefing"
 import type { EffectEvent } from "./effects"
 import type { StoredCallEvent } from "./calls"
+import type { InboxEvent } from "./inbox"
 import type { StoredProposalEvent } from "./proposals"
 import type { StoredPublicationEvent } from "./publishing"
 import type { EngineStore } from "./store"
@@ -12,6 +13,7 @@ export function createMemoryStore(): EngineStore {
   let effects: EffectEvent[] = []
   let callEvents: StoredCallEvent[] = []
   let publicationEvents: StoredPublicationEvent[] = []
+  let inboxEvents: InboxEvent[] = []
   return {
     async readClock() { return clock },
     async writeClock(now) { clock = now },
@@ -38,6 +40,8 @@ export function createMemoryStore(): EngineStore {
     },
     async readPublicationEvents() { return structuredClone(publicationEvents) },
     async appendPublicationEvents(events) { publicationEvents = [...publicationEvents, ...structuredClone(events)] },
-    async reset() { clock = null; briefing = new Map(); proposalEvents = []; effects = []; callEvents = []; publicationEvents = [] },
+    async readInboxEvents() { return structuredClone(inboxEvents) },
+    async appendInboxEvents(events) { inboxEvents = [...inboxEvents, ...structuredClone(events)] },
+    async reset() { clock = null; briefing = new Map(); proposalEvents = []; effects = []; callEvents = []; publicationEvents = []; inboxEvents = [] },
   }
 }

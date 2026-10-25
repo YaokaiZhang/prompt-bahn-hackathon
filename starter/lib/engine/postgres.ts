@@ -3,9 +3,10 @@ import type { PostgresJsDatabase } from "drizzle-orm/postgres-js"
 import type { BriefingItem } from "./briefing"
 import type { EffectEvent } from "./effects"
 import type { StoredCallEvent } from "./calls"
+import type { InboxEvent } from "./inbox"
 import type { StoredProposalEvent } from "./proposals"
 import type { StoredPublicationEvent } from "./publishing"
-import { briefingItems, callEvents, demoClock, effectEvents, ENGINE_TABLES, proposalEvents, publicationEvents } from "./schema"
+import { briefingItems, callEvents, demoClock, effectEvents, ENGINE_TABLES, inboxEvents, proposalEvents, publicationEvents } from "./schema"
 import type { EngineStore } from "./store"
 
 /** Any drizzle postgres-js client, whatever schema it was built with. */
@@ -101,6 +102,20 @@ export function createPostgresStore(db: Database): EngineStore {
       if (!events.length) return
       await db.insert(publicationEvents).values(events.map((event) => ({
         orderId: event.orderId, at: new Date(event.at), by: event.by, kind: event.kind, text: event.text,
+        data: (event.data ?? null) as Record<string, unknown> | null,
+      })))
+    },
+    async readInboxEvents() {
+      const found = await db.select().from(inboxEvents).orderBy(asc(inboxEvents.seq))
+      return found.map((row) => ({
+        threadId: row.threadId, orderId: row.orderId, at: row.at.toISOString(), by: row.by as InboxEvent["by"], kind: row.kind as InboxEvent["kind"],
+        text: row.text, data: (row.data ?? null) as InboxEvent["data"],
+      }))
+    },
+    async appendInboxEvents(events) {
+      if (!events.length) return
+      await db.insert(inboxEvents).values(events.map((event) => ({
+        threadId: event.threadId, orderId: event.orderId, at: new Date(event.at), by: event.by, kind: event.kind, text: event.text,
         data: (event.data ?? null) as Record<string, unknown> | null,
       })))
     },

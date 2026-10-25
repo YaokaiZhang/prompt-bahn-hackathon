@@ -117,8 +117,32 @@ export const travelPlans = pgTable("cr_travel_plans", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
 })
 
+/**
+ * Support inbox events (lib/engine/inbox.ts): append-only, per thread. `linked` and
+ * `unlinked` (an order the operator linked, `order_id`), `replied` (the reply the operator
+ * sent, in `text`; `data.suggested` when it started as the agent's draft). The inbox
+ * records themselves are never edited (ADR 0002): the events are laid over them.
+ */
+export const inboxEvents = pgTable("cr_inbox_events", {
+  seq: bigserial("seq", { mode: "number" }).primaryKey(),
+  threadId: text("thread_id").notNull(),
+  orderId: text("order_id"),
+  at: timestamp("at", { withTimezone: true }).notNull(),
+  by: text("by").notNull(),
+  kind: text("kind").notNull(),
+  text: text("text").notNull(),
+  data: jsonb("data").$type<Record<string, unknown>>(),
+}, (table) => [index("cr_inbox_events_thread_idx").on(table.threadId)])
+
+/** The inbox agent's suggestions (lib/engine/inbox-agent.ts), keyed by a hash of the thread, its orders' state, prompt version and model. */
+export const inboxSuggestions = pgTable("cr_inbox_suggestions", {
+  key: text("key").primaryKey(),
+  suggestion: jsonb("suggestion").$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+})
+
 /** Every engine state table. Add new tables here so reset clears them. */
-export const ENGINE_TABLES = [demoClock, briefingItems, proposalEvents, effectEvents, callEvents, publicationEvents]
+export const ENGINE_TABLES = [demoClock, briefingItems, proposalEvents, effectEvents, callEvents, publicationEvents, inboxEvents]
 
 /**
  * Caches that reset keeps on purpose (ticket 04). A cached review is keyed by the
@@ -127,4 +151,4 @@ export const ENGINE_TABLES = [demoClock, briefingItems, proposalEvents, effectEv
  * a repeated demo take costs no model calls. Put agent *state* (which review is
  * current, proposals, calls) in ENGINE_TABLES, not here.
  */
-export const CACHE_TABLES = [reviewResults, digestProse, travelPlans]
+export const CACHE_TABLES = [reviewResults, digestProse, travelPlans, inboxSuggestions]

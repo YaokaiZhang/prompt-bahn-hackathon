@@ -30,6 +30,7 @@ import { latestEta } from "./eta"
 import { answeredRecords, callbackItems, orderCalls, reportedEta, statedByCallee, utcTime, type BlockedCall, type Call, type CalleeInput, type CallLine, type CallLineView, type Handover, type OrderCalls } from "./calls"
 import { demandCheck, pendingChanges, publicationOf, solvedText, type Publication, type StoredPublicationEvent } from "./publishing"
 import { planInput, planTrip, type TravelOptions } from "./travel-planner"
+import { MAX_REPLY, operatorLinks, type InboxEvent } from "./inbox"
 
 /** The snapshot as the engine reads it: one bundle per order. */
 export type Snapshot = { snapshotAt: string; bundles: Bundle[] }
@@ -125,6 +126,13 @@ export type Command =
    * and drafts travel plans for demanding ones (at most `plans` per run; default all).
    */
   | { type: "runPublishing"; plans?: number }
+  /**
+   * The support inbox (inbox.ts): the operator links an order to a thread, takes back an
+   * order they linked, or sends a reply to the sender. The caller checks the thread exists.
+   */
+  | { type: "linkThread"; threadId: string; orderId: string }
+  | { type: "unlinkThread"; threadId: string; orderId: string }
+  | { type: "replyThread"; threadId: string; text: string; suggested?: boolean }
 
 /**
  * One order as the engine reads it at `now`. `group`, `reason`, `rules` (every
@@ -221,6 +229,8 @@ export type Engine = {
   overlaidAll(bundles: Bundle[]): Promise<Bundle[]>
   /** A persona's mock phone (ticket 11): the live call on it and the queue behind it. */
   phone(persona: PhonePersona): Promise<PhoneView>
+  /** Every support inbox event (links and replies the operator made), oldest first. */
+  inboxEvents(): Promise<InboxEvent[]>
 }
 
 export type EngineDeps = {
@@ -979,6 +989,26 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
       case "markBriefingRead":
         await store.markBriefingRead(command.ids)
         break
+      case "linkThread":
+      case "unlinkThread": {
+        if (!bundles.get(command.orderId)) throw new Error(`Unknown order ${command.orderId}`)
+        const linked = operatorLinks(await store.readInboxEvents(), command.threadId).includes(command.orderId)
+        const reference = bundles.get(command.orderId)!.order.reference
+        if (command.type === "linkThread" && linked) throw new Error(`${reference} is already linked`)
+        if (command.type === "unlinkThread" && !linked) throw new Error(`${reference} was not linked from the inbox`)
+        await store.appendInboxEvents([{
+          threadId: command.threadId, orderId: command.orderId, at: await clock(), by: "operator",
+          kind: command.type === "linkThread" ? "linked" : "unlinked", text: `${command.type === "linkThread" ? "Linked" : "Unlinked"} ${reference}`, data: null,
+        }])
+        break
+      }
+      case "replyThread": {
+        const text = command.text.trim()
+        if (!text) throw new Error("The reply is empty")
+        if (text.length > MAX_REPLY) throw new Error(`The reply is longer than ${MAX_REPLY} characters`)
+        await store.appendInboxEvents([{ threadId: command.threadId, orderId: null, at: await clock(), by: "operator", kind: "replied", text, data: command.suggested ? { suggested: true } : null }])
+        break
+      }
       default:
         assertNever(command)
     }
@@ -994,5 +1024,6 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     state, apply, clock, bundle: (orderId) => bundles.get(orderId) ?? null,
     overlaid: async (bundle) => (await overlaidAll([bundle]))[0], overlaidAll,
     phone: (persona) => callRunner.phone(persona),
+    inboxEvents: () => store.readInboxEvents(),
   }
 }

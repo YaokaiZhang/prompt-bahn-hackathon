@@ -186,3 +186,21 @@ _Avoid_: Report, email, summary email
 **Urgent push**:
 An immediate template-only notice that an order became urgent or a handover arrived.
 _Avoid_: Alert, notification
+
+## Support inbox
+
+**Thread**:
+A conversation in the support inbox with a customer, driver or site, filed before its order link is certain. Its candidate orders are hypotheses; only linked orders are confirmed.
+_Avoid_: Ticket, case, conversation (that is an order's own message thread)
+
+**Link an order**:
+The operator confirms which order a thread is about: a candidate in one click, or any order by its reference. The link is an inbox event laid over the thread; the operator can take back a link they made, but not a seeded one.
+_Avoid_: Match (that is the hypothesis), assign
+
+**Suggested reply**:
+The inbox agent's draft answer to a thread's sender, in the sender's language. It uses only facts in the thread and its linked orders, and reveals nothing about an order the thread is not linked to. The operator edits and sends it; the agent never sends.
+_Avoid_: Auto-reply, response
+
+**Suggested steps**:
+On a linked thread, the steps of the order's situation card that answer the thread, the agent's picks first with its reason. They are the same actions the order offers anywhere else.
+_Avoid_: Recommendations, tasks
