@@ -8,7 +8,7 @@ import { createContext, useContext, type ReactNode } from "react"
 import type { CitedRecord, OrderReview, ReviewFinding } from "@/lib/engine/reviews"
 import { humanize } from "@/lib/present/labels"
 import { Icon } from "./icons"
-import { Pill } from "./ui"
+import { More, Pill } from "./ui"
 
 /** Record ids the order's findings cite. The order page provides it; rows read it to mark themselves. */
 const CitedContext = createContext<ReadonlySet<string>>(new Set())
@@ -101,7 +101,6 @@ const ROLE_LABEL: Record<string, string> = { site: "Site", driver: "Driver", ope
 
 function FindingCard({ finding, orderId, samePage }: { finding: ReviewFinding; orderId: string; samePage: boolean }) {
   const conflict = finding.cited.filter((cited) => cited.role === "conflict")
-  const contact = finding.cited.filter((cited) => cited.role === "contact")
   return <article className="finding" id={finding.id}>
     <div className="finding-title"><Icon name="alert" className="tone-danger" />{finding.title}</div>
     <dl className="finding-facts">
@@ -109,8 +108,7 @@ function FindingCard({ finding, orderId, samePage }: { finding: ReviewFinding; o
       <div><dt>Question</dt><dd className="finding-question">{finding.question}</dd></div>
       <div><dt>Why</dt><dd>{finding.why}</dd></div>
     </dl>
-    <ul className="cited-list">{conflict.map((cited, i) => <CitedRow key={`${cited.recordId}-${i}`} cited={cited} orderId={orderId} samePage={samePage} />)}</ul>
-    {contact.length > 0 && <ul className="cited-list">{contact.map((cited, i) => <CitedRow key={`${cited.recordId}-c${i}`} cited={cited} orderId={orderId} samePage={samePage} />)}</ul>}
+    {conflict.length > 0 && <More label={`Sources (${conflict.length})`}><ul className="cited-list">{conflict.map((cited, i) => <CitedRow key={`${cited.recordId}-${i}`} cited={cited} orderId={orderId} samePage={samePage} />)}</ul></More>}
   </article>
 }
 

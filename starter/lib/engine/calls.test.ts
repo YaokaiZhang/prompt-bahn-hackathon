@@ -138,7 +138,7 @@ test("the background site calls go out on their own, including pickup-readiness 
     assert.equal(site.length, 1, `${reference} had one site call`)
     assert.equal(site[0].answerer, "simulated")
     assert.equal(site[0].outcome, "resolved", `${reference}: the simulated person answered`)
-    assert.notEqual(row.group, "in_progress", `${reference} is no longer In progress`)
+    assert.ok(row.callLines.filter((line) => line.line === "site").every((line) => line.status === "done"), `${reference}: its site line is done`)
   }
   assert.equal(find(after.orders, "CD-420719").calls[0].callee.contactType, "customer_owned_site")
   for (const reference of ["CD-420449", "CD-421011", "CD-421051"]) {
@@ -186,7 +186,7 @@ test("the call layer's own guard: a customer-side pickup contact takes only a pi
   assert.equal(other.lines.length, 0)
 })
 
-test("a confirmed contact becomes a change proposal that waits for a yes; the order is not changed", async () => {
+test("a confirmed contact becomes a change proposal that waits for a yes in Fixed, review it; the order is not changed", async () => {
   const engine = await callEngine({})
   await engine.apply({ type: "runCalls" })
   const row = await order(engine, "CD-420154")
@@ -198,12 +198,12 @@ test("a confirmed contact becomes a change proposal that waits for a yes; the or
   assert.equal(change.policyRow, "order-change")
   assert.equal(change.source, call.id)
   assert.match(change.change ?? "", /Pickup contact confirmed .*Adrian Aldermere \(site-065@example\.test\)/)
-  assert.equal(row.group, "needs_action")
-  assert.match(row.reason, /Waiting for your yes: Confirm the pickup contact/)
+  assert.equal(row.group, "solved")
+  assert.match(row.reason, /waiting for your yes.*Confirm the pickup contact/)
   assert.ok(row.rules.some((rule) => rule.id === "R4" && rule.outcome === "unknown"), "the rules still read the snapshot: nothing changed without a yes")
 })
 
-test("CD-420516's site call about the keys goes out without approval, and its answer becomes a change proposal", async () => {
+test("CD-420516's site call about the keys goes out without approval, and its answer waits in Fixed, review it", async () => {
   const engine = await callEngine({ "CD-420516": [["answer", "1", "3"]] }, { gateway: await testGateway() })
   await engine.apply({ type: "review" })
   const before = await order(engine, "CD-420516")
@@ -224,7 +224,15 @@ test("CD-420516's site call about the keys goes out without approval, and its an
   const change = after.proposals.find((proposal) => proposal.kind === "change")
   assert.equal(change?.status, "proposed")
   assert.match(change?.change ?? "", /collected at stock control/)
-  assert.equal(after.group, "needs_action")
+  // Not published yet: the change from the call is part of the Solved review, not a Blocked decision.
+  assert.equal(after.group, "solved")
+  assert.equal(after.publication.stage, "confirm")
+
+  await engine.apply({ type: "confirmChanges", orderId: after.id })
+  const confirmed = await order(engine, "CD-420516")
+  assert.equal(confirmed.proposals.find((proposal) => proposal.id === change?.id)?.status, "approved", "the yes approves the change from the call")
+  assert.equal(confirmed.publication.published?.by, "operator")
+  assert.notEqual(confirmed.group, "solved")
 })
 
 test("CD-420516's next check fires at 10:00 and starts a routine site call", async () => {

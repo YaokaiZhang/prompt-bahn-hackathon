@@ -79,7 +79,6 @@ export function ProposalCard({ proposal, orderId }: { proposal: Proposal; orderI
   const answerable = proposal.status === "approved" && proposal.waitingOn === "operator"
     && (proposal.kind === "customer_contact" || proposal.kind === "operator_question")
   const conflict = proposal.evidence.filter((cited) => cited.role === "conflict")
-  const contact = proposal.evidence.filter((cited) => cited.role === "contact")
 
   async function run(body: ProposalAction) {
     setBusy(true)
@@ -131,8 +130,7 @@ export function ProposalCard({ proposal, orderId }: { proposal: Proposal; orderI
         </div>
       </form>
       : <blockquote className="proposal-script">{proposal.script}</blockquote>}
-    {conflict.length > 0 && <ul className="cited-list">{conflict.map((cited, i) => <CitedRow key={`${cited.recordId}-${i}`} cited={cited} orderId={orderId} samePage />)}</ul>}
-    {contact.length > 0 && <ul className="cited-list">{contact.map((cited, i) => <CitedRow key={`${cited.recordId}-c${i}`} cited={cited} orderId={orderId} samePage />)}</ul>}
+    {conflict.length > 0 && <More label={`Sources (${conflict.length})`}><ul className="cited-list">{conflict.map((cited, i) => <CitedRow key={`${cited.recordId}-${i}`} cited={cited} orderId={orderId} samePage />)}</ul></More>}
 
     {proposal.answer !== null && <>
       <h4 className="finding-sub">Answer</h4>
@@ -207,7 +205,7 @@ export function CompactProposals({ orderId, proposals }: { orderId: string; prop
           {waiting ? <>
             <blockquote className="proposal-script">{proposal.answer ?? proposal.script}</blockquote>
             {proposal.status === "proposed" && proposal.onApprove && <p className="proposal-will">{proposal.onApprove}</p>}
-            {conflict.length > 0 && <ul className="cited-list">{conflict.map((cited, i) => <CitedRow key={`${cited.recordId}-${i}`} cited={cited} orderId={orderId} samePage={false} />)}</ul>}
+            {conflict.length > 0 && <More label={`Sources (${conflict.length})`}><ul className="cited-list">{conflict.map((cited, i) => <CitedRow key={`${cited.recordId}-${i}`} cited={cited} orderId={orderId} samePage={false} />)}</ul></More>}
           </> : null}
         </div>
       </li>

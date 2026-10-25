@@ -219,7 +219,7 @@ eachStore("a Solved order waits in Confirm before publishing until the operator 
   await assert.rejects(engine.apply({ type: "confirmChanges", orderId: later.id }), /no call results waiting/)
 })
 
-test("orders on the market or on the road are never Solved: their call results need no approval", async () => {
+test("call results on orders on the market or on the road need no approval; only changes from calls make them Solved", async () => {
   const engine = await testEngine()
   await engine.apply({ type: "runCalls" })
   for (let step = 0; step < 6; step += 1) {
@@ -229,10 +229,26 @@ test("orders on the market or on the road are never Solved: their call results n
   const { orders } = await engine.state()
   const solved = orders.filter((row) => row.group === "solved")
   assert.ok(solved.length > 0, "CD-420516 is")
-  assert.ok(solved.every((row) => row.publication.inFlow && !row.publication.published), "only orders not published yet")
+  const past = solved.filter((row) => !row.publication.inFlow || row.publication.published)
+  assert.ok(past.length > 0, "an order past the market with a change from a call is Solved too")
+  for (const row of past) {
+    assert.deepEqual(row.publication.pending, [], `${row.reference}: its call results are committed as they are`)
+    assert.ok(row.publication.changes.length > 0, `${row.reference}: a change from a call waits`)
+  }
   const onRoad = await order(engine, "CD-420806")
   assert.ok(onRoad.effects.some((event) => event.type === "call_result_recorded" && event.by === "agent"), "the driver call's result is committed")
   assert.equal(onRoad.group, "normal")
+
+  // The yes on an order past the market approves its changes and keeps its stage: it is not published again.
+  const [first] = past
+  await engine.apply({ type: "confirmChanges", orderId: first.id })
+  const after = await order(engine, first.reference)
+  assert.notEqual(after.group, "solved")
+  assert.equal(after.publication.stage, first.publication.stage)
+  assert.deepEqual(after.publication.published, first.publication.published)
+  for (const change of first.publication.changes) {
+    assert.equal(after.proposals.find((proposal) => proposal.id === change.proposalId)?.status, "approved")
+  }
 })
 
 eachStore("the operator publishes Normal or Solved orders not on the market yet, and nothing else", async (engine) => {

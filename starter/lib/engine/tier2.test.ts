@@ -164,8 +164,8 @@ test("the agent never agrees to a change: a reply that does is replaced, and the
   assert.equal(change.status, "proposed")
   assert.equal(change.change, LEAVE_NEXT_DOOR.change)
   assert.ok(!row.effects.some((event) => event.type === "eta_reported"), "no arrival time was said, so no ETA is reported")
-  assert.equal(row.group, "needs_action")
-  assert.match(row.reason, /Waiting for your yes/)
+  assert.equal(row.group, "solved", "the change from the call waits in Fixed, review it")
+  assert.match(row.reason, /waiting for your yes/)
   assert.equal(row.callLines.find((line) => line.line === "driver")?.status, "done", "the on-time check is covered")
 })
 

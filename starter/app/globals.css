@@ -367,7 +367,6 @@ ul, ol { padding: 0; list-style: none; }
 .finding-sub { margin: 14px 0 0 32px; font-size: 13.5px; font-weight: 600; color: var(--muted); }
 .cited-list { list-style: none; display: grid; gap: 6px; margin: 8px 0 0 32px; padding: 0; }
 .cited { padding: 10px 14px; border-radius: var(--r-sm); background: var(--sand-50); }
-.cited-contact { background: var(--teal-bg); }
 .cited-link { display: block; color: inherit; text-decoration: none; }
 .cited:has(.cited-link:hover) { background: var(--sand-100); }
 .cited-field { color: var(--muted); }
@@ -404,7 +403,8 @@ ul, ol { padding: 0; list-style: none; }
 .proposal textarea:hover { background: var(--birch); box-shadow: inset 0 0 0 1px var(--sand-200); }
 .proposal textarea:focus { outline: 0; background: var(--birch); box-shadow: inset 0 0 0 2px var(--ink); }
 .proposal-error { margin: 10px 0 0 32px; padding: 10px 14px; border-radius: var(--r-sm); background: var(--red-bg); color: var(--red-ink); font-size: 14px; }
-.proposal .more { margin: 12px 0 0 32px; }
+.proposal .more, .finding .more { margin: 12px 0 0 32px; }
+.more .cited-list { margin-left: 0; }
 .proposal-history { list-style: none; display: grid; gap: 6px; margin: 8px 0 0; padding: 0; }
 .proposal-history li { display: grid; grid-template-columns: 96px 150px minmax(0, 1fr); gap: 10px; font-size: 13.5px; color: var(--body); }
 .proposal-history-at { color: var(--muted); }
@@ -465,7 +465,7 @@ ul, ol { padding: 0; list-style: none; }
 .rule-types { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 @media (max-width: 900px) {
   .proposal { padding: 14px; }
-  .proposal-script, .proposal-decide, .proposal-form, .proposal-error, .proposal .more { margin-left: 0; }
+  .proposal-script, .proposal-decide, .proposal-form, .proposal-error, .proposal .more, .finding .more { margin-left: 0; }
   .proposal-head { grid-template-columns: 20px minmax(0, 1fr); }
   .proposal-head .pill { grid-column: 2; justify-self: start; }
   .proposal .finding-facts > div { grid-template-columns: minmax(0, 1fr); }
@@ -899,6 +899,7 @@ details.more > :not(summary) { margin-top: 10px; }
 .rewrite-old { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--sand-300); }
 .rewrite-none { color: var(--muted); }
 .rewrite-new { font-weight: 600; color: var(--green-ink); }
+p.rewrite-new { margin-top: 6px; max-width: 72ch; }
 .rewrite .more { margin-top: 8px; }
 .rewrite .call-transcript { margin-left: 0; }
 .travel-plan-section { margin-top: 6px; }
