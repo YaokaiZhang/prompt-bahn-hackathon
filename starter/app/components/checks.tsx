@@ -11,7 +11,7 @@ import { ReviewBlock } from "./review"
 import { More, Pill } from "./ui"
 
 export const GROUP_LABEL: Record<Group, string> = {
-  needs_action: "Problem", in_progress: "In progress", solved: "Fixed, review it", normal: "Normal", done: "Finished",
+  needs_action: "Blocked", in_progress: "In progress", solved: "Fixed, review it", normal: "Normal", done: "Finished",
 }
 
 export function groupTone(group: Group, urgent = false): Tone {
@@ -75,7 +75,7 @@ function plannedText(action: PlannedAction): string {
  */
 export function ChecksPanel({ orderId, checks, compact = false, led = false }: { orderId: string; checks: OrderChecks; compact?: boolean; led?: boolean }) {
   const samePage = !compact
-  // Urgency ranks Problem; on other groups it would read as a second verdict.
+  // Urgency ranks Blocked; on other groups it would read as a second verdict.
   const urgent = checks.group === "needs_action" && checks.urgency.urgent
   const failed = checks.rules.filter((rule) => rule.outcome === "fail")
   const unknown = checks.rules.filter((rule) => rule.outcome === "unknown")
@@ -88,7 +88,7 @@ export function ChecksPanel({ orderId, checks, compact = false, led = false }: {
       <span className="checks-count">{checks.rules.length} rules · {passed.length} passed{unknown.length ? ` · ${unknown.length} couldn't check` : ""}{failed.length ? ` · ${failed.length} didn't pass` : ""}</span>
     </div>
     {!led && <p className={`checks-reason tone-${groupTone(checks.group, urgent)}`}>{checks.reason}</p>}
-    {checks.publication && <PublishingBlock orderId={orderId} publication={checks.publication} group={checks.group} calls={checks.calls ?? []} reviewed={checks.review?.status === "reviewed"} />}
+    {checks.publication && <PublishingBlock orderId={orderId} publication={checks.publication} group={checks.group} calls={checks.calls ?? []} reviewed={checks.review?.status === "reviewed"} bare={compact} />}
     {checks.planned.length > 0 && <div className="checks-block">
       <h3>Planned agent work</h3>
       <ul className="checks-list">{checks.planned.map((action) => <li className="check" key={action.kind}>
@@ -99,8 +99,10 @@ export function ChecksPanel({ orderId, checks, compact = false, led = false }: {
         </div>
       </li>)}</ul>
     </div>}
+    {/* In the queue preview, what a yes means comes first. */}
+    {compact && <CompactProposals orderId={orderId} proposals={checks.proposals ?? []} />}
     <CallsBlock orderId={orderId} calls={checks.calls} lines={checks.callLines} blocked={checks.blockedCalls} compact={compact} />
-    {compact ? <CompactProposals orderId={orderId} proposals={checks.proposals ?? []} /> : <ProposalsBlock orderId={orderId} proposals={checks.proposals ?? []} />}
+    {!compact && <ProposalsBlock orderId={orderId} proposals={checks.proposals ?? []} />}
     {!compact && <EffectsBlock effects={checks.effects ?? []} history={checks.history ?? []} />}
     {checks.review && <ReviewBlock orderId={orderId} review={checks.review} compact={compact}
       shown={new Set((checks.proposals ?? []).map((proposal) => proposal.findingId).filter((id): id is string => !!id))} />}
