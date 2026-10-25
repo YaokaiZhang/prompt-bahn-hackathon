@@ -286,7 +286,7 @@ function inProgress(input: SituationInput): Situation {
   return { headline: "Agent at work", body: planned?.reason ? clip(sentence(planned.reason)) : null, step: null, others: [] }
 }
 
-/** The card for an order in Needs action, Confirm before publishing or In progress; null otherwise. */
+/** The card for an order in Problem, Fixed, review it or In progress; null otherwise. */
 export function situationFor(input: SituationInput): Situation | null {
   if (input.group === "needs_action") return needsAction(input)
   if (input.group === "solved") return confirm(input)

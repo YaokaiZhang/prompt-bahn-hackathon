@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     const card = buildBoardCard(bundle)
     const order = orders.get(card.id)
     if (order) {
-      // Publishing moves orders not on the market yet: Confirm before publishing, then Finding a driver.
+      // Publishing moves orders not on the market yet: Fixed, review it, then Finding a driver.
       card.displayLane = order.publication.lane
       const first = order.urgency.reasons[0]
       card.verdict = { group: order.group, reason: order.reason, urgent: order.urgency.urgent, urgency: first?.text ?? null, dueAt: order.urgency.dueAt }
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
   const matches = query ? all.filter((card) => [
     card.reference, card.customer, card.vehicle, card.origin, card.destination, card.plate ?? "",
   ].some((field) => field.toLowerCase().includes(query))) : all
-  // Lane order within each group; Needs action is ranked by the engine's urgency instead.
+  // Lane order within each group; Problem is ranked by the engine's urgency instead.
   const urgency = (card: BoardCard) => {
     const order = orders.get(card.id)
     return order ? { urgency: order.urgency, reference: order.reference } : null

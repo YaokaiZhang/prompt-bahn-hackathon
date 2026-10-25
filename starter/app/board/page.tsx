@@ -1,7 +1,7 @@
 "use client"
 
 // The pipeline board (spec .scratch/publishing): every order, one lane per stage from
-// unpublished to done. Within a lane: Needs action, then Confirm before publishing, then
+// unpublished to done. Within a lane: Problem, then Fixed, review it, then
 // In progress, then Normal, each by when the order was created. The state is a small tag;
 // a normal order carries none.
 

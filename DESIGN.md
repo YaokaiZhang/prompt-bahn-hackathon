@@ -261,7 +261,7 @@ A warm, near-monochrome sand-and-asphalt ramp, with four signal hues used only f
 
 A fixed 72px top bar on birch (wordmark, a "Control Room" label behind a hairline, a pill nav in a sand track, the snapshot clock right-aligned) sits over a full-height workspace with a 32px gutter.
 
-The Not normal board (`/`) is a main area and a rail. Needs action fills the main area as a grid of situation cards (auto-fill, min 380px, 12px gap); Confirm before publishing and In progress sit in a sticky 300–360px rail beside it, In progress as one tonal list of two-line rows. Section heads are a 20px bold label and its count: no rule, strip or tint under them; the grouping is the layout. The Pipeline (`/board`) is five tonal Sand 50 lanes (20px radius) with sticky heads and compact birch tiles. Under 1100px the rail drops below the main area and the lanes scroll sideways with snap.
+The Not normal board (`/`) is a main area and a rail. Problem fills the main area as a grid of situation cards (auto-fill, min 380px, 12px gap); Fixed, review it and In progress sit in a sticky 300–360px rail beside it, In progress as one tonal list of two-line rows. Section heads are a 20px bold label and its count: no rule, strip or tint under them; the grouping is the layout. The Pipeline (`/board`) is five tonal Sand 50 lanes (20px radius) with sticky heads and compact birch tiles. Under 1100px the rail drops below the main area and the lanes scroll sideways with snap.
 
 List-and-detail screens (the support inbox, the Briefing) are a two-column grid: a left column of minmax(380px, 460px) (inbox minmax(340px, 420px)) holding the display title, tools and a scrolling stack of cards, and a right column that is one large scrolling sand panel. The gap is 20px. Each column scrolls on its own with contained overscroll; the page itself does not scroll on these screens.
 
@@ -305,7 +305,7 @@ Soft, confident pills in Bahn's two-tone pair.
 
 ### Cards / Containers
 - **Situation card** (`app/components/situation.tsx`): 24px radius, Sand 50 (birch inside the Briefing's sand panel), padding 18px 22px 20px. A muted line with the car and reference, the deadline right-aligned (Brick when urgent); a 21px 800-weight headline saying what is wrong; one or two 15.5px sentences of situation and suggestion; then one asphalt primary pill for the suggested step and an outlined "Choose another step" pill that opens a small birch menu. The text is a deterministic shortening of the engine's words (`lib/present/situation.ts`). On the order page it leads the record at headline size (`sit-lead`). Used on the board, in the Briefing and on the order page.
-- **Pipeline tile:** 14px radius, birch on the Sand 50 lane, padding 10px 12px. Car name 14.5px bold with a 20px state tag right only when the order is not normal (Urgent, Needs action, Confirm, In progress); reference and route in Muted Umber.
+- **Pipeline tile:** 14px radius, birch on the Sand 50 lane, padding 10px 12px. Car name 14.5px bold with a 20px state tag right only when the order is not normal (Urgent, Problem, Fixed, review it, In progress); reference and route in Muted Umber.
 - **Outlined pill** (`btn-quiet`): transparent with a 1.5px Sand 200 inset ring; the secondary action beside an asphalt primary.
 - **Preview panel:** one 24px Sand 50 panel; content rises in over 0.28s on each selection; a sticky action bar holds "Open order" and the keyboard hint.
 - **Inset block:** birch on sand, 16px radius, 16px to 20px padding; route stops and the open-items list.

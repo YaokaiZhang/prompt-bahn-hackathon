@@ -1,7 +1,7 @@
 "use client"
 
-// The board of orders that are not normal (spec .scratch/publishing). Needs action is the
-// work: situation cards in the main area. Confirm before publishing and In progress sit in
+// The board of orders that are not normal (spec .scratch/publishing). Problem is the
+// work: situation cards in the main area. Fixed, review it and In progress sit in
 // a rail beside it. Each is sorted soonest deadline first. Normal and finished orders are
 // on the pipeline board.
 

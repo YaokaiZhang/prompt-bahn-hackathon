@@ -4,7 +4,7 @@
 // filter's result out.
 //
 //   Normal (reviewed), not on the market yet  -> the agent publishes it (ADR 0003)
-//   Solved, not on the market yet             -> Confirm before publishing; the operator's yes publishes it
+//   Solved, not on the market yet             -> Fixed, review it; the operator's yes publishes it
 //   published, or on the market in the data   -> the demand filter; a demanding order gets a travel plan
 //                                                (travel-planner.ts), then it is live on drivers' phones
 //
@@ -80,7 +80,7 @@ export type Publication = {
   stage: Stage
   /** The dataset lane is New orders or Ready to post: publishing moves this order. */
   inFlow: boolean
-  /** The lane to show: the dataset's, or Confirm before publishing / Finding a driver once publishing moved it. */
+  /** The lane to show: the dataset's, or Fixed, review it / Finding a driver once publishing moved it. */
   lane: string
   published: { at: string; by: "agent" | "operator" } | null
   /** Call results waiting for the operator's yes (the Solved group). */

@@ -1,11 +1,11 @@
 "use client"
 
 // The two order boards (spec .scratch/publishing):
-//   /       orders that are not normal: Needs action as situation cards in the main
-//           area, Confirm before publishing and In progress in a rail beside it, each
+//   /       orders that are not normal: Problem as situation cards in the main
+//           area, Fixed, review it and In progress in a rail beside it, each
 //           soonest deadline first;
 //   /board  the pipeline: every order from unpublished to done, one lane per stage,
-//           ranked by state (Needs action > Confirm before publishing > In progress > Normal),
+//           ranked by state (Problem > Fixed, review it > In progress > Normal),
 //           then by when the order was created.
 
 import Link from "next/link"
@@ -26,7 +26,7 @@ export function bySoonestDeadline(a: BoardCard, b: BoardCard): number {
   return due(a).localeCompare(due(b)) || a.reference.localeCompare(b.reference)
 }
 
-/** State first (Needs action > Confirm before publishing > In progress > Normal), then the order's time, oldest first. */
+/** State first (Problem > Fixed, review it > In progress > Normal), then the order's time, oldest first. */
 export function byStateThenOrderTime(a: BoardCard, b: BoardCard): number {
   const rank = (card: BoardCard) => STATE_RANK[card.verdict?.group ?? "normal"]
   return rank(a) - rank(b) || a.createdAt.localeCompare(b.createdAt) || a.reference.localeCompare(b.reference)

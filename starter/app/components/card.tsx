@@ -25,8 +25,8 @@ export function OrderTile({ card, tagged = false }: { card: BoardCard; tagged?: 
   </Link>
 }
 
-/** The small state tag on a pipeline tile: Urgent, Needs action, Confirm before publishing or In progress. */
+/** The small state tag on a pipeline tile: Urgent, Problem, Fixed, review it or In progress. */
 export function StateTag({ group, urgent = false }: { group: Group; urgent?: boolean }) {
-  const label = urgent && group === "needs_action" ? "Urgent" : group === "solved" ? "Confirm" : GROUP_LABEL[group]
+  const label = urgent && group === "needs_action" ? "Urgent" : GROUP_LABEL[group]
   return <span className={`state-tag state-${group} tone-${groupTone(group, urgent)}`} title={GROUP_LABEL[group]}>{label}</span>
 }
