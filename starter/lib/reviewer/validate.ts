@@ -29,6 +29,8 @@ export type CheckContext = { index: RecordIndex; customerId: string }
 
 export type Check = { ok: true; finding: Finding } | { ok: false; errors: string[] }
 
+const GENDERED = /\b(he|she|him|her|his|hers|himself|herself)\b/i
+
 const ROLE_TYPES: Record<AskRole, ContactType[]> = {
   site: ["third_party_site", "customer_owned_site"],
   driver: ["driver"],
@@ -133,6 +135,10 @@ export function checkFinding(raw: unknown, ctx: CheckContext): Check {
   if (!question) errors.push("question is missing")
   if (!why) errors.push("why is missing")
   if (!whoPays) errors.push("who_pays is missing")
+  // Nobody's gender is on record: the text names people or their role.
+  for (const [key, value] of [["title", title], ["question", question], ["why", why]] as const) {
+    if (value && GENDERED.test(value)) errors.push(`${key}: refer to people by name or role, not by he, she, him, her or his (repeat the name instead)`)
+  }
 
   const conflict: QuotedValue[] = []
   const items = Array.isArray(input.conflict) ? input.conflict : []

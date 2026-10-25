@@ -29,14 +29,14 @@ export const SUBMIT_SPEC: ToolSpec = {
     parameters: {
       type: "object",
       properties: {
-        summary: { type: "string", description: "One sentence on what you read and concluded." },
+        summary: { type: "string", description: "One plain sentence on what you found, without record ids." },
         findings: {
           type: "array",
           description: "A JSON array of finding objects, not a string. Empty when there is nothing to ask.",
           items: {
             type: "object",
             properties: {
-              title: { type: "string", description: "The conflict in one line." },
+              title: { type: "string", description: "What is wrong, in at most ten plain words, without record ids." },
               conflict: { type: "array", minItems: 2, items: quoted, description: "The records that disagree, with quoted values." },
               ask: {
                 type: "object",
@@ -52,7 +52,7 @@ export const SUBMIT_SPEC: ToolSpec = {
               },
               who_pays: { type: "string" },
               policy_row: { type: "string", enum: POLICY_ROW_IDS },
-              question: { type: "string", description: "The draft question to ask." },
+              question: { type: "string", description: "The draft question to ask, in plain words, without record ids." },
               why: { type: "string" },
             },
             required: ["title", "conflict", "ask", "who_pays", "policy_row", "question", "why"],

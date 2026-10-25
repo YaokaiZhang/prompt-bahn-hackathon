@@ -1,22 +1,22 @@
 {
-  "ranAt": "2026-10-24T16:57:53.451Z",
+  "ranAt": "2026-10-25T20:37:43.062Z",
   "now": "2026-10-21T09:00:00.000Z",
   "cases": [
     {
       "reference": "CD-420516",
       "status": "reviewed",
-      "findings": 2,
-      "cost": 0.003476025,
+      "findings": 1,
+      "cost": 0.00247094,
       "checks": [
         {
           "name": "records",
           "pass": true,
-          "detail": "msg-x96d66b17e32a5df4, msg-x5d8006558b9e7cc6, ep-xf77895617a67a311"
+          "detail": "site-001, note-x7b4b75e5977108cd, msg-x96d66b17e32a5df4, msg-x5d8006558b9e7cc6, ep-xf77895617a67a311, win-x45839b2ace2c216d"
         },
         {
           "name": "contact",
           "pass": true,
-          "detail": "site via site-001"
+          "detail": "site via ep-xf77895617a67a311"
         },
         {
           "name": "approval",
@@ -30,13 +30,13 @@
     {
       "reference": "CD-420437",
       "status": "reviewed",
-      "findings": 1,
-      "cost": 0.00337241,
+      "findings": 2,
+      "cost": 0.00358134,
       "checks": [
         {
           "name": "records",
           "pass": true,
-          "detail": "ep-x61821adf903f2d7d, msg-x0049fe6fc2fd0b0e, msg-xf61ef17129348509, win-x3ce81a48192137db, step-x004cde25392dcb5b, work-x6c27e55269d19e01"
+          "detail": "msg-x47456eacbe1e0e07, msg-xf61ef17129348509, msg-x0049fe6fc2fd0b0e, win-x3ce81a48192137db, track-x0e9acf00fc4d6673"
         },
         {
           "name": "contact",
@@ -56,12 +56,12 @@
       "reference": "CD-420089",
       "status": "reviewed",
       "findings": 1,
-      "cost": 0.00403812,
+      "cost": 0.006698819999999999,
       "checks": [
         {
           "name": "records",
           "pass": true,
-          "detail": "asg-xa8246d35bc877646, res-xac6651462ee0355a, travel-x9f257e384701f386, step-x88ed7ca82db890c5"
+          "detail": "asg-xa8246d35bc877646, step-x6c69bbc1bcc0dccc, asg-xb8ad81e2d1e793a9, step-x88ed7ca82db890c5, travel-x9f257e384701f386, res-xac6651462ee0355a, note-x30f784d8cd92ba78"
         },
         {
           "name": "contact",
@@ -81,12 +81,12 @@
       "reference": "CD-420399",
       "status": "reviewed",
       "findings": 2,
-      "cost": 0.00486552,
+      "cost": 0.00618918,
       "checks": [
         {
           "name": "records",
           "pass": true,
-          "detail": "expense-x9d676667cdd4f893, msg-x3bdbe64dcd0bd46e, asg-x8cb23e805f9b3043"
+          "detail": "expense-x9d676667cdd4f893, asg-x8cb23e805f9b3043, msg-x3bdbe64dcd0bd46e"
         },
         {
           "name": "contact",
@@ -106,7 +106,7 @@
       "reference": "CD-420458",
       "status": "reviewed",
       "findings": 0,
-      "cost": 0.00144861,
+      "cost": 0.00198454,
       "checks": [
         {
           "name": "no re-asking",
@@ -121,12 +121,12 @@
       "reference": "CD-420656",
       "status": "reviewed",
       "findings": 1,
-      "cost": 0.00566983,
+      "cost": 0.00413168,
       "checks": [
         {
           "name": "records",
           "pass": true,
-          "detail": "msg-x30a84e718591defa, msg-x488144ab691ee379, win-x1bc8edb0f9c54604, step-x7f0873d21787299e, ep-x377904e24cf3732d"
+          "detail": "msg-x30a84e718591defa, msg-x488144ab691ee379, ord-00656, win-x1bc8edb0f9c54604, ep-x377904e24cf3732d, step-x7f0873d21787299e"
         },
         {
           "name": "contact",
@@ -146,12 +146,12 @@
       "reference": "CD-420311",
       "status": "reviewed",
       "findings": 1,
-      "cost": 0.00518802,
+      "cost": 0.00551508,
       "checks": [
         {
           "name": "records",
           "pass": true,
-          "detail": "asg-x7fd46f1afa73cdef, step-xddbc81fff41286ba, step-x53a8e2a2dca044a8, travel-xf2bdef20786d3ba8, travel-x3f015a8b98732f3f"
+          "detail": "asg-x7fd46f1afa73cdef, step-x53a8e2a2dca044a8, travel-xf2bdef20786d3ba8, travel-xd67df51ec95450b8"
         },
         {
           "name": "contact",
@@ -170,5 +170,5 @@
   ],
   "points": 19,
   "max": 19,
-  "cost": 0.028058534999999996
+  "cost": 0.03057158
 }
