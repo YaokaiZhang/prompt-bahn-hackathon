@@ -28,6 +28,8 @@ import type { PhonePersona, PhoneView } from "./phone"
 import type { AudioClip } from "./voice-agent"
 import { latestEta } from "./eta"
 import { answeredRecords, callbackItems, orderCalls, reportedEta, statedByCallee, utcTime, type BlockedCall, type Call, type CalleeInput, type CallLine, type CallLineView, type Handover, type OrderCalls } from "./calls"
+import { demandCheck, pendingChanges, publicationOf, solvedText, type Publication, type StoredPublicationEvent } from "./publishing"
+import { planInput, planTrip, type TravelOptions } from "./travel-planner"
 
 /** The snapshot as the engine reads it: one bundle per order. */
 export type Snapshot = { snapshotAt: string; bundles: Bundle[] }
@@ -102,6 +104,22 @@ export type Command =
    * handover closes, so it no longer holds the order in Needs action.
    */
   | { type: "recordHandoverResult"; callId: string; result: string }
+  /**
+   * The operator publishes an order that is not on the market yet (New orders, Ready to
+   * post): a Normal one, or a Solved one, whose waiting call results this confirms too.
+   */
+  | { type: "publish"; orderId: string }
+  /**
+   * The operator approves a Solved order (spec .scratch/publishing): its call results are
+   * confirmed and the order is published with the same yes. Only orders not published yet are Solved.
+   */
+  | { type: "confirmChanges"; orderId: string }
+  /**
+   * The publishing loop (ADR 0003): the agent publishes Normal orders the reviewer read
+   * that are not on the market yet, runs the demand filter on every order on the market,
+   * and drafts travel plans for demanding ones (at most `plans` per run; default all).
+   */
+  | { type: "runPublishing"; plans?: number }
 
 /**
  * One order as the engine reads it at `now`. `group`, `reason`, `rules` (every
@@ -130,6 +148,8 @@ export type OrderState = {
   callLines: CallLineView[]
   /** Planned calls the agent will not make because the callee is on the customer side. */
   blockedCalls: BlockedCall[]
+  /** Its stage after grouping: confirm before publishing, on the market, filter and travel plan (publishing.ts). */
+  publication: Publication
 } & Verdict
 
 /** One line of an order's history. `kind` is a proposal event kind, or "effect" for an effect event. */
@@ -157,6 +177,8 @@ export type { AudioClip, TurnCheck, TurnPath, VoiceAgent } from "./voice-agent"
 export type { Briefing, BriefingItem, DigestFacts, DigestItem, DigestSlot, PushItem, PushReason, PushInput } from "./briefing"
 export type { DigestProse, ProseSegment } from "./digest-prose"
 export type { Effect, EffectEvent, EffectInput, EffectSpec, EffectType, EffectWrite, Versioning } from "./effects"
+export type { DemandCheck, Publication, SolvedChange, Stage } from "./publishing"
+export type { TravelLeg, TravelPlan } from "./travel-planner"
 export { becameDue, GROUPS }
 
 /** The Needs action group, most urgent first (urgent, then soonest deadline, then reference). */
@@ -205,6 +227,8 @@ export type EngineDeps = {
   briefing?: ProseOptions
   /** Who answers calls, speech, tier 2, cost rates and pacing. Absent: simulated person, no speech. */
   calls?: CallOptions
+  /** The travel planner's gateway, cache and reference data. Absent: template plans. */
+  travel?: TravelOptions
 }
 
 const MINUTE = 60_000
@@ -222,7 +246,7 @@ function isoOf(value: Date | string): string {
   return date.toISOString()
 }
 
-export function createEngine({ snapshot, store, reviews: reviewOptions, briefing: proseOptions, calls: callOptions = {} }: EngineDeps): Engine {
+export function createEngine({ snapshot, store, reviews: reviewOptions, briefing: proseOptions, calls: callOptions = {}, travel: travelOptions = {} }: EngineDeps): Engine {
   const start = isoOf(snapshot.snapshotAt)
   const bundles = new Map(snapshot.bundles.map((bundle) => [bundle.order.id, bundle]))
   const fleet = buildFleet(snapshot.bundles)
@@ -355,20 +379,106 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
   }
 
   async function ordersAt(at: string): Promise<OrderState[]> {
-    return (await workAt(at)).map(({ bundle, evaluation, review, work, calls, effects }) => ({
-      id: bundle.order.id,
-      reference: bundle.order.reference,
-      status: bundle.order.status,
-      review,
-      proposals: work.proposals,
-      unreachable: work.unreachable,
-      calls: calls.calls,
-      callLines: calls.lines,
-      blockedCalls: calls.blocked,
-      effects,
-      history: historyOf(work.proposals, effects),
-      ...verdictFor({ ...evaluation, planned: calls.planned }, review, { ...work, calls: { lines: calls.lines, carried: calls.carried } }),
-    }))
+    const published = byOrder(await store.readPublicationEvents())
+    return (await workAt(at)).map(({ bundle, evaluation, review, work, calls, effects }) => {
+      const events = published.get(bundle.order.id) ?? []
+      // Call results the operator has not confirmed make an order not published yet Solved (when nothing else is open).
+      const pending = pendingChanges(bundles.get(bundle.order.id)!, effects, calls.calls, events)
+      const verdict = verdictFor({ ...evaluation, planned: calls.planned }, review, { ...work, calls: { lines: calls.lines, carried: calls.carried }, solved: pending.map(solvedText) })
+      return {
+        id: bundle.order.id,
+        reference: bundle.order.reference,
+        status: bundle.order.status,
+        review,
+        proposals: work.proposals,
+        unreachable: work.unreachable,
+        calls: calls.calls,
+        callLines: calls.lines,
+        blockedCalls: calls.blocked,
+        effects,
+        history: historyOf(work.proposals, effects),
+        publication: publicationOf(bundle, verdict.group, pending, events),
+        ...verdict,
+      }
+    })
+  }
+
+  // -- Publishing (spec .scratch/publishing, ADR 0003) ------------------------
+
+  async function orderNow(orderId: string): Promise<OrderState> {
+    const order = (await ordersAt(await clock())).find((row) => row.id === orderId)
+    if (!order) throw new Error(`Unknown order ${orderId}`)
+    return order
+  }
+
+  const publishedEvent = (order: OrderState, at: string, by: "agent" | "operator"): StoredPublicationEvent => ({
+    orderId: order.id, at, by, kind: "published", data: null,
+    text: by === "agent" ? "Published: checked normal, the agent posted it to the driver market." : "Published by the operator.",
+  })
+
+  const confirmedEvent = (order: OrderState, at: string): StoredPublicationEvent => ({
+    orderId: order.id, at, by: "operator", kind: "confirmed", data: { effectIds: order.publication.pending.map((change) => change.effectId) },
+    text: `The operator confirmed ${order.publication.pending.length === 1 ? "the call result" : `${order.publication.pending.length} call results`}.`,
+  })
+
+  /** The operator's publish: a Normal or Solved order not on the market yet; a Solved one's call results are confirmed with it. */
+  async function publish(orderId: string): Promise<void> {
+    const order = await orderNow(orderId)
+    const { publication } = order
+    if (!publication.inFlow) throw new Error(`${order.reference} is not waiting to be posted: it is already on the market or further along`)
+    if (publication.published) throw new Error(`${order.reference} is already published`)
+    if (order.group !== "normal" && order.group !== "solved") throw new Error(`${order.reference} is ${order.group.replace("_", " ")}: only a Normal or Solved order can be published`)
+    const at = await clock()
+    await store.appendPublicationEvents([...(order.group === "solved" ? [confirmedEvent(order, at)] : []), publishedEvent(order, at, "operator")])
+  }
+
+  /** The operator's yes on a Solved order (never published yet): its call results are confirmed and it is published. */
+  async function confirmChanges(orderId: string): Promise<void> {
+    const order = await orderNow(orderId)
+    if (order.group !== "solved" || !order.publication.pending.length) throw new Error(`${order.reference} has no call results waiting for a yes`)
+    const at = await clock()
+    await store.appendPublicationEvents([confirmedEvent(order, at), publishedEvent(order, at, "operator")])
+  }
+
+  /**
+   * The publishing loop. The agent publishes a Normal order not on the market yet only
+   * once the reviewer read it (Normal on the rules alone is not enough). Every order on
+   * the market goes through the demand filter once; a demanding one gets a travel plan.
+   */
+  async function runPublishing(planLimit = Number.POSITIVE_INFINITY): Promise<void> {
+    const at = await clock()
+    const orders = await ordersAt(at)
+    const writes: StoredPublicationEvent[] = []
+    const toPlan: { order: OrderState; check: ReturnType<typeof demandCheck> }[] = []
+    for (const order of orders) {
+      const { publication } = order
+      const publishNow = publication.stage === "unposted" && order.group === "normal" && order.review.status === "reviewed"
+      if (publishNow) writes.push(publishedEvent(order, at, "agent"))
+      if (publication.stage !== "market" && !publishNow) continue
+      let check = publication.check
+      if (!check) {
+        check = demandCheck(bundleOf(order.id))
+        writes.push({
+          orderId: order.id, at, by: "agent", kind: "filtered", data: { check },
+          text: check.demanding ? `Demand filter: demanding. ${check.reasons.join(" ")}` : "Demand filter: not demanding; live for drivers.",
+        })
+      }
+      if (check.demanding && !publication.plan && !publication.planError) toPlan.push({ order, check })
+    }
+    await store.appendPublicationEvents(writes)
+    for (const { order, check } of toPlan.slice(0, planLimit)) {
+      try {
+        const plan = await planTrip(planInput(bundleOf(order.id), check, order.publication.budgetEur, travelOptions.reference), travelOptions)
+        await store.appendPublicationEvents([{
+          orderId: order.id, at, by: "agent", kind: "planned", data: { plan },
+          text: `Travel plan drafted (${plan.source}): rough total EUR ${plan.totalEur} against a budget of EUR ${plan.budgetEur}.`,
+        }])
+      } catch (error) {
+        await store.appendPublicationEvents([{
+          orderId: order.id, at, by: "agent", kind: "plan_failed", data: { error: error instanceof Error ? error.message : String(error) }, text: "The travel planner failed.",
+        }])
+      }
+    }
   }
 
   // -- Calls (ticket 10) -------------------------------------------------------
@@ -816,6 +926,15 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
         break
       case "recordHandoverResult":
         await recordHandoverResult(command.callId, command.result)
+        break
+      case "publish":
+        await publish(command.orderId)
+        break
+      case "confirmChanges":
+        await confirmChanges(command.orderId)
+        break
+      case "runPublishing":
+        await runPublishing(command.plans)
         break
       case "deliverBriefing":
         await deliverBriefing()

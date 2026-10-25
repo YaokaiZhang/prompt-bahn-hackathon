@@ -94,8 +94,31 @@ export const callEvents = pgTable("cr_call_events", {
   data: jsonb("data").$type<Record<string, unknown>>(),
 }, (table) => [primaryKey({ columns: [table.callId, table.seq] }), index("cr_call_events_order_idx").on(table.orderId)])
 
+/**
+ * Publication events (spec .scratch/publishing, ADR 0003): append-only, per order.
+ * `published`, `confirmed` (call results the operator confirmed), `filtered` (the
+ * demand filter's result) and `planned` / `plan_failed` (the travel plan) in `data`.
+ * Not effect events: publishing changes no record of the order, only its stage.
+ */
+export const publicationEvents = pgTable("cr_publication_events", {
+  seq: bigserial("seq", { mode: "number" }).primaryKey(),
+  orderId: text("order_id").notNull(),
+  at: timestamp("at", { withTimezone: true }).notNull(),
+  by: text("by").notNull(),
+  kind: text("kind").notNull(),
+  text: text("text").notNull(),
+  data: jsonb("data").$type<Record<string, unknown>>(),
+}, (table) => [index("cr_publication_events_order_idx").on(table.orderId)])
+
+/** Travel plans the model drafted, keyed by a hash of the plan input (plus prompt version and model). */
+export const travelPlans = pgTable("cr_travel_plans", {
+  key: text("key").primaryKey(),
+  plan: jsonb("plan").$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+})
+
 /** Every engine state table. Add new tables here so reset clears them. */
-export const ENGINE_TABLES = [demoClock, briefingItems, proposalEvents, effectEvents, callEvents]
+export const ENGINE_TABLES = [demoClock, briefingItems, proposalEvents, effectEvents, callEvents, publicationEvents]
 
 /**
  * Caches that reset keeps on purpose (ticket 04). A cached review is keyed by the
@@ -104,4 +127,4 @@ export const ENGINE_TABLES = [demoClock, briefingItems, proposalEvents, effectEv
  * a repeated demo take costs no model calls. Put agent *state* (which review is
  * current, proposals, calls) in ENGINE_TABLES, not here.
  */
-export const CACHE_TABLES = [reviewResults, digestProse]
+export const CACHE_TABLES = [reviewResults, digestProse, travelPlans]

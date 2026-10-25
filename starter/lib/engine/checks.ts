@@ -5,8 +5,9 @@
 
 import type { Evaluation, Fleet, RuleContext } from "./rules"
 
-export type Group = "needs_action" | "in_progress" | "normal" | "done"
-export const GROUPS: Group[] = ["needs_action", "in_progress", "normal", "done"]
+/** `done` is shown as "Finished": delivered or cancelled with nothing open. */
+export type Group = "needs_action" | "in_progress" | "solved" | "normal" | "done"
+export const GROUPS: Group[] = ["needs_action", "in_progress", "solved", "normal", "done"]
 
 /** A record a rule read, so the UI can link to it. `collection` is the dataset file name. */
 export type SourceRef = { collection: string; id: string; label: string }
@@ -100,8 +101,12 @@ export type CallSignal = {
   carried: Set<string>
 }
 
-/** The order's proposals, findings the agent cannot act on for lack of a contact, and its calls. */
-export type WorkSignal = { proposals: ProposalSignal[]; unreachable: { title: string }[]; calls?: CallSignal }
+/**
+ * The order's proposals, findings the agent cannot act on for lack of a contact, its
+ * calls, and `solved`: what each call result the agent committed and the operator
+ * has not confirmed yet says (publishing.ts).
+ */
+export type WorkSignal = { proposals: ProposalSignal[]; unreachable: { title: string }[]; calls?: CallSignal; solved?: string[] }
 
 const sentence = (text: string) => text.replace(/[.]$/, "")
 
@@ -119,7 +124,10 @@ function waitingText(proposal: ProposalSignal): string {
  *   customer contact handed over, a question) -> Needs action;
  * - else planned agent work or a routine call the agent will make -> In progress
  *   (a done review fulfils the rules' reviewer pass);
- * - else finished with nothing open -> Done; else Normal, which says what the reviewer read.
+ * - else finished with nothing open -> Done (shown as "Finished");
+ * - else call results the agent committed and the operator has not confirmed -> Solved
+ *   (confirm before publishing);
+ * - else Normal, which says what the reviewer read.
  * Decided proposals (dismissed, answered, an approved change) no longer hold an order.
  * A finding with no contact on record is a gap ("couldn't check"), not a decision.
  */
@@ -155,6 +163,11 @@ export function verdictFor(evaluation: Evaluation, review: ReviewSignal | null =
   const unreachable = work.unreachable.map((finding) => `Reviewer: ${sentence(finding.title)}, but no contact is on record, so it couldn't be checked.`)
   const gaps = rules.filter((row) => row.outcome === "unknown").length + work.unreachable.length
   if (finished && gaps === 0) return { group: "done", reason: ["Finished with nothing open.", readNote, ...results].filter(Boolean).join(" "), rules, planned, urgency }
+  const solved = work.solved ?? []
+  if (solved.length) {
+    const head = `The agent's calls settled ${solved.length === 1 ? "an open point" : `${solved.length} open points`}; waiting for your yes on the change.`
+    return { group: "solved", reason: [head, ...solved.map((text) => `${sentence(text)}.`)].join(" "), rules, planned, urgency }
+  }
   // Normal is "passed the rules and the reviewer" (spec "Grouping"): a strong rule whose
   // first action is a reviewer pass fired, and the done review found nothing to act on.
   // The reason says so rather than claiming every check passed.

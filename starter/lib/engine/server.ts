@@ -3,12 +3,15 @@
 
 import "server-only"
 import path from "node:path"
+import { and, inArray, isNull } from "drizzle-orm"
 import { db } from "@/lib/db"
+import { relatedRecords } from "@/lib/schema"
 import { openRouterFromEnv } from "@/lib/reviewer/openrouter"
 import { createPostgresReviewCache } from "@/lib/reviewer/postgres-cache"
 import { reviewSourceFromDatabase } from "@/lib/reviewer/source"
 import { createEngine, type Engine } from "./engine"
 import { createPostgresStore } from "./postgres"
+import { createPostgresPlanCache } from "./plan-cache"
 import { createPostgresProseCache } from "./prose-cache"
 import { demoAnswerer, RING_TIMEOUT_MS, type PhonePersona } from "./phone"
 import { simulatedPerson } from "./simulated-person"
@@ -23,6 +26,7 @@ import type { ModelGateway } from "@/lib/reviewer/gateway"
 const cache = globalThis as unknown as {
   controlRoomEngine?: Promise<Engine>; controlRoomAudio?: AudioStore; controlRoomPump?: ReturnType<typeof setInterval>
   controlRoomPhones?: Map<PhonePersona, { since: number; seen: number }>
+  controlRoomPublishing?: ReturnType<typeof setInterval>
 }
 
 /** A phone page counts as open while it polled within this many ms. */
@@ -90,9 +94,39 @@ function voiceAgent(gateway: ModelGateway | null): VoiceAgent | null {
   return createVoiceAgent({ voice: openRouterVoiceFromEnv(getAudioStore()), ear, checker: gateway })
 }
 
+/** How often the publishing loop runs (ms); PUBLISH_PUMP_MS=0 turns it off. */
+const PUBLISH_MS = Number(process.env.PUBLISH_PUMP_MS ?? 3000)
+
+/**
+ * The publishing loop (spec .scratch/publishing): the agent publishes reviewed Normal
+ * orders, filters every order on the market and drafts one travel plan per tick, on its
+ * own interval so a slow plan never holds up the call pump.
+ */
+function startPublishing(engine: Engine): void {
+  if (!PUBLISH_MS || cache.controlRoomPublishing) return
+  let busy = false
+  cache.controlRoomPublishing = setInterval(() => {
+    if (busy) return
+    busy = true
+    engine.apply({ type: "runPublishing", plans: 1 })
+      .catch((error) => console.error("publishing:", error instanceof Error ? error.message : error))
+      .finally(() => { busy = false })
+  }, PUBLISH_MS)
+  cache.controlRoomPublishing.unref?.()
+}
+
+/** Ferry terminals and city-to-terminal road estimates: reference rows (no order id) the travel planner reads. */
+async function travelReference() {
+  const rows = await db.select().from(relatedRecords).where(and(isNull(relatedRecords.orderId), inArray(relatedRecords.collection, ["ferry_terminals", "terminal_road_estimates"])))
+  return {
+    terminals: rows.filter((row) => row.collection === "ferry_terminals").map((row) => ({ id: row.id, ...row.details })),
+    roadEstimates: rows.filter((row) => row.collection === "terminal_road_estimates").map((row) => ({ id: row.id, ...row.details })),
+  }
+}
+
 export function getEngine(): Promise<Engine> {
-  cache.controlRoomEngine ??= reviewSourceFromDatabase(db)
-    .then((source) => {
+  cache.controlRoomEngine ??= Promise.all([reviewSourceFromDatabase(db), travelReference()])
+    .then(([source, reference]) => {
       const gateway = openRouterFromEnv()
       const engine = createEngine({
         snapshot: source.snapshot,
@@ -107,8 +141,11 @@ export function getEngine(): Promise<Engine> {
           ...(LIVE_DEMO ? { answererFor: demoAnswerer() } : {}),
           phoneOpenSince, ringTimeoutMs: RING_TIMEOUT, voice: voiceAgent(gateway),
         },
+        // Travel plans (spec .scratch/publishing): the same gateway; template plans without a key.
+        travel: { gateway, cache: createPostgresPlanCache(db), reference },
       })
       startPump(engine)
+      startPublishing(engine)
       return engine
     })
     .catch((error) => { cache.controlRoomEngine = undefined; throw error })

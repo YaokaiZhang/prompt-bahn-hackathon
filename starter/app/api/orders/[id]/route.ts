@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getEngine } from "@/lib/engine/server"
 import { loadOrder } from "@/lib/present/load"
+import { laneLabel } from "@/lib/present/labels"
 import { buildRecordView } from "@/lib/present/record"
 import type { OrderChecks } from "@/lib/present/types"
 
@@ -18,12 +19,14 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   const view = buildRecordView(await engine.overlaid(bundle))
   const state = await engine.state()
   const verdict = state.orders.find((row) => row.id === order.id)
+  // Publishing moves an order not on the market yet; the dataset's lane stays as seeded (ADR 0002).
+  if (verdict) view.header = { ...view.header, lane: verdict.publication.lane, laneLabel: laneLabel(verdict.publication.lane) }
   const checks: OrderChecks | null = verdict
     ? {
       now: state.now, group: verdict.group, reason: verdict.reason, rules: verdict.rules, planned: verdict.planned, urgency: verdict.urgency,
       review: verdict.review, proposals: verdict.proposals, unreachable: verdict.unreachable,
       calls: verdict.calls, callLines: verdict.callLines, blockedCalls: verdict.blockedCalls,
-      effects: verdict.effects, history: verdict.history,
+      effects: verdict.effects, history: verdict.history, publication: verdict.publication,
     }
     : null
   return NextResponse.json({

@@ -4,7 +4,8 @@ import type { BriefingItem } from "./briefing"
 import type { EffectEvent } from "./effects"
 import type { StoredCallEvent } from "./calls"
 import type { StoredProposalEvent } from "./proposals"
-import { briefingItems, callEvents, demoClock, effectEvents, ENGINE_TABLES, proposalEvents } from "./schema"
+import type { StoredPublicationEvent } from "./publishing"
+import { briefingItems, callEvents, demoClock, effectEvents, ENGINE_TABLES, proposalEvents, publicationEvents } from "./schema"
 import type { EngineStore } from "./store"
 
 /** Any drizzle postgres-js client, whatever schema it was built with. */
@@ -88,6 +89,20 @@ export function createPostgresStore(db: Database): EngineStore {
     async markBriefingRead(ids) {
       if (ids && !ids.length) return
       await db.update(briefingItems).set({ read: true }).where(ids ? inArray(briefingItems.id, ids) : sql`true`)
+    },
+    async readPublicationEvents() {
+      const found = await db.select().from(publicationEvents).orderBy(asc(publicationEvents.seq))
+      return found.map((row) => ({
+        orderId: row.orderId, at: row.at.toISOString(), by: row.by as StoredPublicationEvent["by"], kind: row.kind as StoredPublicationEvent["kind"],
+        text: row.text, data: (row.data ?? null) as StoredPublicationEvent["data"],
+      }))
+    },
+    async appendPublicationEvents(events) {
+      if (!events.length) return
+      await db.insert(publicationEvents).values(events.map((event) => ({
+        orderId: event.orderId, at: new Date(event.at), by: event.by, kind: event.kind, text: event.text,
+        data: (event.data ?? null) as Record<string, unknown> | null,
+      })))
     },
     async reset() {
       const names = ENGINE_TABLES.map((table) => `"${getTableName(table)}"`).join(", ")

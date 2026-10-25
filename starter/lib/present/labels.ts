@@ -5,6 +5,8 @@
 export const LANES = [
   ["intake", "New orders"],
   ["ready", "Ready to post"],
+  // Not a dataset lane: an order not on the market yet that is Solved waits here for the operator's yes (lib/engine/publishing.ts).
+  ["confirm", "Waiting for publication approval"],
   ["market", "Finding a driver"],
   ["booked", "Driver assigned"],
   ["moving", "Moving"],
@@ -13,6 +15,24 @@ export const LANES = [
 ] as const
 
 export type Lane = (typeof LANES)[number][0]
+
+/**
+ * The pipeline board's columns (spec .scratch/publishing): every order by where it is,
+ * from not published to done. Driver assigned holds booked and moving orders.
+ */
+export const PIPELINE = [
+  { key: "unpublished", label: "Unpublished", lanes: ["intake", "ready"] },
+  { key: "approval", label: "Waiting for publication approval", lanes: ["confirm"] },
+  { key: "market", label: "Finding a driver", lanes: ["market"] },
+  { key: "assigned", label: "Driver assigned", lanes: ["booked", "moving"] },
+  { key: "done", label: "Done", lanes: ["delivered", "cancelled"] },
+] as const
+
+export type PipelineColumn = (typeof PIPELINE)[number]["key"]
+
+export function pipelineColumn(lane: string): PipelineColumn {
+  return PIPELINE.find((column) => (column.lanes as readonly string[]).includes(lane))?.key ?? "unpublished"
+}
 
 export const LANE_ORDER: Lane[] = LANES.map(([lane]) => lane)
 

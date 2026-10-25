@@ -6,6 +6,7 @@ import { ChecksPanel } from "./checks"
 import { CitedProvider } from "./review"
 import { KeyDates, RecordHero } from "./record/header"
 import { RecordsPanel } from "./record/records"
+import { TravelPlanSection } from "./travel-plan"
 import { ActivitySection, ConversationsSection, DecisionsSection, EvidenceSection, RouteSection } from "./record/sections"
 import { OpenItems } from "./ui"
 
@@ -43,5 +44,6 @@ export function OrderPane({ detail }: { detail: Detail }) {
     <DecisionsSection view={view} />
     <ActivitySection view={view} />
     <RecordsPanel view={view} orderId={detail.order.id} />
+    {checks?.publication && <TravelPlanSection publication={checks.publication} />}
   </CitedProvider>
 }

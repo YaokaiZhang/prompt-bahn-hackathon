@@ -83,5 +83,6 @@ export function buildBoardCard(bundle: Bundle): BoardCard {
     decisive,
     work: work.slice(0, MAX_LINES),
     updatedAt: order.updatedAt,
+    createdAt: order.createdAt,
   }
 }

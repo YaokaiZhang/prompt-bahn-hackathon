@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { Call, CalleeInput } from "@/lib/engine/calls"
 import type { PhonePersona, PhoneView } from "@/lib/engine/phone"
+import { DriverJobsList } from "./jobs"
 import { Icon } from "./icons"
 import { Pill } from "./ui"
 
@@ -223,6 +224,7 @@ export function PhoneApp({ persona }: { persona: PhonePersona | "operator" }) {
       <ul>{view.queued.map((row) => <li key={row.id}><Icon name="waiting" className="tone-accent" /><span><b>{row.reference}</b> · {row.callee.name ? row.callee.name.split(",")[0] : row.callee.handle}<br /><span className="phone-queue-why">{row.reason}</span></span></li>)}</ul>
       <p>The phone takes one call at a time. The next one rings when this call ends.</p>
     </section>}
+    {as === "driver" && <DriverJobsList />}
     <p className="picker-note">Mock phone. No real numbers are dialled.</p>
   </>
 }
