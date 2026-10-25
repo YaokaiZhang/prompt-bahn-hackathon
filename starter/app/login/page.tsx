@@ -29,7 +29,6 @@ export default async function PickerPage({ searchParams }: { searchParams: Promi
   return <Windscreen
     eyebrow="Control Room"
     title={<>Hi, <em>Bahner</em>, who is driving today?</>}
-    hint="Fictional data · move your mouse to steer, then pick who you are"
     label="Choose a persona"
     choices={choices}
     angles={[-40, 0, 40]}
