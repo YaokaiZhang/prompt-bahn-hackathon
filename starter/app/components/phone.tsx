@@ -13,7 +13,7 @@
 //     ringing -> RingingScreen    (caller ID, order, answer / decline / ignore)
 //     tier1   -> KeypadScreen     (prompt caption, options, keypad)
 //     tier2   -> Tier2Screen      (ticket 12: push-to-talk with the voice agent; mic opens when it shows;
-//                                  a chime and a banner mark the transfer from the keypad)
+//                                  a chime marks the transfer from the keypad)
 //     ended   -> EndedScreen      (outcome, until the person taps Done)
 // Answering is the user gesture that unlocks audio (and, in tier 2, the microphone).
 
@@ -489,7 +489,6 @@ function Tier2Screen({ call, playing, stopPrompt, hangUp, sendVoice }: {
       <span className="phone-timer">{clock((now - new Date(answeredAt).getTime()) / 1000)}</span>
     </div>
     <div className="phone-call-pills"><Pill tone="accent" dot>Tier 2</Pill><Pill tone={recording ? "warn" : "accent"}>{status}</Pill></div>
-    {!lines.some((line) => line.by === "callee") && <p className="phone-transfer" role="status"><Icon name="mic" size={16} />You're now talking to the voice assistant, so the voice sounds different. No more keypad: hold the button below and answer in your own words.</p>}
     <p className="phone-prompt" aria-live="polite">{said?.text ?? "…"}</p>
     <div className="phone-talk-wrap">
       <button type="button" className="phone-talk" data-recording={recording || undefined} disabled={!canTalk && !recording}
