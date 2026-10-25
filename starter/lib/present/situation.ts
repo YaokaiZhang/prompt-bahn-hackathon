@@ -114,10 +114,10 @@ export function ruleProblem(rule: RuleResult): { headline: string; situation: st
 
 /** Where on the order page a rule's evidence sits, and the verb for looking at it. */
 const RULE_OPEN: Partial<Record<RuleResult["id"], { label: string; anchor: string }>> = {
-  CLOSE: { label: "Review the open records", anchor: "attention" },
-  R1: { label: "Check the release", anchor: "checks" },
+  CLOSE: { label: "Review the open records", anchor: "rule-CLOSE" },
+  R1: { label: "Check the release", anchor: "rule-R1" },
   R11: { label: "Check the pickup", anchor: "attention" },
-  R13: { label: "Check the travel claims", anchor: "checks" },
+  R13: { label: "Check the travel claims", anchor: "rule-R13" },
   R12: { label: "Decide what to tell the customer", anchor: "checks" },
 }
 

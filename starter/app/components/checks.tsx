@@ -53,7 +53,7 @@ const OUTCOME_ICON = { fail: "alert", unknown: "note", pass: "check" } as const
 
 function RuleItem({ orderId, rule, samePage }: { orderId: string; rule: RuleResult; samePage: boolean }) {
   const tone: Tone = rule.outcome === "fail" ? (rule.firstAction === "show_person" || rule.firstAction === "operator_proposal" ? "danger" : "warn") : rule.outcome === "pass" ? "ok" : "neutral"
-  return <li className="check">
+  return <li className="check" id={`rule-${rule.id}`}>
     <Icon name={OUTCOME_ICON[rule.outcome]} className={`tone-${tone}`} />
     <div>
       <div className="check-title">{rule.title}{rule.strength === "weak" && <span className="check-kind">weak signal</span>}</div>

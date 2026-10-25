@@ -40,7 +40,7 @@ test("a rule shown to a person: headline from the rule, the work item as the sug
   assert.ok(situation)
   assert.equal(situation.headline, "Delivered, but 4 records are still open")
   assert.match(situation.body ?? "", /Suggestion: ask the receiver for the signed record\.$/)
-  assert.deepEqual(situation.step, { label: "Review the open records", do: "open", anchor: "attention" })
+  assert.deepEqual(situation.step, { label: "Review the open records", do: "open", anchor: "rule-CLOSE" })
 })
 
 test("a change waiting for a yes: the approval is the step, dismissing is another", () => {

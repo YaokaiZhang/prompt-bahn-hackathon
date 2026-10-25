@@ -91,7 +91,7 @@ _Avoid_: Done
 The tag and Overview stage of a Solved order: the agent fixed it, and the operator checks it before it is published. The operator reads each rewrite and the call transcripts; their approval confirms the changes and publishes the order.
 
 **Needs action**:
-The board of the orders that are not normal: Blocked, Fixed, review it and In progress, each soonest deadline first.
+The board of the orders that are not normal: Blocked, Fixed, review it and In progress, each most pressing first: urgent orders, then the soonest deadline, then orders with no deadline left.
 _Avoid_: Not normal
 
 **Overview**:
