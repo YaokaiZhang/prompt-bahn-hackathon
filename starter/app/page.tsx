@@ -7,7 +7,7 @@
 import { useEffect, useState } from "react"
 import type { ApprovalQueue, BoardCard } from "@/lib/present/types"
 import { GROUP_LABEL } from "./components/checks"
-import { bySoonestDeadline } from "./components/columns"
+import { byEmergency } from "./components/columns"
 import { useClockVersion } from "./components/demo-clock"
 import { BatchApproval } from "./components/proposals"
 import { QueueBoard, type QueueFilter } from "./components/queue"
@@ -39,7 +39,7 @@ export default function NeedsActionBoard() {
   }, [clockVersion])
 
   const waiting = approvals?.waiting.length ?? 0
-  return <QueueBoard board="attention" filters={FILTERS} place={place} sort={bySoonestDeadline}
+  return <QueueBoard board="attention" filters={FILTERS} place={place} sort={byEmergency}
     tools={waiting > 0 && <button type="button" className={`btn btn-s ${batch ? "btn-primary" : "btn-tertiary"} queue-batch`} aria-pressed={batch} onClick={() => setBatch((value) => !value)}>
       {batch ? "Close batch approval" : `Approve ${waiting} in batch`}
     </button>}

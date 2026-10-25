@@ -62,6 +62,19 @@ type Props = {
   lead?: boolean
 }
 
+/**
+ * Brings the evidence at an anchor into view on this page and marks it for a moment. An anchor
+ * this page does not carry (no open items, say) falls back to the checks.
+ */
+function reveal(anchor: string) {
+  const target = document.getElementById(anchor) ?? document.getElementById("checks")
+  if (!target) return
+  target.scrollIntoView({ behavior: "smooth", block: "center" })
+  target.classList.remove("is-revealed")
+  void target.offsetWidth
+  target.classList.add("is-revealed")
+}
+
 export function SituationCard({ orderId, situation, car, reference, due, urgent = false, samePage = false, lead = false }: Props) {
   const [writing, setWriting] = useState<Extract<Step, { prompt: string }> | null>(null)
   const [draft, setDraft] = useState("")
@@ -97,8 +110,10 @@ export function SituationCard({ orderId, situation, car, reference, due, urgent 
     try { await submit(writing, draft); setWriting(null) } catch (cause) { setError(cause instanceof Error ? cause.message : "Nothing changed") } finally { setBusy(false) }
   }
 
-  const stepHref = (step: Step) => step.do === "open" ? (samePage && !step.full ? `#${step.anchor}` : `${href}#${step.anchor}`) : href
-  const button = (step: Step, primary: boolean) => step.do === "open"
+  const stepHref = (step: Step) => step.do === "open" ? `${href}#${step.anchor}` : href
+  const button = (step: Step, primary: boolean) => step.do === "open" && samePage && !step.full
+    ? <button key={step.label} type="button" className={`btn btn-s ${primary ? "btn-primary" : "btn-quiet"}`} onClick={() => reveal(step.anchor)}>{step.label}</button>
+    : step.do === "open"
     ? <Link key={step.label} className={`btn btn-s ${primary ? "btn-primary" : "btn-quiet"}`} href={stepHref(step)}>{step.label}</Link>
     : <button key={step.label} type="button" className={`btn btn-s ${primary ? "btn-primary" : "btn-quiet"}`} disabled={busy} onClick={() => void act(step)}>{busy && primary ? "Working…" : step.label}</button>
 
@@ -125,7 +140,9 @@ export function SituationCard({ orderId, situation, car, reference, due, urgent 
           {step ? <><span className="sit-long">Choose another step</span><span className="sit-short">Other steps</span></> : "Choose a step"}<Icon name="chevron" size={12} className="sit-chev" />
         </button>
         {menu && <ul className="sit-menu" role="menu">{others.map((other) => <li key={other.label} role="none">
-          {other.do === "open"
+          {other.do === "open" && samePage && !other.full
+            ? <button role="menuitem" type="button" onClick={() => { setMenu(false); reveal(other.anchor) }}>{other.label}</button>
+            : other.do === "open"
             ? <Link role="menuitem" href={stepHref(other)} onClick={() => setMenu(false)}>{other.label}</Link>
             : <button role="menuitem" type="button" disabled={busy} onClick={() => void act(other)}>{other.label}</button>}
         </li>)}</ul>}

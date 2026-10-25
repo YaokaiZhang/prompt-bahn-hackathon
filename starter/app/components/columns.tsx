@@ -14,10 +14,20 @@ import { Icon } from "./icons"
 /** The overview's rank of states within a stage. */
 const STATE_RANK: Record<Group, number> = { needs_action: 0, solved: 1, in_progress: 2, normal: 3, done: 4 }
 
-/** Soonest deadline first (the rules' earliest deadline, else the card's deciding date), then reference. */
-export function bySoonestDeadline(a: BoardCard, b: BoardCard): number {
-  const due = (card: BoardCard) => card.verdict?.dueAt ?? card.decisive?.start ?? "9"
-  return due(a).localeCompare(due(b)) || a.reference.localeCompare(b.reference)
+/**
+ * Most pressing first: urgent orders (an action due within 2 h, a promise at risk today, a pickup
+ * within 24 h that isn't ready), then the soonest deadline the rules know of, overdue first. Orders
+ * with no deadline left (a finished order's open records) come last, by their deciding date.
+ */
+export function byEmergency(a: BoardCard, b: BoardCard): number {
+  const urgent = (card: BoardCard) => Number(card.verdict?.urgent ?? false)
+  const due = (card: BoardCard) => card.verdict?.dueAt ?? null
+  const dueA = due(a), dueB = due(b)
+  return urgent(b) - urgent(a)
+    || Number(dueB !== null) - Number(dueA !== null)
+    || (dueA ?? "").localeCompare(dueB ?? "")
+    || (a.decisive?.start ?? "9").localeCompare(b.decisive?.start ?? "9")
+    || a.reference.localeCompare(b.reference)
 }
 
 /** State first (Blocked > Fixed, review it > In progress > Normal), then the order's time, oldest first. */
