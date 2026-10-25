@@ -3,6 +3,7 @@
 import Link from "next/link"
 import type { ReactNode } from "react"
 import { homeFor, PICKER_PATH } from "@/lib/persona"
+import { AgentAvatar } from "./agent-avatar"
 import { BriefingToasts, useBriefingFeed } from "./briefing"
 import { DemoClock } from "./demo-clock"
 import { BahnLogo } from "./logo"
@@ -46,5 +47,6 @@ export function Shell({ children, section, snapshotAt, fixed = false }: { childr
     </header>
     <div className="shell-main">{children}</div>
     {persona === "operator" && <BriefingToasts feed={briefing} />}
+    {persona === "operator" && <AgentAvatar />}
   </div>
 }
