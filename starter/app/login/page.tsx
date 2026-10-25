@@ -1,36 +1,40 @@
 import type { Metadata } from "next"
 import { Icon } from "@/app/components/icons"
-import { Shell } from "@/app/components/shell"
-import { PERSONA_ICON, PERSONA_LABEL, PERSONAS, type Persona } from "@/lib/persona"
+import { Windscreen, type WindscreenChoice } from "@/app/components/windscreen"
+import { PERSONA_LABEL, type Persona } from "@/lib/persona"
 import { currentPersona } from "@/lib/persona-server"
 import { choosePersona } from "./actions"
 
 export const metadata: Metadata = { title: "Choose a persona · Control Room" }
 
-const ABOUT: Record<Persona, { what: string }> = {
-  operator: { what: "Works the orders and makes the decisions." },
-  site: { what: "Answers calls to a pickup or delivery place." },
-  driver: { what: "Answers driver calls and sees open jobs." },
+const ABOUT: Record<Persona, string> = {
+  operator: "Works the orders and makes the decisions.",
+  site: "Answers calls to a pickup or delivery place.",
+  driver: "Answers driver calls and sees open jobs.",
 }
 
-/** The persona picker. No password: the demo site sits behind basic auth, and this only decides which screens you see. */
+/** Left to right on the arc: the Operator sits in the middle, straight ahead. */
+const SEATS: Persona[] = ["site", "operator", "driver"]
+
+/**
+ * The persona picker. No password: the demo site sits behind basic auth, and this only decides which screens you see.
+ * Site and Driver go to their phone page; the Operator goes to the start page (or the page they were sent away from).
+ */
 export default async function PickerPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const [{ next }, current] = await Promise.all([searchParams, currentPersona()])
-  return <Shell><main className="picker">
-    <header className="picker-head">
-      <h1 className="display">Choose a persona</h1>
-    </header>
-    <form action={choosePersona} className="picker-options">
-      {next && <input type="hidden" name="next" value={next} />}
-      {PERSONAS.map((persona) => <button key={persona} type="submit" name="persona" value={persona} className="picker-option" aria-current={persona === current ? "true" : undefined}>
-        <span className="picker-icon"><Icon name={PERSONA_ICON[persona]} size={22} /></span>
-        <span className="picker-text">
-          <b>{PERSONA_LABEL[persona]}{persona === current && <em>Current</em>}</b>
-          <span>{ABOUT[persona].what}</span>
-        </span>
-        <Icon name="arrow" className="picker-go" />
-      </button>)}
-    </form>
-    <p className="picker-note">Fictional data. No real phone numbers, customers or bookings.</p>
-  </main></Shell>
+  const choices: WindscreenChoice[] = SEATS.map((persona) => ({
+    key: persona, label: PERSONA_LABEL[persona], name: "persona", value: persona, title: ABOUT[persona],
+    current: persona === current, badge: persona === current ? <Icon name="check" size={14} /> : undefined,
+  }))
+  return <Windscreen
+    eyebrow="Control Room"
+    title={<>Hi, <em>Bahner</em>, who is driving today?</>}
+    hint="Fictional data · move your mouse to steer, then pick who you are"
+    label="Choose a persona"
+    choices={choices}
+    angles={[-40, 0, 40]}
+    goingTo="Taking the wheel as"
+    action={choosePersona}
+    hidden={next ? { next } : undefined}
+  />
 }
