@@ -24,7 +24,7 @@ Cheap-first work by agents under an explicit approval policy. Rule checks and a 
 
 - Orders move cars between dealers, sites, yards and private addresses across Europe (Finland, Sweden, Germany, Italy, France and others), by driver, train and ferry.
 - One order's records often disagree: customer messages, site notes, endpoint claims, tracking, documents, expenses, alerts and work items.
-- Vocabulary is fixed in `GLOSSARY.md` (Problem, In progress, Fixed, review it, Normal, Finished; proposal, approve, policy row, effect event, couldn't-check item, finding, call, tier, handover, digest). The UI uses these words.
+- Vocabulary is fixed in `GLOSSARY.md` (Needs action, Overview; Blocked, In progress, Fixed, review it, Normal, Finished; proposal, approve, policy row, effect event, couldn't-check item, finding, call, tier, handover, digest). The UI uses these words.
 - The snapshot time is 2026-10-21T09:00Z. Every time shown is relative to that, not the wall clock.
 
 ## Capabilities and Constraints

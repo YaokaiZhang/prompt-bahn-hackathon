@@ -193,18 +193,29 @@ export function ProposalsBlock({ orderId, proposals }: { orderId: string; propos
   </div>
 }
 
-/** One line per proposal, for the queue preview. */
+/**
+ * Proposals in the queue preview. The situation card above holds the buttons; a proposal
+ * waiting for the operator shows what a yes means (the script, what approving will do and
+ * the records that disagree), so it can be decided without opening the order.
+ */
 export function CompactProposals({ orderId, proposals }: { orderId: string; proposals: Proposal[] }) {
   if (!proposals.length) return null
   return <div className="checks-block">
     <h3>Proposals</h3>
     <ul className="checks-list">{proposals.map((proposal) => {
       const state = proposalState(proposal)
-      return <li className="check" key={proposal.id}>
+      const waiting = proposal.waitingOn === "operator"
+      const conflict = waiting ? proposal.evidence.filter((cited) => cited.role === "conflict") : []
+      return <li className="check" key={proposal.id} id={proposal.id}>
         <Icon name={KIND_ICON[proposal.kind]} className={`tone-${state.tone}`} />
         <div>
-          <div className="check-title"><Link className="name-link" href={`/orders/${encodeURIComponent(orderId)}#${proposal.id}`}>{proposal.title}</Link></div>
-          <div className="check-detail"><Pill tone={state.tone}>{state.label}</Pill> <span className="check-kind">{proposal.policyRow} · {proposal.decision}</span></div>
+          <div className="check-title">{proposal.title} <Pill tone={state.tone}>{state.label}</Pill></div>
+          {waiting ? <>
+            <blockquote className="proposal-script">{proposal.answer ?? proposal.script}</blockquote>
+            {proposal.status === "proposed" && proposal.onApprove && <p className="proposal-will"><b>Approving will:</b> {proposal.onApprove}</p>}
+            <p className="check-detail">{proposal.contact.name} · {proposal.whoPays} · <PolicyLink proposal={proposal} /></p>
+            {conflict.length > 0 && <ul className="cited-list">{conflict.map((cited, i) => <CitedRow key={`${cited.recordId}-${i}`} cited={cited} orderId={orderId} samePage={false} />)}</ul>}
+          </> : <div className="check-detail check-kind">{proposal.policyRow} · {proposal.decision}</div>}
         </div>
       </li>
     })}</ul>

@@ -22,15 +22,19 @@ export type SituationInput = {
   publication: Publication | null
 }
 
-/** A step the operator can take from the card. `open` goes to the order page at an anchor. */
+/**
+ * A step the operator can take from the card. `open` shows the evidence at an anchor (in the
+ * queue preview or on the order page); `full` marks the one that leaves for the whole record.
+ */
 export type Step = { label: string } & (
   | { do: "approve"; proposalId: string }
   | { do: "answer"; proposalId: string; command: "recordAnswer" | "answerQuestion"; prompt: string }
   | { do: "dismiss"; proposalId: string }
+  | { do: "instruct"; proposalId: string; prompt: string }
   | { do: "handover"; callId: string; prompt: string }
   | { do: "ring"; line: "site" | "driver" }
   | { do: "confirm" }
-  | { do: "open"; anchor: string }
+  | { do: "open"; anchor: string; full?: true }
 )
 
 export type Situation = {
@@ -153,7 +157,8 @@ const ringable = (line: CallLineView) => !!line.callee && (line.status === "to_c
 
 const ringStep = (line: CallLineView): Step => ({ label: `Ring ${shortName(line.callee?.name ?? line.callee?.handle)} live`, do: "ring", line: line.line })
 
-const openStep = (anchor = "checks", label = "Open the order"): Step => ({ label, do: "open", anchor })
+const openStep = (anchor: string, label: string): Step => ({ label, do: "open", anchor })
+const openOrder: Step = { label: "Open the order", do: "open", anchor: "checks", full: true }
 
 /** The work item an urgency reason names: "Due work item: Ask X; do Y" -> "Ask X". */
 function workItem(urgency: Urgency): string | null {
@@ -200,7 +205,7 @@ function needsAction(input: SituationInput): Situation {
       headline: summaryHeadline(note.summary, name),
       body: joinBody(`${name} handed it over from the ${handover.line} call`, `Suggestion: ${lower(stop(note.nextStep))}`),
       step,
-      others: uniqueSteps([...proposalSteps, ...lineSteps, ...dismissals, openStep("calls")], step),
+      others: uniqueSteps([...proposalSteps, ...lineSteps, ...dismissals, openStep("calls", "Read the call")], step),
     }
   }
 
@@ -211,27 +216,27 @@ function needsAction(input: SituationInput): Situation {
     const proposal = forOperator.find((row) => row.kind !== "change") ?? null
     const fromProposal = proposal ? proposalStep(proposal) : null
     const open = RULE_OPEN[rule.id]
-    const step = fromProposal ?? (open ? openStep(open.anchor, open.label) : openStep())
+    const step = fromProposal ?? (open ? openStep(open.anchor, open.label) : openOrder)
     const suggest = proposal ? `Suggestion: ${lower(stop(proposal.action))}` : suggestion ? `Suggestion: ${lower(suggestion)}` : null
     const more = decisions.length > 1 ? `Also: ${lower(ruleProblem(decisions[1]).headline)}` : null
     return {
       headline: problem.headline,
       body: joinBody(problem.situation, suggest ?? more),
       step,
-      others: uniqueSteps([...proposalSteps, ...lineSteps, ...dismissals, open ? openStep(open.anchor, open.label) : null, openStep()], step),
+      others: uniqueSteps([...proposalSteps, ...lineSteps, ...dismissals, open ? openStep(open.anchor, open.label) : null, openOrder], step),
     }
   }
 
   if (forOperator.length) {
     const proposal = forOperator[0]
-    const step = proposalStep(proposal) ?? openStep(proposal.id)
+    const step = proposalStep(proposal) ?? openStep(proposal.id, "Read the proposal")
     const situation = proposal.kind === "change" ? `Approving writes it to the order` : proposal.why
     const suggest = proposal.kind === "change" ? null : `Suggestion: ${lower(stop(proposal.action))}`
     return {
       headline: proposalHeadline(proposal),
       body: joinBody(situation, suggest),
       step,
-      others: uniqueSteps([...proposalSteps, ...lineSteps, ...dismissals, { label: "Give an instruction", do: "open", anchor: proposal.id }, openStep()], step),
+      others: uniqueSteps([...proposalSteps, ...lineSteps, ...dismissals, { label: "Give an instruction", do: "instruct", proposalId: proposal.id, prompt: "Your instruction to the agent" }, openOrder], step),
     }
   }
 
@@ -243,11 +248,11 @@ function needsAction(input: SituationInput): Situation {
       headline: unreachable ? `${name} can't be reached` : `The call with ${name} needs a person`,
       body: joinBody(line.latest?.reason ?? null, suggestion ? `Suggestion: ${lower(suggestion)}` : null),
       step: openStep("calls", "See the call"),
-      others: uniqueSteps([...lineSteps, openStep()], null),
+      others: uniqueSteps([...lineSteps, openOrder], null),
     }
   }
 
-  return { headline: "Needs your decision", body: null, step: openStep(), others: [] }
+  return { headline: "Needs your decision", body: null, step: openOrder, others: [] }
 }
 
 function confirm(input: SituationInput): Situation {
@@ -286,7 +291,7 @@ function inProgress(input: SituationInput): Situation {
   return { headline: "Agent at work", body: planned?.reason ? clip(sentence(planned.reason)) : null, step: null, others: [] }
 }
 
-/** The card for an order in Problem, Fixed, review it or In progress; null otherwise. */
+/** The card for an order in Blocked, Fixed, review it or In progress; null otherwise. */
 export function situationFor(input: SituationInput): Situation | null {
   if (input.group === "needs_action") return needsAction(input)
   if (input.group === "solved") return confirm(input)
