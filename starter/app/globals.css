@@ -1085,7 +1085,7 @@ details.more > :not(summary) { margin-top: 10px; }
 }
 
 /* Floating agent avatar (operator only): draggable, animated while the agent works */
-.agent-avatar { position: fixed; z-index: 40; width: 72px; height: 72px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: grab; touch-action: none; user-select: none; filter: drop-shadow(0 6px 14px rgba(18, 17, 14, 0.22)); }
+.agent-avatar { position: relative; width: 72px; height: 72px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: grab; touch-action: none; user-select: none; filter: drop-shadow(0 6px 14px rgba(18, 17, 14, 0.22)); }
 .agent-avatar.is-dragging { cursor: grabbing; }
 .agent-avatar:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
 .agent-avatar img { display: block; width: 100%; height: 100%; border-radius: 50%; pointer-events: none; }
@@ -1098,3 +1098,20 @@ details.more > :not(summary) { margin-top: 10px; }
 .agent-avatar-dot { position: absolute; top: -2px; right: -2px; display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: var(--r-pill); background: var(--red); box-shadow: 0 0 0 2px var(--birch); color: var(--birch); font-size: 12px; font-weight: 700; line-height: 1; }
 .agent-avatar-note { position: absolute; left: 50%; top: calc(100% + 4px); width: max-content; max-width: 220px; padding: 4px 10px; border-radius: var(--r-sm); background: var(--birch); box-shadow: inset 0 0 0 1px var(--red), 0 4px 12px -6px rgba(18, 17, 14, 0.3); color: var(--red-ink); font-size: 11px; font-weight: 600; line-height: 1.3; text-align: center; transform: translateX(-50%); }
 @media (prefers-reduced-motion: reduce) { .agent-avatar-working, .agent-avatar-working span { animation: none; } }
+.agent-avatar-root { position: fixed; z-index: 40; width: 72px; height: 72px; }
+.agent-tasks { position: absolute; width: 340px; max-height: min(420px, 60vh); overflow: auto; padding: 8px; border-radius: var(--r-md); background: var(--birch); box-shadow: inset 0 0 0 1px var(--sand-200), 0 12px 32px -12px rgba(18, 17, 14, 0.35); }
+.agent-tasks header { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px 8px; font-size: 14px; color: var(--ink); }
+.agent-tasks header span { font-size: 13px; font-weight: 600; color: var(--muted); }
+.agent-tasks ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.agent-tasks a { display: grid; gap: 2px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--sand-50); color: var(--ink); text-decoration: none; transition: background-color 0.2s var(--ease); }
+.agent-tasks a:hover, .agent-tasks a:focus-visible { background: var(--sand-100); }
+.agent-task-top { display: flex; align-items: center; gap: 8px; }
+.agent-task-top b { flex: 1; min-width: 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agent-task-meta { font-size: 12px; color: var(--muted); }
+.agent-task-text { font-size: 13px; color: var(--body); line-height: 1.35; }
+.agent-tasks-empty { margin: 0; padding: 4px 10px 10px; font-size: 13px; color: var(--muted); line-height: 1.4; }
+.highlight-toggle { border: 0; cursor: pointer; font-family: inherit; }
+.highlight-toggle:hover { background: var(--sand-100); }
+.highlight-toggle.is-on { background: var(--ink); color: var(--birch); }
+.highlight-toggle.is-on .icon, .highlight-mark { fill: currentColor; }
+.highlight-mark { flex: none; color: var(--orange); }
