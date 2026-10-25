@@ -5,6 +5,7 @@ import Link from "next/link"
 import type { ReactNode } from "react"
 import { fmtDateTime, fmtLong, fmtRange, relativeTo } from "@/lib/present/time"
 import type { Actor, AttentionItem, Fact, OrderRef, RecordView, Tone } from "@/lib/present/types"
+import { CLOSABLE_ITEM, CloseButton } from "./close"
 import { Icon } from "./icons"
 
 export function Pill({ tone = "neutral", children, dot = false }: { tone?: Tone; children: ReactNode; dot?: boolean }) {
@@ -105,7 +106,8 @@ export function OpenItems({ view, limit }: { view: RecordView; limit?: number })
         <div className={`item-title tone-${item.tone}`}>{item.title}</div>
         {item.detail && <div className="item-detail">{item.detail}</div>}
       </div>
-      <div className="item-side">{item.owner ?? "No owner"}{item.at && item.atLabel ? <><br />{capitalise(item.atLabel)} <When at={item.at} snapshotAt={view.snapshotAt} relative withZone={false} /></> : null}</div>
+      <div className="item-side">{item.owner ?? "No owner"}{item.at && item.atLabel ? <><br />{capitalise(item.atLabel)} <When at={item.at} snapshotAt={view.snapshotAt} relative withZone={false} /></> : null}
+        {CLOSABLE_ITEM[item.kind] && <div><CloseButton orderId={view.header.id} record={{ collection: CLOSABLE_ITEM[item.kind]!.collection, recordId: item.recordId }} verb={CLOSABLE_ITEM[item.kind]!.verb} /></div>}</div>
     </div>)}
     {limit && items.length > limit && <div className="item"><span /><div className="item-detail">{items.length - limit} more on the order page.</div></div>}
   </div>

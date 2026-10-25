@@ -16,7 +16,7 @@ const BY_LABEL: Record<string, string> = { agent: "Agent", policy: "Policy", ope
 const EFFECT_LABEL: Record<EffectType, string> = {
   contact_confirmed: "Contact confirmed", contact_changed: "Contact changed", window_changed: "Window changed",
   call_result_recorded: "Call result recorded", eta_reported: "ETA reported", customer_answer_recorded: "Customer answer recorded",
-  operator_answer_recorded: "Operator answer recorded", cost_approved: "Cost approved",
+  operator_answer_recorded: "Operator answer recorded", cost_approved: "Cost approved", record_closed: "Record closed",
 }
 
 function Supersedes({ ids }: { ids: string[] }) {

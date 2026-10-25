@@ -34,6 +34,7 @@ export type Step = { label: string } & (
   | { do: "handover"; callId: string; prompt: string }
   | { do: "ring"; line: "site" | "driver" }
   | { do: "confirm" }
+  | { do: "close"; records: { collection: string; recordId: string }[] }
   | { do: "open"; anchor: string; full?: true }
 )
 
@@ -158,6 +159,16 @@ const ringable = (line: CallLineView) => !!line.callee && (line.status === "to_c
 const ringStep = (line: CallLineView): Step => ({ label: `Ring ${shortName(line.callee?.name ?? line.callee?.handle)} live`, do: "ring", line: line.line })
 
 const openStep = (anchor: string, label: string): Step => ({ label, do: "open", anchor })
+
+/** Closes what keeps a finished order open (the CLOSE rule's records): accept the proofs, or close them all. */
+function closeStep(rule: RuleResult): Step | null {
+  const records = rule.id === "CLOSE" ? rule.sources.filter((source) => source.close) : []
+  if (!records.length) return null
+  const proofs = records.every((source) => source.collection === "proofs" && source.close === "Accept")
+  const label = proofs ? (records.length === 1 ? "Accept the proof" : `Accept the ${records.length} proofs`)
+    : records.length === 1 ? `${records[0].close}: ${lower(records[0].label)}` : `Close all ${records.length} records`
+  return { label, do: "close", records: records.map((source) => ({ collection: source.collection, recordId: source.id })) }
+}
 const openOrder: Step = { label: "Open the order", do: "open", anchor: "checks", full: true }
 
 /** The work item an urgency reason names: "Due work item: Ask X; do Y" -> "Ask X". */
@@ -216,14 +227,15 @@ function needsAction(input: SituationInput): Situation {
     const proposal = forOperator.find((row) => row.kind !== "change") ?? null
     const fromProposal = proposal ? proposalStep(proposal) : null
     const open = RULE_OPEN[rule.id]
-    const step = fromProposal ?? (open ? openStep(open.anchor, open.label) : openOrder)
+    const closing = closeStep(rule)
+    const step = fromProposal ?? closing ?? (open ? openStep(open.anchor, open.label) : openOrder)
     const suggest = proposal ? `Suggestion: ${lower(stop(proposal.action))}` : suggestion ? `Suggestion: ${lower(suggestion)}` : null
     const more = decisions.length > 1 ? `Also: ${lower(ruleProblem(decisions[1]).headline)}` : null
     return {
       headline: problem.headline,
       body: joinBody(problem.situation, suggest ?? more),
       step,
-      others: uniqueSteps([...proposalSteps, ...lineSteps, ...dismissals, open ? openStep(open.anchor, open.label) : null, openOrder], step),
+      others: uniqueSteps([...proposalSteps, ...lineSteps, ...dismissals, closing, open ? openStep(open.anchor, open.label) : null, openOrder], step),
     }
   }
 

@@ -9,6 +9,7 @@
 
 import type { Bundle, RelatedRow } from "@/lib/present/bundle"
 import { bool, finalDeliveryPoint, obj, originPickupPoint, rows, str } from "@/lib/present/bundle"
+import { CLOSING, type ClosableCollection } from "@/lib/present/closing"
 import { fmtDateTime } from "@/lib/present/time"
 import { endpointContactType, pickupCallAllowed } from "./contacts"
 import { nextChecksOf, type NextCheck } from "./due"
@@ -296,18 +297,21 @@ function countLabels(sources: SourceRef[]): string {
 function nothingOpen(facts: Facts): RuleResult {
   const title = RULE_CATALOGUE.CLOSE.title
   const { bundle } = facts
+  // Each open record carries the operator's verb for closing it (lib/present/closing.ts).
+  const closable = (collection: ClosableCollection, row: RelatedRow, label: string): SourceRef =>
+    ({ ...ref(collection, row, label), close: CLOSING[collection].verb(row.details, str(row.details.status)) })
   const open: SourceRef[] = [
-    ...rows(bundle, "proofs").filter((row) => OPEN_PROOF.has(String(row.details.status))).map((row) => ref("proofs", row, `Proof ${String(row.details.status).toLowerCase()}`)),
+    ...rows(bundle, "proofs").filter((row) => OPEN_PROOF.has(String(row.details.status))).map((row) => closable("proofs", row, `Proof ${String(row.details.status).toLowerCase()}`)),
     ...rows(bundle, "documents").filter((row) => row.details.required === true && OPEN_DOCUMENT.has(String(row.details.status)))
-      .map((row) => ref("documents", row, `${String(row.details.kind).toLowerCase().replace(/_/g, " ")} ${String(row.details.status).toLowerCase()}`)),
-    ...rows(bundle, "endpoint_claims").filter((row) => row.details.resolution_status === "OPEN").map((row) => ref("endpoint_claims", row, "Unresolved claim")),
-    ...bundle.alerts.filter((alert) => OPEN_ALERT.has(alert.status)).map((alert) => ({ collection: "alerts", id: alert.id, label: `Alert ${alert.status.toLowerCase()}` })),
-    ...rows(bundle, "work_items").filter((row) => OPEN_WORK.has(String(row.details.status))).map((row) => ref("work_items", row, "Open work item")),
-    ...rows(bundle, "incidents").filter((row) => !str(row.details.resolved_at)).map((row) => ref("incidents", row, "Open incident")),
-    ...rows(bundle, "agent_proposals").filter((row) => OPEN_PROPOSAL.has(String(row.details.status))).map((row) => ref("agent_proposals", row, "Proposal not settled")),
-    ...rows(bundle, "custody_assets").filter((row) => str(row.details.next_action)).map((row) => ref("custody_assets", row, "Custody follow-up")),
+      .map((row) => closable("documents", row, `${String(row.details.kind).toLowerCase().replace(/_/g, " ")} ${String(row.details.status).toLowerCase()}`)),
+    ...rows(bundle, "endpoint_claims").filter((row) => row.details.resolution_status === "OPEN").map((row) => closable("endpoint_claims", row, "Unresolved claim")),
+    ...bundle.alerts.filter((alert) => OPEN_ALERT.has(alert.status)).map((alert) => ({ collection: "alerts", id: alert.id, label: `Alert ${alert.status.toLowerCase()}`, close: CLOSING.alerts.verb(alert.details, alert.status) })),
+    ...rows(bundle, "work_items").filter((row) => OPEN_WORK.has(String(row.details.status))).map((row) => closable("work_items", row, "Open work item")),
+    ...rows(bundle, "incidents").filter((row) => !str(row.details.resolved_at)).map((row) => closable("incidents", row, "Open incident")),
+    ...rows(bundle, "agent_proposals").filter((row) => OPEN_PROPOSAL.has(String(row.details.status))).map((row) => closable("agent_proposals", row, "Proposal not settled")),
+    ...rows(bundle, "custody_assets").filter((row) => str(row.details.next_action)).map((row) => closable("custody_assets", row, "Custody follow-up")),
     ...rows(bundle, "work_assignments").filter((row) => row.details.order_id === bundle.order.id && LIVE_DUTY.has(String(row.details.status)))
-      .map((row) => ref("work_assignments", row, "A car of this order is still on the road")),
+      .map((row) => closable("work_assignments", row, "A car of this order is still on the road")),
   ]
   if (!open.length) return result("CLOSE", "strong", title, "pass", "No proof, document, claim, alert, work item, proposal, custody follow-up or trade-in is open.", null, [])
   return result("CLOSE", "strong", title, "fail",
