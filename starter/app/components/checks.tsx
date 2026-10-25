@@ -11,7 +11,7 @@ import { ReviewBlock } from "./review"
 import { More, Pill } from "./ui"
 
 export const GROUP_LABEL: Record<Group, string> = {
-  needs_action: "Needs action", in_progress: "In progress", solved: "Solved", normal: "Normal", done: "Finished",
+  needs_action: "Needs action", in_progress: "In progress", solved: "Confirm before publishing", normal: "Normal", done: "Finished",
 }
 
 export function groupTone(group: Group, urgent = false): Tone {

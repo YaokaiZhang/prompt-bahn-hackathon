@@ -110,8 +110,8 @@ export type Command =
    */
   | { type: "publish"; orderId: string }
   /**
-   * The operator confirms a Solved order's call results (spec .scratch/publishing). An
-   * order not on the market yet is published with the same yes.
+   * The operator approves a Solved order (spec .scratch/publishing): its call results are
+   * confirmed and the order is published with the same yes. Only orders not published yet are Solved.
    */
   | { type: "confirmChanges"; orderId: string }
   /**
@@ -382,7 +382,7 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     const published = byOrder(await store.readPublicationEvents())
     return (await workAt(at)).map(({ bundle, evaluation, review, work, calls, effects }) => {
       const events = published.get(bundle.order.id) ?? []
-      // Call results the operator has not confirmed make the order Solved (when nothing else is open).
+      // Call results the operator has not confirmed make an order not published yet Solved (when nothing else is open).
       const pending = pendingChanges(bundles.get(bundle.order.id)!, effects, calls.calls, events)
       const verdict = verdictFor({ ...evaluation, planned: calls.planned }, review, { ...work, calls: { lines: calls.lines, carried: calls.carried }, solved: pending.map(solvedText) })
       return {
@@ -432,13 +432,12 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     await store.appendPublicationEvents([...(order.group === "solved" ? [confirmedEvent(order, at)] : []), publishedEvent(order, at, "operator")])
   }
 
-  /** The operator's yes on a Solved order: its call results are confirmed, and it is published if it is not on the market yet. */
+  /** The operator's yes on a Solved order (never published yet): its call results are confirmed and it is published. */
   async function confirmChanges(orderId: string): Promise<void> {
     const order = await orderNow(orderId)
     if (order.group !== "solved" || !order.publication.pending.length) throw new Error(`${order.reference} has no call results waiting for a yes`)
     const at = await clock()
-    const publishToo = order.publication.inFlow && !order.publication.published
-    await store.appendPublicationEvents([confirmedEvent(order, at), ...(publishToo ? [publishedEvent(order, at, "operator")] : [])])
+    await store.appendPublicationEvents([confirmedEvent(order, at), publishedEvent(order, at, "operator")])
   }
 
   /**

@@ -22,7 +22,7 @@ const UNPOSTED_LANES = new Set(["intake", "ready"])
 
 /**
  * - `unposted`: not on the market yet and not ready to publish (still being checked, or waiting on a person);
- * - `confirm`: not on the market yet, Solved: confirm before publishing;
+ * - `confirm`: not on the market yet, Solved: waiting for publication approval;
  * - `market`: on the driver market (published here, or Finding a driver in the data);
  * - `posted`: further along in the data (driver assigned, moving, delivered, cancelled).
  */
@@ -200,11 +200,15 @@ function confirmedIds(events: StoredPublicationEvent[]): Set<string> {
 }
 
 /**
- * The call results waiting for the operator's yes, as rewrites: the agent's own call
- * results (not one the operator wrote, such as a closed handover), not confirmed yet.
+ * The call results waiting for the operator's yes before publishing, as rewrites: the
+ * agent's own call results (not one the operator wrote, such as a closed handover), not
+ * confirmed yet. Only an order not published yet has any: once an order is on the market
+ * or past it, call results are committed as they are, and the order is never Solved
+ * (orders not published and orders on the road are kept apart).
  * `raw` is the snapshot bundle, so "before" reads the records as they were.
  */
 export function pendingChanges(raw: Bundle, effects: EffectEvent[], calls: Call[], events: StoredPublicationEvent[]): SolvedChange[] {
+  if (!isUnposted(raw) || events.some((event) => event.kind === "published")) return []
   const confirmed = confirmedIds(events)
   // A result a newer version replaced (the operator's closed handover, a later ETA) is history, not a change to confirm.
   const replaced = new Set(effects.flatMap((event) => event.supersedes))

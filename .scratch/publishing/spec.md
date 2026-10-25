@@ -27,11 +27,12 @@ Before an order in Finding a driver reaches drivers, a **demand filter** decides
 6. As an operator, I want each settled point shown as a rewrite (before: what the records said, after: what the call says now), so that I can judge the change in seconds.
 7. As an operator, I want the transcript of each call that settled a point, so that I can check what was actually said.
 8. As an operator, I want one "Approve and publish" button, so that confirming the changes and publishing is one decision.
-9. As an operator, I want a Solved order already on the market to only need my confirmation, so that the group means the same thing for every order.
-10. As an operator, I want an order to come back to Solved when a later call changes something new, so that every call result is confirmed once.
+9. As an operator, I want orders on the market or on the road never to be Solved, so that orders not published yet and orders on the road stay completely apart.
+10. As an operator, I want a call result on an order not published yet to be confirmed once, with the approval that publishes it.
 11. As an operator, I want to publish a Normal order myself, so that I can post it even when the reviewer has not run (no model key).
 12. As an operator, I want delivered and cancelled orders in a Finished group, so that they are not confused with Solved.
-13. As an operator, I want the lane board to show "Confirm before publishing" between "Ready to post" and "Finding a driver", and published orders under "Finding a driver", so that the board shows the real stage.
+13. As an operator, I want a "Not normal" board with one column each for Needs action, Confirm before publishing and In progress, soonest deadline first, so that everything needing attention is in one place.
+13a. As an operator, I want a Pipeline board with every order in five columns (Unpublished, Waiting for publication approval, Finding a driver, Driver assigned, Done) and a small state tag on each card, ranked Needs action, Confirm before publishing, In progress, Normal, then by when the order was created, so that I see where every order is.
 14. As an operator, I want every order in Finding a driver checked by the demand filter, so that long jobs are recognised before drivers see them.
 15. As an operator, I want the filter to give its reasons (countries, hours of driving, ferry or train), so that I can see why a job counts as demanding.
 16. As an operator, I want a published order to reach drivers only after the filter, and for demanding jobs after the plan, so that a driver never sees a demanding job without its plan.
@@ -49,16 +50,20 @@ Before an order in Finding a driver reaches drivers, a **demand filter** decides
 
 - **Who is in the flow.** Only orders whose dataset lane is New orders or Ready to post can be published. Orders already Finding a driver are on the market and go straight to the filter and planner. Orders with a driver or further along keep their dataset lane.
 - **Groups.** `needs_action`, `in_progress`, `solved`, `normal`, `done` (shown as "Finished"). Precedence: Needs action, then In progress, then Finished (finished with nothing open), then Solved, then Normal.
-- **Solved.** The order has call results the agent committed (`call_result_recorded` or `eta_reported`, by the agent) that the operator has not confirmed, and nothing else is open. Results the operator wrote (a closed handover) need no confirmation.
+- **Solved.** Only an order not published yet (dataset lane New orders or Ready to post, no publication) can be Solved. It must have call results the agent committed (`call_result_recorded` or `eta_reported`, by the agent) that the operator has not confirmed, and nothing else may be open. On orders on the market or on the road, call results are committed as they are and need no approval. Results the operator wrote (a closed handover), and results a newer version replaced, need no confirmation.
 - **Rewrite.** For each pending call result: the point it settles (its fact label), "before" (the records it superseded, read as one line each from the snapshot, plus the rule or check that asked), "after" (the claim or reported ETA), and the call's transcript.
 - **Publications are their own append-only store table** (`cr_publication_events`), not effect events. Effect events change the order's records, which re-reviews the order. Publishing changes no record, only the order's stage. Event kinds: `published`, `confirmed` (with the effect ids it confirms), `filtered` (the filter's result), `planned` (the plan), `plan_failed`.
 - **Policy (ADR 0003).** The agent may publish a Normal, reviewed order alone. Confirming call results, and so publishing a Solved order, is the operator's.
 - **Commands.**
   - `publish` (operator; a Normal or Solved order not on the market; for Solved it also confirms).
-  - `confirmChanges` (operator; a Solved order; publishes it when it is not on the market yet).
+  - `confirmChanges` (operator; a Solved order; confirms its call results and publishes it).
   - `runPublishing` (the agent's loop: publish reviewed Normal orders, filter every order in Finding a driver, plan demanding ones).
 - **The pump.** The server runs `runPublishing` on its own interval, next to the call pump.
-- **Display lane.** An unposted order that is published shows as Finding a driver. One that is Solved and not published shows as Confirm before publishing. The dataset's lane stays as seeded (ADR 0002).
+- **Display lane.** An unposted order that is published shows as Finding a driver. One that is Solved and not published shows as Waiting for publication approval. The dataset's lane stays as seeded (ADR 0002).
+- **Boards.**
+  - `/` is "Not normal": three columns (Needs action, Confirm before publishing, In progress), each sorted by the rules' earliest deadline.
+  - `/board` is "Pipeline": every order in five columns. Driver assigned holds both booked and moving orders; Done holds delivered and cancelled ones. Within a column, cards sort by state tag (Needs action, Confirm before publishing, In progress, Normal), then by creation time, oldest first. Cards in Done whose order is finished carry no tag.
+  - A card opens the order page. Batch approval opens above the columns.
 - **Demand filter.** Deterministic, with reasons:
   - cross-country: the pickup and delivery countries differ;
   - long drive: route km / 75 km/h > 12 h;
@@ -81,7 +86,8 @@ Before an order in Finding a driver reaches drivers, a **demand filter** decides
   - an unreviewed one is not;
   - a Solved one waits;
   - `confirmChanges` publishes it;
-  - a new call result brings it back to Solved.
+  - a call result after publishing does not make it Solved again;
+  - orders on the market or on the road are never Solved.
 - Filter: pure tests on named orders (CD-421053 cross-country, CD-420692 long drive, CD-420257 ferry, CD-420015 not demanding).
 - Planner: template plan without a model; a scripted gateway reply is validated and cached; a bad reply falls back to the template.
 - Real-model checks only on one or two named orders.

@@ -167,8 +167,10 @@ export type BoardCard = {
   decisive: KeyDate | null
   work: WorkLine[]
   updatedAt: string
-  /** Group, reason and urgency from the engine; set on the home queue, absent on entity pages. */
-  verdict?: { group: Group; reason: string; urgent: boolean; urgency: string | null }
+  /** When the order was created: the pipeline board ranks by it within a state. */
+  createdAt: string
+  /** Group, reason and urgency from the engine; set on the home queue, absent on entity pages. `dueAt`: the earliest deadline the rules know of. */
+  verdict?: { group: Group; reason: string; urgent: boolean; urgency: string | null; dueAt: string | null }
 }
 
 export type Overview = {

@@ -62,18 +62,17 @@ export function PublishingBlock({ orderId, publication, group, calls, reviewed }
     sendPublishing(action, orderId).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Nothing changed")).finally(() => setBusy(false))
   }
   const pending = group === "solved" ? publication.pending : []
-  const publishesToo = publication.inFlow && !publication.published
   const canPublish = publication.stage === "unposted" && group === "normal"
   if (publication.stage === "posted" && !pending.length) return null
   return <div className="checks-block publishing" id="publishing">
-    <h3>{pending.length ? (publishesToo ? "Confirm before publishing" : "Confirm the agent's changes") : "Driver market"}</h3>
+    <h3>{pending.length ? "Confirm before publishing" : "Driver market"}</h3>
     <p className="publishing-stage"><Icon name="offer" className={publication.stage === "market" ? "tone-accent" : "tone-neutral"} />{STAGE_TEXT(publication)}</p>
     {publication.check?.demanding && <p className="publishing-filter">{publication.check.reasons.map((reason) => <Pill key={reason} tone="warn">{reason}</Pill>)}</p>}
     {pending.length > 0 && <>
-      <p className="publishing-note">The agent&apos;s calls settled {pending.length === 1 ? "this point" : `these ${pending.length} points`}. Check each rewrite against the call, then approve{publishesToo ? " to publish the order to drivers" : ""}.</p>
+      <p className="publishing-note">The agent&apos;s calls settled {pending.length === 1 ? "this point" : `these ${pending.length} points`}. Check each rewrite against the call, then approve to publish the order to drivers.</p>
       <ol className="rewrites">{pending.map((change) => <Rewrite key={change.effectId} change={change} call={calls.find((call) => call.id === change.call?.id) ?? null} />)}</ol>
       <div className="publishing-actions">
-        <button type="button" className="btn btn-primary btn-s" disabled={busy} onClick={() => act("confirm")}><Icon name="check" />{publishesToo ? "Approve and publish" : "Confirm changes"}</button>
+        <button type="button" className="btn btn-primary btn-s" disabled={busy} onClick={() => act("confirm")}><Icon name="check" />Approve and publish</button>
       </div>
     </>}
     {canPublish && <div className="publishing-actions">

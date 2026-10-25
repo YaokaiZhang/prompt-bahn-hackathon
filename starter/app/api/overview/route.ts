@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
       // Publishing moves orders not on the market yet: Confirm before publishing, then Finding a driver.
       card.displayLane = order.publication.lane
       const first = order.urgency.reasons[0]
-      card.verdict = { group: order.group, reason: order.reason, urgent: order.urgency.urgent, urgency: first?.text ?? null }
+      card.verdict = { group: order.group, reason: order.reason, urgent: order.urgency.urgent, urgency: first?.text ?? null, dueAt: order.urgency.dueAt }
     }
     return card
   })

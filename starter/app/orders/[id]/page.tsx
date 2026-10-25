@@ -35,7 +35,7 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
   }, [detail])
 
   return <Shell section="orders" snapshotAt={detail?.view.snapshotAt ?? null}><main className="page">
-    <nav className="crumbs" aria-label="Breadcrumb"><Link href={detail ? `/?order=${detail.order.id}` : "/"}>Orders</Link><span>/</span><span>{detail?.view.header.reference ?? id}</span></nav>
+    <nav className="crumbs" aria-label="Breadcrumb"><Link href="/">Orders</Link><span>/</span><span>{detail?.view.header.reference ?? id}</span></nav>
     {error && <div className="state" role="alert"><h1 className="display">{error}</h1><p>The record could not be opened. <Link className="name-link" href="/">Back to orders</Link></p></div>}
     {!error && !detail && <div aria-busy="true"><div className="hero-photo" /><p className="queue-note">Loading order…</p></div>}
     {detail && <OrderPane detail={detail} />}

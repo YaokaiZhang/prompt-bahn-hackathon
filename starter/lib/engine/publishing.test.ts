@@ -197,14 +197,28 @@ eachStore("a Solved order waits in Confirm before publishing until the operator 
   assert.equal(published.publication.published?.by, "operator")
   assert.deepEqual(published.publication.pending, [])
 
-  // A later call result is new: Solved again, and confirming it only confirms (already published).
+  // Once published, a later call result is committed as it is: the order is never Solved again.
   await callResult(engine, "CD-420010", "Pickup moved to the back gate")
-  const again = await order(engine, "CD-420010")
-  assert.equal(again.group, "solved")
-  assert.equal(again.publication.stage, "market")
-  await engine.apply({ type: "confirmChanges", orderId: again.id })
-  assert.equal((await order(engine, "CD-420010")).group, "normal")
-  await assert.rejects(engine.apply({ type: "confirmChanges", orderId: again.id }), /no call results waiting/)
+  const later = await order(engine, "CD-420010")
+  assert.equal(later.group, "normal")
+  assert.deepEqual(later.publication.pending, [])
+  await assert.rejects(engine.apply({ type: "confirmChanges", orderId: later.id }), /no call results waiting/)
+})
+
+test("orders on the market or on the road are never Solved: their call results need no approval", async () => {
+  const engine = await testEngine()
+  await engine.apply({ type: "runCalls" })
+  for (let step = 0; step < 6; step += 1) {
+    await engine.apply({ type: "advanceClock", minutes: 30 })
+    await engine.apply({ type: "runCalls" })
+  }
+  const { orders } = await engine.state()
+  const solved = orders.filter((row) => row.group === "solved")
+  assert.ok(solved.length > 0, "CD-420516 is")
+  assert.ok(solved.every((row) => row.publication.inFlow && !row.publication.published), "only orders not published yet")
+  const onRoad = await order(engine, "CD-420806")
+  assert.ok(onRoad.effects.some((event) => event.type === "call_result_recorded" && event.by === "agent"), "the driver call's result is committed")
+  assert.equal(onRoad.group, "normal")
 })
 
 eachStore("the operator publishes Normal or Solved orders not on the market yet, and nothing else", async (engine) => {

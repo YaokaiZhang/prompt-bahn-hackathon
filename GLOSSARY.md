@@ -77,7 +77,7 @@ The group of orders where an agent action is running or waiting on a reply.
 The group of orders that are checked normal and not finished.
 
 **Solved**:
-The group of orders where the agent's calls settled the open points and the operator has not confirmed the call results yet. An order not on the market yet waits in Confirm before publishing.
+The group of orders not published yet where the agent's calls settled the open points and the operator has not confirmed the call results yet. Shown as the tag "Confirm before publishing"; the order waits in Waiting for publication approval. Orders on the market or on the road are never Solved.
 _Avoid_: Done, resolved
 
 **Finished**:
@@ -87,7 +87,10 @@ _Avoid_: Done
 ## Publishing
 
 **Confirm before publishing**:
-The stage of a Solved order not on the driver market yet. The operator reads each rewrite and the call transcripts; their approval confirms the changes and publishes the order.
+The state tag of a Solved order; its pipeline stage is Waiting for publication approval. The operator reads each rewrite and the call transcripts; their approval confirms the changes and publishes the order.
+
+**Pipeline**:
+Every order by stage: Unpublished, Waiting for publication approval, Finding a driver, Driver assigned (booked or moving), Done (delivered or cancelled). Its state (Needs action, Confirm before publishing, In progress, Normal) is a small tag on the card.
 
 **Rewrite**:
 One call result shown as before (what the records said) and now (what the person said on the call), with the call's transcript.
