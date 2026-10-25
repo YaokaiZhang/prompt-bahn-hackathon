@@ -713,6 +713,26 @@ details.more > :not(summary) { margin-top: 10px; }
 .mail-read .msg { background: var(--birch); }
 .mail-read .msg.internal { background: var(--orange-bg); }
 .mail-messages { margin-top: 24px; }
+/* The inbox: linking an order, the agent's suggestion and the reply. */
+.mail-link { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+.mail-link-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.mail-link-form .field { height: 40px; width: 160px; padding: 0 16px; border: 0; background: var(--birch); box-shadow: inset 0 0 0 1px var(--sand-200); font: inherit; font-size: 15px; color: var(--ink); }
+.mail-link .close-error { flex-basis: 100%; }
+.mail-linked { display: inline-flex; flex-wrap: wrap; gap: 4px 14px; }
+.mail-linked-order { display: inline-flex; align-items: baseline; gap: 8px; }
+.mail-linked-order .btn-link { font-size: 13px; }
+.mail-agent { margin-top: 20px; padding: 20px 22px 22px; border-radius: var(--r-lg); background: var(--birch); box-shadow: inset 0 0 0 1px var(--sand-100); }
+.mail-agent-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+.mail-agent-head h3 { font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
+.mail-agent-source { font-size: 13px; color: var(--muted); }
+.mail-agent-head .mail-agent-source { margin-left: auto; }
+.mail-agent-note { margin-top: 8px; font-size: 15.5px; color: var(--body); max-width: 70ch; }
+.mail-agent-orders { display: grid; gap: 10px; margin-top: 14px; }
+.mail-agent-orders .sit { height: auto; }
+.mail-agent-draft { margin-top: 14px; padding: 16px 18px; border-radius: var(--r-md); background: var(--sand-50); }
+.mail-agent-draft .sit-actions { padding-top: 12px; }
+.mail-agent-label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.mail-reply { margin-top: 20px; }
 
 /* ── Briefing ───────────────────────────────────────────────────────────── */
 .nav a .nav-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; margin-left: 7px; padding: 0 6px; border-radius: var(--r-pill); background: var(--ink); color: var(--birch); font-size: 12px; font-weight: 700; line-height: 1; }

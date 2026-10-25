@@ -136,7 +136,8 @@ const EXPLICIT: Record<string, string> = {
   // support inbox
   PENDING_IDENTITY: "Pending identity", LINK_ONE_ORDER: "Linked to one order", LINK_SEVERAL_ORDERS: "Linked to several orders",
   ANSWER_GENERAL_POLICY: "Answered as general policy", SENDER_CORRECTION: "a correction from the sender",
-  DOCUMENT_READY: "the document to be ready", PAYOUT_RECONCILIATION: "payout reconciliation",
+  DOCUMENT_READY: "the document to be ready", ORDER_REFERENCE: "the order reference from the sender",
+  OPERATOR_LINKED: "Linked by the operator", PAYOUT_RECONCILIATION: "payout reconciliation",
   order_status: "Order status", document_request: "Document request", general_policy: "General policy",
 }
 
