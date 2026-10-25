@@ -30,3 +30,8 @@ Open http://localhost:3000.
 The seed does not run the reviewer. With `OPENROUTER_API_KEY` set, review a few orders with
 `npm run review:sweep -- CD-420516 CD-420437`, or opt in to the full one-time sweep of every order
 (it calls the model on all 100) with `npm run db:seed -- --review`.
+
+For a live demo, run `starter/scripts/start.sh --demo`. It does everything above, then reviews
+the demo orders (only the ones not reviewed yet call the model) and resets the demo clock to 09:00.
+Run it again just before the demo starts. The Site and Driver teammates should open the phone page
+only when the demo reaches their call: a call rings out 30 s after the page opens.
