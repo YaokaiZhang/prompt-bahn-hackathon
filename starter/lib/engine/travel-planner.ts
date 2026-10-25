@@ -15,9 +15,9 @@ import type { Effort, ModelGateway } from "@/lib/reviewer/gateway"
 import { DEFAULT_REVIEWER_MODEL } from "@/lib/reviewer/reviewer"
 import { jobWindows, type DemandCheck } from "./publishing"
 
-export const PLAN_VERSION = "travel-plan-v2"
-/** A driver should not drive more than this in one day; longer drives get a night stop. */
-export const DAILY_DRIVE_HOURS = 9
+export const PLAN_VERSION = "travel-plan-v3"
+/** Only a drive of more than this many hours of continuous driving gets a hotel night; shorter drives never do. */
+export const HOTEL_DRIVE_HOURS = 12
 const PLAN_TIMEOUT_MS = 60_000
 
 export type LegKind = "train" | "ferry" | "hotel" | "drive" | "flight" | "local"
@@ -120,9 +120,9 @@ export function templatePlan(input: PlanInput, note: string): TravelPlan {
   const pickupAt = input.pickupWindow?.start ?? null
   legs.push({ kind: "train", from: "Driver's home area", to: input.from.city, when: `Before the pickup slot (${hhmm(pickupAt)})`, costEur: 40, note: "Rough fare; the driver's home is not known before a driver takes the job." })
   const hours = input.driveHours
-  const hotel = hours !== null && hours > DAILY_DRIVE_HOURS
+  const hotel = hours !== null && hours > HOTEL_DRIVE_HOURS
   legs.push({ kind: "drive", from: input.from.city, to: input.to.city, when: `From pickup (${hhmm(pickupAt)})`, costEur: 0, note: hours !== null ? `About ${hours} h for ${input.km} km.` : "Route length not recorded." })
-  if (hotel) legs.push({ kind: "hotel", from: "About halfway", to: "About halfway", when: "Night after pickup", costEur: 90, note: `More than ${DAILY_DRIVE_HOURS} h of driving: one night stop.` })
+  if (hotel) legs.push({ kind: "hotel", from: "About halfway", to: "About halfway", when: "Night after pickup", costEur: 90, note: `More than ${HOTEL_DRIVE_HOURS} h of driving: one night stop.` })
   if (input.crossings.some((text) => text.includes("ferry"))) {
     const ferry = input.quotes.filter((quote) => quote.kind === "FERRY" && quote.eur !== null && quote.status !== "SOLD_OUT").sort((a, b) => a.eur! - b.eur!)[0]
     legs.push(ferry
@@ -133,7 +133,7 @@ export function templatePlan(input: PlanInput, note: string): TravelPlan {
   const totalEur = legs.reduce((sum, leg) => sum + leg.costEur, 0)
   return {
     summary: `Train to ${input.from.city}, drive to ${input.to.city}${hotel ? " with one night stop" : ""}${legs.some((leg) => leg.kind === "ferry") ? " and a ferry crossing" : ""}, then train home.`,
-    hotel: { needed: hotel, why: hotel ? `About ${hours} h of driving, more than ${DAILY_DRIVE_HOURS} h in a day.` : "The drive fits in one day." },
+    hotel: { needed: hotel, why: hotel ? `About ${hours} h of driving, more than ${HOTEL_DRIVE_HOURS} h of continuous driving.` : `The drive is ${HOTEL_DRIVE_HOURS} h or less: no hotel.` },
     legs, totalEur, budgetEur: input.budgetEur, withinBudget: totalEur <= input.budgetEur,
     caveats: ["Rough template prices, not quotes. Nothing is booked."],
     source: "template", model: null, cost: 0, cached: false, note,
@@ -144,9 +144,10 @@ const SYSTEM = `You are the travel planner of a car-delivery company. A freelanc
 
 You receive the job as JSON: pickup and delivery places, the pickup slot and delivery promise (UTC with the local zone), route length and estimated hours of driving, why the job counts as demanding, the order's recorded travel quotes, the company's ferry terminals with city-to-terminal road estimates, and the driver's travel budget in EUR.
 
-Plan, in order: getting the driver to the pickup city in time for the pickup slot (train, or a flight only when much cheaper or faster), the drive itself, a hotel night when the drive is more than ${DAILY_DRIVE_HOURS} hours in a day or a ferry timetable forces a stop, ferry or train tickets the route needs, and the way home after delivery.
+Plan, in order: getting the driver to the pickup city in time for the pickup slot (train, or a flight only when much cheaper or faster), the drive itself, a hotel night only when the drive from pickup to delivery needs more than ${HOTEL_DRIVE_HOURS} hours of continuous driving, ferry or train tickets the route needs, and the way home after delivery.
 
 Rules:
+- Hotels: recommend one only when the estimated hours of driving are more than ${HOTEL_DRIVE_HOURS}. Otherwise set hotel.needed to false and plan no hotel leg, even with a ferry or train crossing or a late arrival.
 - Use the recorded quotes when they fit (same crossing, open, before the delivery promise); never pick a quote marked SOLD_OUT.
 - Prices are rough whole euros. Say "rough" in a leg's note when you estimate.
 - Keep the total within the budget when you can; when you cannot, choose the cheapest workable plan and say so in the caveats.
@@ -193,6 +194,8 @@ export function parsePlan(content: string | null, input: PlanInput): Omit<Travel
     }
   })
   if (hotel.needed && !legs.some((leg) => leg.kind === "hotel")) throw new PlanRejected("a hotel is needed but no hotel leg is planned")
+  const shortDrive = input.driveHours !== null && input.driveHours <= HOTEL_DRIVE_HOURS
+  if (shortDrive && (hotel.needed || legs.some((leg) => leg.kind === "hotel"))) throw new PlanRejected(`a hotel is planned for a drive of ${HOTEL_DRIVE_HOURS} h or less`)
   const totalEur = legs.reduce((sum, leg) => sum + leg.costEur, 0)
   const caveats = Array.isArray(parsed.caveats) ? parsed.caveats.filter((item): item is string => typeof item === "string").map((item) => item.slice(0, 400)).slice(0, 6) : []
   return {

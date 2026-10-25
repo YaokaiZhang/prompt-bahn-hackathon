@@ -64,9 +64,6 @@ function CostMeter({ call }: { call: Call }) {
       <span className="call-meter-figure"><span className="call-meter-label">This call</span><b>{eur(cost.totalEur)}</b></span>
       <span className="call-meter-figure"><span className="call-meter-label">Same call by an operator</span><b>{eur(cost.operatorEur)}</b></span>
     </div>
-    <p className="call-meter-parts">
-      Model {usd(cost.modelUsd)} · phone {clock(cost.phoneSeconds)} at {eur(cost.rates.phonePerMinuteEur)}/min = {eur(cost.phoneEur)} · ringing {clock(cost.ringSeconds)} · operator at {eur(cost.rates.operatorPerMinuteEur)}/min, one minute at least
-    </p>
   </div>
 }
 
@@ -138,15 +135,15 @@ function HandoverView({ call }: { call: Call }) {
       <dt>Summary</dt><dd>{handover.summary}</dd>
       <dt>Open question</dt><dd>{handover.question}</dd>
       <dt>Next step</dt><dd>{handover.nextStep}</dd>
-      {closed && <><dt>You learned</dt><dd>{closed.result}<span className="call-line-meta">Recorded {demoTime(closed.at)} as the call&apos;s result</span></dd></>}
+      {closed && <><dt>You learned</dt><dd>{closed.result}<span className="call-line-meta">{demoTime(closed.at)}</span></dd></>}
     </dl>
     {!closed && !writing && <div className="proposal-actions">
       <button type="button" className="btn btn-primary btn-s" onClick={() => setWriting(true)}>Record what you learned</button>
     </div>}
     {!closed && writing && <form className="call-handover-form" onSubmit={submit}>
-      <label className="proposal-label" htmlFor={`${call.id}-result`}>What you learned. It is saved as the call&apos;s result and closes the handover.</label>
+      <label className="sr-only" htmlFor={`${call.id}-result`}>What you learned</label>
       <textarea id={`${call.id}-result`} value={draft} onChange={(event) => setDraft(event.target.value)} rows={3} autoFocus
-        placeholder="For example: called the customer, deliver to the booked address; told the driver." />
+        placeholder="What you learned" />
       <div className="proposal-actions">
         <button className="btn btn-primary btn-s" type="submit" disabled={busy || !draft.trim()}>{busy ? "Saving…" : "Save and close the handover"}</button>
         <button className="btn btn-tertiary btn-s" type="button" onClick={() => setWriting(false)} disabled={busy}>Cancel</button>
@@ -167,18 +164,18 @@ function CallCard({ call }: { call: Call }) {
       <Icon name="phone" className={live ? "tone-accent" : "tone-neutral"} />
       <div>
         <div className="call-title">{call.line === "site" ? "Site call" : "Driver call"} to {name}</div>
-        <div className="call-sub">{call.callee.handle}{call.callee.role ? ` · ${call.callee.role}` : ""} · {demoTime(call.startedAt)} · tier {call.tier}{call.attempt > 1 ? ` · attempt ${call.attempt}` : ""}{call.answerer === "live" ? " · live phone" : ""}</div>
+        <div className="call-sub">{demoTime(call.startedAt)}{call.attempt > 1 ? ` · attempt ${call.attempt}` : ""}</div>
       </div>
       <div className="call-pills">
         {live ? <Pill tone="accent" dot>{STATE_LABEL[call.state]}</Pill> : outcome && <Pill tone={outcome.tone}>{outcome.label}</Pill>}
       </div>
     </div>
     <p className="call-reason">{call.reason}</p>
-    {live && call.answerer === "live" && call.state === "ringing" && <p className="call-reason tone-accent">Ringing on the {PHONE_NAME[call.line]} page (Phone, {call.line === "site" ? "Site" : "Driver"} persona). It waits there while another live call is on that phone.</p>}
+    {live && call.answerer === "live" && call.state === "ringing" && <p className="call-reason tone-accent">Ringing on the {PHONE_NAME[call.line]} page</p>}
     {call.summary && !call.handover && <p className="call-summary">{call.summary}{call.callbackAt && call.outcome === "callback" ? ` Callback at ${demoTime(call.callbackAt)}.` : ""}</p>}
     {call.handover && <HandoverView call={call} />}
     <CostMeter call={call} />
-    {live || handedOver ? <Transcript call={call} /> : <More label={`Transcript (${call.transcript.length} lines)`}><Transcript call={call} /></More>}
+    {live || handedOver ? <Transcript call={call} /> : <More label="Transcript"><Transcript call={call} /></More>}
   </article>
 }
 
@@ -200,7 +197,6 @@ function RingLive({ orderId, line }: { orderId: string; line: CallLineView }) {
   const name = line.callee?.name ? line.callee.name.split(",")[0] : line.callee?.handle
   return <div className="call-ring-live">
     <button type="button" className="btn btn-tertiary btn-s" onClick={ring} disabled={state.busy}><Icon name="phone" />{state.busy ? "Ringing…" : `Ring ${name} live`}</button>
-    <span>{line.status === "on_request" ? `${line.text} Rings ` : line.status === "callback" ? "Calls back now, " : ""}on the {PHONE_NAME[line.line]} page instead of the simulated person.</span>
     {state.error && <span className="call-ring-error" role="alert">{state.error}</span>}
   </div>
 }
@@ -213,8 +209,7 @@ export function CallsBlock({ orderId, calls = [], lines = [], blocked = [], comp
     return <div className="checks-block"><h3>Calls</h3><ul className="checks-list">
       {lines.filter((line) => line.latest || line.status !== "done").map((line) => <li className="check" key={line.line}>
         <Icon name="phone" className={line.status === "calling" ? "tone-accent" : line.status === "handover" ? "tone-warn" : "tone-neutral"} />
-        <div><div className="check-title">{line.text || (line.latest?.summary ?? "")}</div>
-          {line.latest && <div className="check-detail">Tier {line.latest.tier} · {eur(line.latest.cost.totalEur)} against {eur(line.latest.cost.operatorEur)} for an operator</div>}</div>
+        <div className="check-title">{line.text || (line.latest?.summary ?? "")}</div>
       </li>)}
     </ul></div>
   }

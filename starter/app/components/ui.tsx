@@ -74,9 +74,8 @@ export function More({ label, children, open = false }: { label: string; childre
 export function CarPhoto({ view, className = "photo", sizes, priority = false }: { view: RecordView; className?: string; sizes: string; priority?: boolean }) {
   const vehicle = view.header.vehicle
   if (!vehicle?.illustrationSlug) return <div className="photo-missing"><Icon name="car" />{vehicle ? "No illustration for this model" : "Vehicle not linked"}</div>
-  return <figure className={className}>
+  return <figure className={className} title="Model illustration, not a photo of this car">
     <Image src={`/car-images/${vehicle.illustrationSlug}.webp`} alt={`Illustration of a ${vehicle.title}`} fill sizes={sizes} priority={priority} />
-    <figcaption className="photo-note" title="Orders with the same model share this picture. It is not a photo or evidence of this car.">Model illustration</figcaption>
   </figure>
 }
 
@@ -94,8 +93,7 @@ export function OpenItems({ view, limit }: { view: RecordView; limit?: number })
   const items = view.attention
   if (items.length === 0) return <div className="items-quiet">
     <Icon name="check" />
-    <span>Nothing in the records is waiting on a person.
-      <small>Checked: alerts, incidents, work items, conversations, agent proposals, claims, custody and a moving car&apos;s position. Not checked: proofs, documents and endpoint details beyond a booked car&apos;s pickup contact and access.</small></span>
+    <span>Nothing waiting on a person</span>
   </div>
   const shown = limit ? items.slice(0, limit) : items
   return <div className="items">
@@ -106,9 +104,9 @@ export function OpenItems({ view, limit }: { view: RecordView; limit?: number })
         <div className={`item-title tone-${item.tone}`}>{item.title}</div>
         {item.detail && <div className="item-detail">{item.detail}</div>}
       </div>
-      <div className="item-side">{item.owner ?? "No owner"}{item.at && item.atLabel ? <><br />{capitalise(item.atLabel)} <When at={item.at} snapshotAt={view.snapshotAt} relative withZone={false} /></> : null}
+      <div className="item-side">{item.owner}{item.at && item.atLabel ? <>{item.owner && <br />}{capitalise(item.atLabel)} <When at={item.at} snapshotAt={view.snapshotAt} relative withZone={false} /></> : null}
         {CLOSABLE_ITEM[item.kind] && <div><CloseButton orderId={view.header.id} record={{ collection: CLOSABLE_ITEM[item.kind]!.collection, recordId: item.recordId }} verb={CLOSABLE_ITEM[item.kind]!.verb} /></div>}</div>
     </div>)}
-    {limit && items.length > limit && <div className="item"><span /><div className="item-detail">{items.length - limit} more on the order page.</div></div>}
+    {limit && items.length > limit && <div className="item"><span /><div className="item-detail">{items.length - limit} more</div></div>}
   </div>
 }

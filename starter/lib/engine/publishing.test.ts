@@ -133,6 +133,20 @@ test("a rejected plan falls back to the template, with the reason", async () => 
   assert.match(prose.note ?? "", /not JSON/)
 })
 
+test("a drive of 12 h or less gets no hotel, from the model or the template", async () => {
+  const raw = await bundle("CD-421053")
+  const input = { ...planInput(raw, demandCheck(raw), 150), driveHours: 11 }
+  const plan = await planTrip(input, { gateway: planGateway(JSON.stringify(MODEL_PLAN)) })
+  assert.equal(plan.source, "template", "the model's hotel on an 11 h drive is rejected")
+  assert.match(plan.note ?? "", /hotel is planned for a drive of 12 h or less/)
+  assert.equal(plan.hotel.needed, false)
+  assert.ok(!plan.legs.some((leg) => leg.kind === "hotel"))
+  const exactly = templatePlan({ ...input, driveHours: 12 }, "")
+  assert.equal(exactly.hotel.needed, false, "12 h is not more than 12 h")
+  const longer = templatePlan({ ...input, driveHours: 12.5 }, "")
+  assert.equal(longer.hotel.needed, true)
+})
+
 // -- Publishing through the engine -----------------------------------------------
 
 eachStore("the agent publishes a Normal order not on the market only once the reviewer read it", async (engine) => {

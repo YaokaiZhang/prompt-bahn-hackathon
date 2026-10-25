@@ -368,11 +368,10 @@ ul, ol { padding: 0; list-style: none; }
 .cited-list { list-style: none; display: grid; gap: 6px; margin: 8px 0 0 32px; padding: 0; }
 .cited { padding: 10px 14px; border-radius: var(--r-sm); background: var(--sand-50); }
 .cited-contact { background: var(--teal-bg); }
-.cited-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 10px; }
-.cited-kind { font-size: 13px; font-weight: 600; color: var(--brown); }
-.cited-field { font-weight: 500; color: var(--muted); }
-.cited .source-link { padding: 2px 10px; font-size: 12.5px; font-weight: 500; overflow-wrap: anywhere; }
-.cited-value { margin-top: 6px; font-size: 14.5px; line-height: 1.5; color: var(--body); overflow-wrap: anywhere; max-width: 80ch; }
+.cited-link { display: block; color: inherit; text-decoration: none; }
+.cited:has(.cited-link:hover) { background: var(--sand-100); }
+.cited-field { color: var(--muted); }
+.cited-value { font-size: 14.5px; line-height: 1.5; color: var(--body); overflow-wrap: anywhere; max-width: 80ch; }
 .cited-meta { margin-top: 4px; font-size: 12.5px; color: var(--muted); }
 .quote-mark { padding: 0 2px; border-radius: 4px; background: var(--red-bg); color: var(--red-ink); font-weight: 600; }
 .is-cited .quote-mark, .msg.is-cited .quote-mark { background: var(--birch); }
@@ -381,7 +380,7 @@ ul, ol { padding: 0; list-style: none; }
 .row.is-cited { margin: 0 -14px; padding-left: 14px; padding-right: 14px; border-radius: var(--r-sm); background: var(--red-bg); }
 @media (max-width: 900px) {
   .finding { padding: 14px; }
-  .finding-facts, .finding-sub, .cited-list { margin-left: 0; }
+  .finding-facts, .finding-sub, .cited-list, .proposal-why { margin-left: 0; }
   .finding-facts > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 }
 
@@ -397,7 +396,8 @@ ul, ol { padding: 0; list-style: none; }
 .proposal-answer { background: var(--green-bg); font-weight: 500; }
 .proposal-decide, .proposal-form { margin: 14px 0 0 32px; }
 .proposal-will { font-size: 14.5px; color: var(--body); max-width: 72ch; }
-.proposal-will b { font-weight: 600; color: var(--ink); }
+.proposal-will { color: var(--muted); }
+.proposal-why { display: grid; gap: 4px; margin: 10px 0 0 32px; font-size: 14.5px; color: var(--body); max-width: 72ch; }
 .proposal-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .proposal-label { display: block; margin-bottom: 6px; font-size: 13.5px; font-weight: 600; color: var(--muted); }
 .proposal textarea { display: block; width: 100%; max-width: 72ch; padding: 12px 16px; border: 0; border-radius: var(--r-md); background: var(--sand-50); font: inherit; font-size: 15px; line-height: 1.45; color: var(--ink); resize: vertical; transition: background-color 0.18s var(--ease), box-shadow 0.18s var(--ease); }

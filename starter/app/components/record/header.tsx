@@ -17,9 +17,8 @@ export function RecordHero({ view, lead }: { view: RecordView; lead?: ReactNode 
   const photo = vehicle?.illustrationSlug
   return <>
     <section className={`hero${photo ? "" : " no-photo"}`}>
-      {photo && <figure className="hero-photo">
+      {photo && <figure className="hero-photo" title="Model illustration, not a photo of this car">
         <Image src={`/car-images/${photo}.webp`} alt={`Illustration of a ${vehicle?.title}`} fill sizes="(max-width: 1180px) 100vw, 1120px" priority />
-        <figcaption className="photo-note" title="Orders with the same model share this picture. It is not a photo or evidence of this car.">Model illustration</figcaption>
       </figure>}
       <div className="hero-card">
         <div className="hero-pills">

@@ -43,9 +43,14 @@ const BY_LABEL: Record<string, string> = { agent: "Agent", policy: "Policy", ope
 
 export function PolicyLink({ proposal }: { proposal: Proposal }) {
   const tone: Tone = proposal.decision === "acts alone" ? "neutral" : "warn"
-  return <Link className="policy-link" href={`/rules#${proposal.policyRow}`} title="Open this row on the Rules page">
-    <Pill tone={tone}>{proposal.policyRow}</Pill><span>{proposal.decision}</span>
+  return <Link className="policy-link" href={`/rules#${proposal.policyRow}`} title={`${proposal.policyRow}: ${proposal.decision}`}>
+    <Pill tone={tone}>{proposal.policyRow}</Pill>
   </Link>
+}
+
+/** The contact's name without the trailing context ("…, order contact for CD-420449"). */
+export function contactName(proposal: Proposal): string {
+  return proposal.contact.name.split(",")[0]
 }
 
 function History({ proposal }: { proposal: Proposal }) {
@@ -59,9 +64,7 @@ function History({ proposal }: { proposal: Proposal }) {
 type Mode = null | "edit" | "instruct" | "dismiss" | "answer"
 
 function answerLabel(proposal: Proposal): string {
-  return proposal.kind === "customer_contact"
-    ? `What ${proposal.contact.name} answered (after you made the contact). The agent then proposes the order update for your yes.`
-    : "Your answer to the agent (saved here and fed into the order's next review)"
+  return proposal.kind === "customer_contact" ? `What ${contactName(proposal)} said` : "Your answer"
 }
 
 /** One proposal on the order page, with its decisions. */
@@ -114,14 +117,10 @@ export function ProposalCard({ proposal, orderId }: { proposal: Proposal; orderI
       <div className="proposal-title">{proposal.title}</div>
       <Pill tone={state.tone}>{state.label}</Pill>
     </div>
-    <dl className="finding-facts">
-      <div><dt>Agent wants to</dt><dd>{proposal.action}</dd></div>
-      <div><dt>Contact</dt><dd>{proposal.contact.name} <span className="finding-role">· {proposal.contact.typeLabel}{proposal.contact.handle && !proposal.contact.name.includes(proposal.contact.handle) ? ` · ${proposal.contact.handle}` : ""}</span></dd></div>
-      <div><dt>Who pays</dt><dd>{proposal.whoPays}</dd></div>
-      <div><dt>Policy</dt><dd><PolicyLink proposal={proposal} /></dd></div>
-      <div><dt>Why</dt><dd>{proposal.why}</dd></div>
-    </dl>
-    <h4 className="finding-sub">{proposal.kind === "change" ? "Change" : "Script"}</h4>
+    <div className="proposal-why">
+      <p>{proposal.why}</p>
+      <p className="check-detail">{contactName(proposal)} <PolicyLink proposal={proposal} /></p>
+    </div>
     {mode === "edit"
       ? <form className="proposal-form" onSubmit={submit}>
         <label className="sr-only" htmlFor={`${proposal.id}-script`}>Script</label>
@@ -132,20 +131,17 @@ export function ProposalCard({ proposal, orderId }: { proposal: Proposal; orderI
         </div>
       </form>
       : <blockquote className="proposal-script">{proposal.script}</blockquote>}
-    {conflict.length > 0 && <>
-      <h4 className="finding-sub">Evidence: records that disagree</h4>
-      <ul className="cited-list">{conflict.map((cited, i) => <CitedRow key={`${cited.recordId}-${i}`} cited={cited} orderId={orderId} samePage />)}</ul>
-    </>}
+    {conflict.length > 0 && <ul className="cited-list">{conflict.map((cited, i) => <CitedRow key={`${cited.recordId}-${i}`} cited={cited} orderId={orderId} samePage />)}</ul>}
     {contact.length > 0 && <ul className="cited-list">{contact.map((cited, i) => <CitedRow key={`${cited.recordId}-c${i}`} cited={cited} orderId={orderId} samePage />)}</ul>}
 
     {proposal.answer !== null && <>
-      <h4 className="finding-sub">{proposal.kind === "customer_contact" ? `Answer from the ${proposal.contact.typeLabel.toLowerCase()}, recorded by you` : "Your answer"}</h4>
+      <h4 className="finding-sub">Answer</h4>
       <blockquote className="proposal-script proposal-answer">{proposal.answer}</blockquote>
     </>}
 
     {mode === "answer" && <form className="proposal-form" onSubmit={submit}>
-      <label className="proposal-label" htmlFor={`${proposal.id}-answer`}>{answerLabel(proposal)}</label>
-      <textarea id={`${proposal.id}-answer`} value={draft} onChange={(event) => setDraft(event.target.value)} rows={3} autoFocus />
+      <label className="sr-only" htmlFor={`${proposal.id}-answer`}>{answerLabel(proposal)}</label>
+      <textarea id={`${proposal.id}-answer`} value={draft} onChange={(event) => setDraft(event.target.value)} rows={3} autoFocus placeholder={answerLabel(proposal)} />
       <div className="proposal-actions">
         <button className="btn btn-primary btn-s" type="submit" disabled={busy || !draft.trim()}>{busy ? "Saving…" : "Save answer"}</button>
         <button className="btn btn-tertiary btn-s" type="button" onClick={() => setMode(null)} disabled={busy}>Cancel</button>
@@ -153,9 +149,9 @@ export function ProposalCard({ proposal, orderId }: { proposal: Proposal; orderI
     </form>}
 
     {(mode === "instruct" || mode === "dismiss") && <form className="proposal-form" onSubmit={submit}>
-      <label className="proposal-label" htmlFor={`${proposal.id}-${mode}`}>{mode === "instruct" ? "Your instruction to the agent (saved here and fed into the order's next review)" : "Why dismiss (optional)"}</label>
+      <label className="sr-only" htmlFor={`${proposal.id}-${mode}`}>{mode === "instruct" ? "Instruction to the agent" : "Why dismiss"}</label>
       <textarea id={`${proposal.id}-${mode}`} value={draft} onChange={(event) => setDraft(event.target.value)} rows={3} autoFocus
-        placeholder={mode === "instruct" ? "For example: ask stock control directly, not the site desk." : ""} />
+        placeholder={mode === "instruct" ? "Instruction to the agent" : "Why dismiss (optional)"} />
       <div className="proposal-actions">
         <button className="btn btn-primary btn-s" type="submit" disabled={busy || (mode === "instruct" && !draft.trim())}>
           {mode === "instruct" ? (busy ? "Re-reviewing…" : "Send instruction") : "Dismiss proposal"}
@@ -165,9 +161,7 @@ export function ProposalCard({ proposal, orderId }: { proposal: Proposal; orderI
     </form>}
 
     {mode === null && <div className="proposal-decide">
-      {proposal.onApprove && <p className="proposal-will"><b>Approving will:</b> {proposal.onApprove}</p>}
-      {answerable && proposal.kind === "customer_contact" && <p className="proposal-will"><b>Yours to make:</b> reach {proposal.contact.name} yourself with the script above, then record the answer here. The agent does not contact them.</p>}
-      {answerable && proposal.kind === "operator_question" && <p className="proposal-will"><b>The agent asks you.</b> Your answer is saved here and goes into the agent&apos;s next review of this order.</p>}
+      {proposal.onApprove && <p className="proposal-will">{proposal.onApprove}</p>}
       <div className="proposal-actions">
         {proposal.status === "proposed" && <button className="btn btn-primary btn-s" type="button" disabled={busy}
           onClick={() => void run({ action: "approve", proposalId: proposal.id })}>Approve</button>}
@@ -195,8 +189,8 @@ export function ProposalsBlock({ orderId, proposals }: { orderId: string; propos
 
 /**
  * Proposals in the queue preview. The situation card above holds the buttons; a proposal
- * waiting for the operator shows what a yes means (the script, what approving will do and
- * the records that disagree), so it can be decided without opening the order.
+ * waiting for the operator shows its script and the records that disagree, so it can be
+ * decided without opening the order.
  */
 export function CompactProposals({ orderId, proposals }: { orderId: string; proposals: Proposal[] }) {
   if (!proposals.length) return null
@@ -212,10 +206,9 @@ export function CompactProposals({ orderId, proposals }: { orderId: string; prop
           <div className="check-title">{proposal.title} <Pill tone={state.tone}>{state.label}</Pill></div>
           {waiting ? <>
             <blockquote className="proposal-script">{proposal.answer ?? proposal.script}</blockquote>
-            {proposal.status === "proposed" && proposal.onApprove && <p className="proposal-will"><b>Approving will:</b> {proposal.onApprove}</p>}
-            <p className="check-detail">{proposal.contact.name} · {proposal.whoPays} · <PolicyLink proposal={proposal} /></p>
+            {proposal.status === "proposed" && proposal.onApprove && <p className="proposal-will">{proposal.onApprove}</p>}
             {conflict.length > 0 && <ul className="cited-list">{conflict.map((cited, i) => <CitedRow key={`${cited.recordId}-${i}`} cited={cited} orderId={orderId} samePage={false} />)}</ul>}
-          </> : <div className="check-detail check-kind">{proposal.policyRow} · {proposal.decision}</div>}
+          </> : null}
         </div>
       </li>
     })}</ul>
@@ -257,7 +250,6 @@ export function BatchApproval({ queue, onClose }: { queue: ApprovalQueue; onClos
       <h2 className="batch-title">Waiting for your yes</h2>
       <button type="button" className="btn btn-tertiary btn-s" onClick={onClose}>Close</button>
     </div>
-    <p className="batch-sub">Each row says what approving will do. Nothing runs until you approve; a customer contact is always yours to make.</p>
     {done !== null && <p className="batch-done" role="status"><Icon name="check" /> Approved {done} {done === 1 ? "proposal" : "proposals"}.</p>}
     {queue.waiting.length === 0 && <p className="queue-note">No proposal is waiting for a yes.</p>}
     <ol className="batch-list">{queue.waiting.map((proposal) => <li key={proposal.id} className="batch-row">
@@ -272,8 +264,7 @@ export function BatchApproval({ queue, onClose }: { queue: ApprovalQueue; onClos
         </div>
         <div className="batch-row-title">{proposal.title}</div>
         <blockquote className="proposal-script">{proposal.script}</blockquote>
-        <p className="proposal-will"><b>Approving will:</b> {proposal.onApprove}</p>
-        <p className="batch-meta">{proposal.contact.name} · {proposal.contact.typeLabel} · {proposal.whoPays}</p>
+        <p className="proposal-will">{proposal.onApprove}</p>
       </div>
     </li>)}</ol>
     {error && <p className="proposal-error" role="alert">{error}</p>}
