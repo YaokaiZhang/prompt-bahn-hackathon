@@ -69,7 +69,7 @@ test("CD-420516 runs live end to end: the phone answers and keys in, and the res
   assert.match(row.calls[0].summary ?? "", /stock control/)
   const change = row.proposals.find((proposal) => proposal.kind === "change")
   assert.match(change?.change ?? "", /collected at stock control/)
-  assert.equal(row.group, "needs_action", "the key desk waits for the operator's yes")
+  assert.equal(row.group, "solved", "the key desk waits for the operator's yes in Fixed, review it")
 })
 
 test("each phone takes one live call at a time; the next rings once the first ends", async () => {

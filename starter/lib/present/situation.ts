@@ -268,12 +268,16 @@ function needsAction(input: SituationInput): Situation {
 }
 
 function confirm(input: SituationInput): Situation {
-  const pending = input.publication?.pending ?? []
-  const first = pending[0]
-  const step: Step = { label: "Approve and publish", do: "confirm" }
+  const publication = input.publication
+  const points = publication?.pending.length
+    ? publication.pending.map((change) => ({ point: change.point, after: change.after }))
+    : (publication?.changes ?? []).map((change) => ({ point: change.title, after: change.change }))
+  const first = points[0]
+  const publishes = !!publication && publication.inFlow && !publication.published
+  const step: Step = { label: publishes ? "Approve and publish" : "Approve", do: "confirm" }
   return {
     headline: first ? stop(first.point) : "Call results wait for your yes",
-    body: joinBody(first ? `Now: ${lower(stop(first.after))}` : null, pending.length > 1 ? `${pending.length - 1} more ${pending.length === 2 ? "point" : "points"} settled by the calls` : null),
+    body: joinBody(first ? `Now: ${lower(stop(first.after))}` : null, points.length > 1 ? `${points.length - 1} more ${points.length === 2 ? "point" : "points"} settled by the calls` : null),
     step,
     others: [openStep("publishing", "Check each rewrite")],
   }

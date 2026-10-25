@@ -29,7 +29,6 @@ export function callsAreLive(calls: Call[] = [], lines: CallLineView[] = []): bo
   return calls.some((call) => call.state !== "ended") || lines.some((line) => line.status === "to_call" || line.status === "callback_due")
 }
 
-const eur = (value: number) => value === 0 ? "€0" : value < 0.01 ? `€${value.toFixed(4)}` : `€${value.toFixed(2)}`
 const usd = (value: number) => value === 0 ? "$0" : `$${value < 0.01 ? value.toFixed(5) : value.toFixed(3)}`
 
 function clock(seconds: number): string {
@@ -55,16 +54,6 @@ function PlayButton({ audioId }: { audioId: string }) {
   return <button type="button" className="call-play" onClick={toggle} aria-label={playing ? "Stop the prompt" : "Play the prompt"} aria-pressed={playing}>
     {playing ? <span className="call-play-stop" /> : <span className="call-play-tri" />}
   </button>
-}
-
-function CostMeter({ call }: { call: Call }) {
-  const { cost } = call
-  return <div className="call-meter" aria-label="Cost of this call">
-    <div className="call-meter-row">
-      <span className="call-meter-figure"><span className="call-meter-label">This call</span><b>{eur(cost.totalEur)}</b></span>
-      <span className="call-meter-figure"><span className="call-meter-label">Same call by an operator</span><b>{eur(cost.operatorEur)}</b></span>
-    </div>
-  </div>
 }
 
 const PATH_LABEL: Record<TurnPath, string> = {
@@ -174,7 +163,6 @@ function CallCard({ call }: { call: Call }) {
     {live && call.answerer === "live" && call.state === "ringing" && <p className="call-reason tone-accent">Ringing on the {PHONE_NAME[call.line]} page</p>}
     {call.summary && !call.handover && <p className="call-summary">{call.summary}{call.callbackAt && call.outcome === "callback" ? ` Callback at ${demoTime(call.callbackAt)}.` : ""}</p>}
     {call.handover && <HandoverView call={call} />}
-    <CostMeter call={call} />
     {live || handedOver ? <Transcript call={call} /> : <More label="Transcript"><Transcript call={call} /></More>}
   </article>
 }

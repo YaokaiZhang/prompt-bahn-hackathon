@@ -398,8 +398,13 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     return (await workAt(at)).map(({ bundle, evaluation, review, work, calls, effects }) => {
       const events = published.get(bundle.order.id) ?? []
       // Call results the operator has not confirmed make an order not published yet Solved (when nothing else is open).
-      const pending = pendingChanges(bundles.get(bundle.order.id)!, effects, calls.calls, events)
-      const verdict = verdictFor({ ...evaluation, planned: calls.planned }, review, { ...work, calls: { lines: calls.lines, carried: calls.carried }, solved: pending.map(solvedText) })
+      const raw = bundles.get(bundle.order.id)!
+      const pending = pendingChanges(raw, effects, calls.calls, events)
+      // Changes a person confirmed on the agent's call are reviewed as Solved, not decided one by one in Blocked.
+      const fromCalls = callChanges(work.proposals, calls.calls)
+      const solved = [...pending.map(solvedText), ...fromCalls.filter((proposal) => !pending.some((change) => change.call?.id === proposal.source)).map((proposal) => proposal.title)]
+      const proposals = work.proposals.filter((proposal) => !fromCalls.includes(proposal))
+      const verdict = verdictFor({ ...evaluation, planned: calls.planned }, review, { ...work, proposals, calls: { lines: calls.lines, carried: calls.carried }, solved })
       return {
         id: bundle.order.id,
         reference: bundle.order.reference,
@@ -412,13 +417,18 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
         blockedCalls: calls.blocked,
         effects,
         history: historyOf(work.proposals, effects),
-        publication: publicationOf(bundle, verdict.group, pending, events),
+        publication: publicationOf(bundle, verdict.group, pending, events, fromCalls.map((proposal) => ({ proposalId: proposal.id, title: proposal.title, change: proposal.change ?? proposal.script, who: proposal.contact.name }))),
         ...verdict,
       }
     })
   }
 
   // -- Publishing (spec .scratch/publishing, ADR 0003) ------------------------
+
+  /** Change proposals waiting for a yes that came from the agent's own calls. */
+  function callChanges(proposals: Proposal[], calls: Call[]): Proposal[] {
+    return proposals.filter((proposal) => proposal.kind === "change" && proposal.status === "proposed" && calls.some((call) => call.id === proposal.source))
+  }
 
   async function orderNow(orderId: string): Promise<OrderState> {
     const order = (await ordersAt(await clock())).find((row) => row.id === orderId)
@@ -443,14 +453,22 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     if (!publication.inFlow) throw new Error(`${order.reference} is not waiting to be posted: it is already on the market or further along`)
     if (publication.published) throw new Error(`${order.reference} is already published`)
     if (order.group !== "normal" && order.group !== "solved") throw new Error(`${order.reference} is ${order.group.replace("_", " ")}: only a Normal or Solved order can be published`)
+    if (order.group === "solved") await approveProposals(callChanges(order.proposals, order.calls).map((proposal) => proposal.id))
     const at = await clock()
     await store.appendPublicationEvents([...(order.group === "solved" ? [confirmedEvent(order, at)] : []), publishedEvent(order, at, "operator")])
   }
 
-  /** The operator's yes on a Solved order (never published yet): its call results are confirmed and it is published. */
+  /**
+   * The operator's yes on a Solved order: the changes from its calls are approved. One
+   * not published yet also has its call results confirmed and is published; one on the
+   * market or further along keeps its stage.
+   */
   async function confirmChanges(orderId: string): Promise<void> {
     const order = await orderNow(orderId)
-    if (order.group !== "solved" || !order.publication.pending.length) throw new Error(`${order.reference} has no call results waiting for a yes`)
+    const changes = order.group === "solved" ? callChanges(order.proposals, order.calls) : []
+    if (order.group !== "solved" || (!order.publication.pending.length && !changes.length)) throw new Error(`${order.reference} has no call results waiting for a yes`)
+    await approveProposals(changes.map((proposal) => proposal.id))
+    if (!order.publication.inFlow || order.publication.published) return
     const at = await clock()
     await store.appendPublicationEvents([confirmedEvent(order, at), publishedEvent(order, at, "operator")])
   }
@@ -637,6 +655,18 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     await store.appendProposalEvents([{
       proposalId: draft.id, orderId: draft.orderId, at: draft.proposedAt, by: "agent", kind: "proposed", text: draft.action, data: { draft },
     }])
+  }
+
+  /** The operator's yes on proposals. A change's yes commits it: every effect is checked before anything is written (all or nothing). */
+  async function approveProposals(ids: string[]): Promise<void> {
+    if (!ids.length) return
+    const proposals = await Promise.all(ids.map(findProposal))
+    proposals.forEach(approvable)
+    const effects = proposals.map(effectOfApproval).filter((effect): effect is EffectInput => effect !== null)
+    for (const effect of effects) checkEffect(bundleOf(effect.orderId), effect)
+    await store.appendProposalEvents(await Promise.all(proposals.map((proposal) => eventFor(proposal, "approved", approvalText(proposal)))))
+    await commitEffects(effects)
+    for (const orderId of new Set(effects.map((effect) => effect.orderId))) await rereview(orderId)
   }
 
   async function findProposal(proposalId: string): Promise<Proposal> {
@@ -836,18 +866,9 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
         await reviews.run(await currentInputs(), command.orderIds)
         break
       case "approve":
-      case "approveBatch": {
-        const ids = command.type === "approve" ? [command.proposalId] : [...new Set(command.proposalIds)]
-        const proposals = await Promise.all(ids.map(findProposal))
-        proposals.forEach(approvable)
-        // A change's yes commits it: check every effect before anything is written (all or nothing).
-        const effects = proposals.map(effectOfApproval).filter((effect): effect is EffectInput => effect !== null)
-        for (const effect of effects) checkEffect(bundleOf(effect.orderId), effect)
-        await store.appendProposalEvents(await Promise.all(proposals.map((proposal) => eventFor(proposal, "approved", approvalText(proposal)))))
-        await commitEffects(effects)
-        for (const orderId of new Set(effects.map((effect) => effect.orderId))) await rereview(orderId)
+      case "approveBatch":
+        await approveProposals(command.type === "approve" ? [command.proposalId] : [...new Set(command.proposalIds)])
         break
-      }
       case "recordEffect": {
         // ADR 0001: the agent commits only what a person said on its calls (attributed
         // statements). Any change to the order, or an answer, is the operator's to write.

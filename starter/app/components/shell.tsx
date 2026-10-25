@@ -11,7 +11,7 @@ import { PersonaSwitch, usePersona } from "./persona"
 
 export type Section = "orders" | "briefing" | "inbox" | "customers" | "drivers" | "sites" | "rules"
 
-const LINKS: { section: Section; href: string; label: string }[] = [
+export const NAV_LINKS: { section: Section; href: string; label: string }[] = [
   { section: "orders", href: "/", label: "Orders" },
   { section: "briefing", href: "/briefing", label: "Briefing" },
   { section: "inbox", href: "/inbox", label: "Inbox" },
@@ -36,7 +36,7 @@ export function Shell({ children, section, snapshotAt, fixed = false }: { childr
         <span className="brand-room">Control Room</span>
       </Link>
       {persona === "operator" && <nav className="nav" aria-label="Main navigation">
-        {LINKS.map((link) => <Link key={link.section} href={link.href} aria-current={section === link.section ? "page" : undefined}>
+        {NAV_LINKS.map((link) => <Link key={link.section} href={link.href} aria-current={section === link.section ? "page" : undefined}>
           {link.label}
           {link.section === "briefing" && briefing.unread > 0 && <span className="nav-badge">{briefing.unread}<span className="sr-only"> unread</span></span>}
         </Link>)}

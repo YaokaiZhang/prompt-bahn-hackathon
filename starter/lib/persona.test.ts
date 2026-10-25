@@ -47,14 +47,16 @@ test("the operator reaches everything, including the phone page for rehearsal", 
   }
 })
 
-test("after choosing, the picker returns to the page asked for only when the persona may open it", () => {
+test("after choosing, the picker returns to the page asked for only when the persona may open it; else the operator gets the start page", () => {
   assert.equal(landingFor("operator", "/orders/ord-00001"), "/orders/ord-00001")
-  assert.equal(landingFor("operator", null), "/")
+  assert.equal(landingFor("operator", null), "/start")
   assert.equal(landingFor("site", "/orders/ord-00001"), "/phone")
   assert.equal(landingFor("driver", "/phone"), "/phone")
-  assert.equal(landingFor("operator", "//evil.example"), "/")
-  assert.equal(landingFor("operator", "https://evil.example"), "/")
-  assert.equal(landingFor("operator", "/login"), "/")
+  assert.equal(landingFor("operator", "//evil.example"), "/start")
+  assert.equal(landingFor("operator", "https://evil.example"), "/start")
+  assert.equal(landingFor("operator", "/login"), "/start")
+  assert.equal(landingFor("operator", "/start"), "/start")
+  assert.deepEqual(gate("site", "/start"), { kind: "redirect", to: "/phone" })
 })
 
 test("a lookalike path is not mistaken for the phone page", () => {

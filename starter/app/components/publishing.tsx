@@ -39,6 +39,9 @@ function Rewrite({ change, call }: { change: SolvedChange; call: Call | null }) 
   </li>
 }
 
+/** The yes publishes only an order not published yet; one on the market or further along keeps its stage. */
+const confirmLabel = (publication: Publication) => publication.inFlow && !publication.published ? "Approve and publish" : "Approve"
+
 const STAGE_TEXT = (publication: Publication): string => {
   if (publication.stage === "market") {
     const since = publication.published ? ` since ${fmtDateTime(publication.published.at, null, false)}` : ""
@@ -59,16 +62,26 @@ export function PublishingBlock({ orderId, publication, group, calls, bare = fal
     sendPublishing(action, orderId).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Nothing changed")).finally(() => setBusy(false))
   }
   const pending = group === "solved" ? publication.pending : []
+  // The rewrites already show what the calls settled; an order past the market has only its changes.
+  const changes = group === "solved" && !pending.length ? publication.changes : []
+  const review = pending.length > 0 || changes.length > 0
   const canPublish = publication.stage === "unposted" && group === "normal"
-  if (publication.stage === "posted" && !pending.length) return null
+  if (publication.stage === "posted" && !review) return null
   return <div className="checks-block publishing" id="publishing">
-    <h3>{pending.length ? "Fixed, review it" : "Driver market"}</h3>
+    <h3>{review ? "Fixed, review it" : "Driver market"}</h3>
     <p className="publishing-stage"><Icon name="offer" className={publication.stage === "market" ? "tone-accent" : "tone-neutral"} />{STAGE_TEXT(publication)}</p>
     {publication.check?.demanding && <p className="publishing-filter">{publication.check.reasons.map((reason) => <Pill key={reason} tone="warn">{reason}</Pill>)}</p>}
-    {pending.length > 0 && <>
-      <ol className="rewrites">{pending.map((change) => <Rewrite key={change.effectId} change={change} call={calls.find((call) => call.id === change.call?.id) ?? null} />)}</ol>
+    {review && <>
+      <ol className="rewrites">
+        {pending.map((change) => <Rewrite key={change.effectId} change={change} call={calls.find((call) => call.id === change.call?.id) ?? null} />)}
+        {changes.map((change) => <li className="rewrite" key={change.proposalId}>
+          <div className="rewrite-point">{change.title}</div>
+          <p className="rewrite-new">{change.change}</p>
+          <p className="rewrite-meta">{change.who}</p>
+        </li>)}
+      </ol>
       {!bare && <div className="publishing-actions">
-        <button type="button" className="btn btn-primary btn-s" disabled={busy} onClick={() => act("confirm")}><Icon name="check" />Approve and publish</button>
+        <button type="button" className="btn btn-primary btn-s" disabled={busy} onClick={() => act("confirm")}><Icon name="check" />{confirmLabel(publication)}</button>
       </div>}
     </>}
     {canPublish && <div className="publishing-actions">

@@ -16,6 +16,8 @@ export const PERSONA_ICON: Record<Persona, string> = { operator: "people", site:
 
 export const PICKER_PATH = "/login"
 export const PHONE_PATH = "/phone"
+/** The Operator's start page, shown after choosing the persona and before the work. */
+export const START_PATH = "/start"
 
 export function parsePersona(value: string | null | undefined): Persona | null {
   return (PERSONAS as readonly string[]).includes(value ?? "") ? value as Persona : null
@@ -47,9 +49,12 @@ export function gate(persona: Persona | null, pathname: string): GateResult {
   return api ? { kind: "deny", status: 403 } : { kind: "redirect", to: homeFor(persona) }
 }
 
-/** A `next` value from the picker is only followed if it is a local path this persona may open. */
+/**
+ * Where the picker sends a persona: the page it was sent away from (`next`) when that is a local path
+ * this persona may open; otherwise the Operator's start page, or the phone page for Site and Driver.
+ */
 export function landingFor(persona: Persona, next: string | null | undefined): string {
   if (next && next.startsWith("/") && !next.startsWith("//") && gate(persona, next.split(/[?#]/)[0]).kind === "allow"
     && !next.startsWith(PICKER_PATH)) return next
-  return homeFor(persona)
+  return persona === "operator" ? START_PATH : homeFor(persona)
 }

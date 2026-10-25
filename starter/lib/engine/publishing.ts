@@ -76,6 +76,9 @@ export type SolvedChange = {
   call: { id: string; line: string; who: string; endedAt: string | null; tier: number; transcript: TranscriptLine[] } | null
 }
 
+/** A change a person confirmed on the agent's call, waiting for the operator's yes with the order's other call results. */
+export type CallChange = { proposalId: string; title: string; change: string; who: string }
+
 export type Publication = {
   stage: Stage
   /** The dataset lane is New orders or Ready to post: publishing moves this order. */
@@ -85,6 +88,8 @@ export type Publication = {
   published: { at: string; by: "agent" | "operator" } | null
   /** Call results waiting for the operator's yes (the Solved group). */
   pending: SolvedChange[]
+  /** Changes from the agent's calls waiting for the same yes; on any order, not only one not published yet. */
+  changes: CallChange[]
   check: DemandCheck | null
   plan: TravelPlan | null
   planError: string | null
@@ -235,7 +240,7 @@ export function pendingChanges(raw: Bundle, effects: EffectEvent[], calls: Call[
 export const solvedText = (change: SolvedChange) => `${change.call ? `${change.call.who} (${change.call.line})` : "A call"}: ${change.after}`
 
 /** The order's publication: its stage, lane, filter, plan and whether drivers see it. */
-export function publicationOf(bundle: Bundle, group: string, pending: SolvedChange[], events: StoredPublicationEvent[]): Publication {
+export function publicationOf(bundle: Bundle, group: string, pending: SolvedChange[], events: StoredPublicationEvent[], changes: CallChange[] = []): Publication {
   const inFlow = isUnposted(bundle)
   const published = events.find((event) => event.kind === "published") ?? null
   const onMarket = bundle.order.lane === "market" || (inFlow && !!published)
@@ -248,7 +253,7 @@ export function publicationOf(bundle: Bundle, group: string, pending: SolvedChan
     stage, inFlow,
     lane: stage === "market" ? "market" : stage === "confirm" ? "confirm" : bundle.order.lane,
     published: published ? { at: published.at, by: published.by } : null,
-    pending, check, plan,
+    pending, changes, check, plan,
     planError: planned?.kind === "plan_failed" ? planned.data?.error ?? "The planner failed." : null,
     live: stage === "market" && !!check && (!check.demanding || !!planned),
     budgetEur: travelBudget(bundle.order.reference),

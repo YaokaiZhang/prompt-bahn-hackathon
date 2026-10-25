@@ -78,7 +78,7 @@ The group of orders where an agent action is running or waiting on a reply.
 The group of orders that are checked normal and not finished.
 
 **Solved**:
-The group of orders not published yet where the agent's calls settled the open points and the operator has not confirmed the call results yet. Shown as "Fixed, review it", both as its tag and as its stage on the Overview. Orders on the market or on the road are never Solved.
+The group of orders where the agent's calls settled the open points and the operator has not confirmed them yet: the call results on an order not published yet, or a change a person confirmed on the agent's call on any order. Shown as "Fixed, review it". An order on the market or on the road keeps its stage.
 _Avoid_: Done, resolved
 
 **Finished**:
@@ -88,7 +88,7 @@ _Avoid_: Done
 ## Publishing
 
 **Fixed, review it**:
-The tag and Overview stage of a Solved order: the agent fixed it, and the operator checks it before it is published. The operator reads each rewrite and the call transcripts; their approval confirms the changes and publishes the order.
+The tag of a Solved order, and the Overview stage of one not published yet: the agent fixed it, and the operator checks it. The operator reads each rewrite or change and the call transcripts; their approval confirms the changes, and publishes an order not published yet.
 
 **Needs action**:
 The board of the orders that are not normal: Blocked, Fixed, review it and In progress, each most pressing first: urgent orders, then the soonest deadline, then orders with no deadline left.
