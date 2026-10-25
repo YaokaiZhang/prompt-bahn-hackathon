@@ -7,6 +7,7 @@ import { fmtDateTime, fmtRange, fmtWeekday } from "@/lib/present/time"
 import type { Group } from "@/lib/engine/checks"
 import type { BoardCard } from "@/lib/present/types"
 import { GROUP_LABEL, groupTone } from "./checks"
+import { HighlightMark } from "./highlights"
 import { Icon } from "./icons"
 
 /**
@@ -31,6 +32,7 @@ export function QueueCard({ card, current = false, tagged = false, due, onSelect
     aria-label={`${card.vehicle}, ${card.reference}${loud ? `, ${GROUP_LABEL[loud.group]}` : ""}${why ? `, ${why}` : ""}`}>
     <span className="qcard-top">
       <span className="qcard-car">{card.vehicle}</span>
+      <HighlightMark orderId={card.id} />
       {tagged && loud ? <StateTag group={loud.group} urgent={loud.urgent} />
         : due ? <span className={`qcard-due${loud?.urgent ? " is-urgent" : ""}`}>{due}</span> : null}
     </span>

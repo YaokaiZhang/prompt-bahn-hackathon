@@ -13,6 +13,7 @@ import { situationFor } from "@/lib/present/situation"
 import type { BoardCard, OrderChecks, RecordView } from "@/lib/present/types"
 import { callsAreLive } from "./calls"
 import { QueueCard } from "./card"
+import { HighlightButton } from "./highlights"
 import { ChecksPanel } from "./checks"
 import { BoardSwitch, SearchField } from "./columns"
 import { useClockVersion } from "./demo-clock"
@@ -189,6 +190,7 @@ function OrderPreview({ view, checks, position, total, onNext }: { view: RecordV
           <Pill>{header.reference}</Pill>
           <Pill>{header.customer.name}</Pill>
           {header.vehicle?.plate && <Pill>{header.vehicle.plate}</Pill>}
+          <HighlightButton orderId={header.id} />
         </div>
         <h2 className="display preview-title">{header.vehicle?.title ?? "Vehicle not linked"}</h2>
         <RouteSummary view={view} />

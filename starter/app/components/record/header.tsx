@@ -4,6 +4,7 @@ import Image from "next/image"
 import Link from "next/link"
 import type { ReactNode } from "react"
 import type { RecordView, Tile } from "@/lib/present/types"
+import { HighlightButton } from "../highlights"
 import { Pill, StagePill } from "../ui"
 
 /**
@@ -24,6 +25,7 @@ export function RecordHero({ view, lead }: { view: RecordView; lead?: ReactNode 
         <div className="hero-pills">
           <StagePill lane={header.lane} label={header.laneLabel} />
           <Pill>{header.reference}</Pill>
+          <HighlightButton orderId={header.id} />
         </div>
         <h1 className="display hero-title">{vehicle ? vehicle.title : "Vehicle not linked"}</h1>
         <p className="hero-facts">
