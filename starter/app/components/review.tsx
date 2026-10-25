@@ -132,9 +132,9 @@ export function ReviewBlock({ orderId, review, compact = false, shown = new Set(
       <Icon name="bot" className={reviewed ? (review.findings.length ? "tone-danger" : "tone-ok") : "tone-neutral"} />
       <div>
         <div className="check-title">{reviewLine(review)}{!compact && reviewed && review.cost > 0 && <span className="check-kind">{money(review.cost)}</span>}</div>
-        <div className="check-detail">
-          {reviewed ? (review.summary ?? "") : (review.reason ?? "Not reviewed yet").replace(/^not reviewed yet:?\s*/i, "").replace(/^./, (c) => c.toUpperCase()) || "The reviewer has not read this order."}
-        </div>
+        {reviewed
+          ? review.summary && <More label="Full analysis"><div className="check-detail">{review.summary}</div></More>
+          : <div className="check-detail">{(review.reason ?? "Not reviewed yet").replace(/^not reviewed yet:?\s*/i, "").replace(/^./, (c) => c.toUpperCase()) || "The reviewer has not read this order."}</div>}
       </div>
     </div>
     {!compact && rest.map((finding) => <FindingCard key={finding.id} finding={finding} orderId={orderId} samePage />)}
