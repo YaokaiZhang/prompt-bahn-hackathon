@@ -19,6 +19,8 @@ import { createDiskAudioStore, openRouterSpeechFromEnv, type AudioStore } from "
 import { createVoiceAgent, type VoiceAgent } from "./voice-agent"
 import { openRouterTranscriberFromEnv, openRouterVoiceFromEnv } from "./voice-openrouter"
 import type { ModelGateway } from "@/lib/reviewer/gateway"
+import type { SuggestOptions } from "./inbox-agent"
+import { createPostgresSuggestionCache } from "./suggestion-cache"
 
 // The snapshot is read once per server process (kept across dev reloads).
 // Restart the server after reseeding. Reviews are read from cr_review_results on
@@ -153,4 +155,9 @@ export function getEngine(): Promise<Engine> {
     })
     .catch((error) => { cache.controlRoomEngine = undefined; throw error })
   return cache.controlRoomEngine
+}
+
+/** The inbox agent's model and cache (inbox-agent.ts): the reviewer's gateway; template suggestions without a key. */
+export function inboxAgentOptions(): SuggestOptions {
+  return { gateway: openRouterFromEnv(), cache: createPostgresSuggestionCache(db) }
 }

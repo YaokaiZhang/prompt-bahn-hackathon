@@ -30,6 +30,7 @@ export function buildInboxView(threads: Row[], messages: Row[], dir: Directory, 
       candidateBasis: str(thread.candidate_basis),
       candidates: strings(thread.candidate_order_ids).map(ref),
       linked: strings(thread.linked_order_ids).map(ref),
+      operatorLinked: strings(thread.operator_linked_order_ids),
       resolution: resolution ? { decisionLabel: label(str(resolution.decision)) || "Resolved", at: str(resolution.decided_at) } : null,
       messages: messages.filter((message) => message.thread_id === id).map((message) => {
         const channel = str(message.channel) ?? ""
@@ -38,6 +39,7 @@ export function buildInboxView(threads: Row[], messages: Row[], dir: Directory, 
           recipient: dir.resolve(message.recipient_id, message.recipient_type), channel, channelLabel: label(channel) || humanize(channel),
           at: str(message.authored_at) ?? "", body: str(message.body) ?? "",
           internal: str(message.visibility) === "INTERNAL" || channel === "internal_note", language: str(message.language),
+          sentFromApp: message.sent_from_app === true, draftedByAgent: message.drafted_by_agent === true,
         }
       }).sort((a, b) => a.at.localeCompare(b.at)),
     }

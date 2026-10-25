@@ -169,7 +169,7 @@ function closeStep(rule: RuleResult): Step | null {
     : records.length === 1 ? `${records[0].close}: ${lower(records[0].label)}` : `Close all ${records.length} records`
   return { label, do: "close", records: records.map((source) => ({ collection: source.collection, recordId: source.id })) }
 }
-const openOrder: Step = { label: "Open the order", do: "open", anchor: "checks", full: true }
+export const openOrder: Step = { label: "Open the order", do: "open", anchor: "checks", full: true }
 
 /** The work item an urgency reason names: "Due work item: Ask X; do Y" -> "Ask X". */
 function workItem(urgency: Urgency): string | null {

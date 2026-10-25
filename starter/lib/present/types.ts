@@ -673,6 +673,9 @@ export type InboxMessageView = {
   body: string
   internal: boolean
   language: string | null
+  /** Sent from the inbox by the operator; `draftedByAgent` when it began as the inbox agent's draft. */
+  sentFromApp: boolean
+  draftedByAgent: boolean
 }
 
 export type InboxThreadView = {
@@ -695,6 +698,8 @@ export type InboxThreadView = {
   candidateBasis: string | null
   candidates: OrderRef[]
   linked: OrderRef[]
+  /** Linked orders the operator added from the inbox (they can take these back). */
+  operatorLinked: string[]
   resolution: { decisionLabel: string; at: string | null } | null
   messages: InboxMessageView[]
 }
