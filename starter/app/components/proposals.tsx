@@ -118,7 +118,7 @@ export function ProposalCard({ proposal, orderId }: { proposal: Proposal; orderI
     </div>
     <div className="proposal-why">
       <p>{proposal.why}</p>
-      <p className="check-detail">{contactName(proposal)} <PolicyLink proposal={proposal} /></p>
+      <p className="check-detail">{contactName(proposal)}</p>
     </div>
     {mode === "edit"
       ? <form className="proposal-form" onSubmit={submit}>
@@ -171,7 +171,7 @@ export function ProposalCard({ proposal, orderId }: { proposal: Proposal; orderI
       </div>
     </div>}
     {error && <p className="proposal-error" role="alert">{error}</p>}
-    <More label={`History (${proposal.history.length})`} open={proposal.history.length > 2}><History proposal={proposal} /></More>
+    <More label={`History (${proposal.history.length})`}><History proposal={proposal} /></More>
   </article>
 }
 

@@ -9,7 +9,7 @@
 
 import Link from "next/link"
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
-import { situationFor } from "@/lib/present/situation"
+import { applyPlain, situationFor } from "@/lib/present/situation"
 import type { BoardCard, OrderChecks, RecordView } from "@/lib/present/types"
 import { callsAreLive } from "./calls"
 import { QueueCard } from "./card"
@@ -179,7 +179,8 @@ export function QueueBoard({ board, filters, place, sort, tagged = false, tools,
 /** The selected order: who and where, what is wrong with its steps, then the evidence the steps act on. */
 function OrderPreview({ view, checks, position, total, onNext }: { view: RecordView; checks: OrderChecks | null; position: number; total: number; onNext: () => void }) {
   const { header, story } = view
-  const situation = checks ? situationFor(checks) : null
+  const code = checks ? situationFor(checks) : null
+  const situation = code && applyPlain(code, checks?.plain)
   const problem = checks?.group === "needs_action"
   return <div className="preview-inner">
     <div className="preview-top">

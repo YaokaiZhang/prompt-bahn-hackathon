@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { compareUrgency } from "@/lib/engine/checks"
-import { getEngine } from "@/lib/engine/server"
+import { getEngine, inPlainWords } from "@/lib/engine/server"
 import { buildBoardCard } from "@/lib/present/board"
 import { LANE_ORDER } from "@/lib/present/labels"
 import { loadBoardBundles } from "@/lib/present/load"
@@ -43,6 +43,9 @@ export async function GET(request: NextRequest) {
     }
     return card
   })
+  // The cards in the model's plain words where a rewrite is cached; the rest keep the code text for now.
+  const plain = await inPlainWords(all.map((card) => ({ situation: card.situation ?? null, group: card.verdict?.group ?? "normal" })))
+  all.forEach((card, index) => { if (card.situation) card.situation = plain[index] })
   const counts = Object.fromEntries(LANE_ORDER.map((lane) => [lane, all.filter((card) => card.displayLane === lane).length]))
   const attentionCounts = Object.fromEntries(LANE_ORDER.map((lane) => [lane, all.filter((card) => card.displayLane === lane && card.attention.length > 0).length]))
   const matches = query ? all.filter((card) => [

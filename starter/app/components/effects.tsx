@@ -32,7 +32,7 @@ export function EffectsBlock({ effects, history }: { effects: EffectEvent[]; his
         <p className="effect-text">{event.text}</p>
       </li>)}</ul>
     </>}
-    {history.length > 0 && <More label="History" open={effects.length > 0}>
+    {history.length > 0 && <More label="History">
       <ol className="proposal-history">{history.map((entry, i) => <li key={i} className={entry.kind === "effect" ? "is-effect" : undefined}>
         <span className="proposal-history-at">{fmtDateTime(entry.at, null, false)}</span>
         <span className="proposal-history-by">{BY_LABEL[entry.by] ?? entry.by} · {entry.kind === "effect" ? "change" : entry.kind}</span>

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server"
-import { getEngine } from "@/lib/engine/server"
+import { getEngine, plainFor } from "@/lib/engine/server"
 import { loadOrder } from "@/lib/present/load"
 import { laneLabel } from "@/lib/present/labels"
 import { buildRecordView } from "@/lib/present/record"
+import { situationFor } from "@/lib/present/situation"
 import type { OrderChecks } from "@/lib/present/types"
 
 export const runtime = "nodejs"
@@ -27,8 +28,10 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       review: verdict.review, proposals: verdict.proposals, unreachable: verdict.unreachable,
       calls: verdict.calls, callLines: verdict.callLines, blockedCalls: verdict.blockedCalls,
       effects: verdict.effects, history: verdict.history, publication: verdict.publication,
+      plain: null,
     }
     : null
+  if (checks && verdict) [checks.plain] = await plainFor([{ situation: situationFor(verdict), group: verdict.group }])
   return NextResponse.json({
     order, customer, pickup, delivery, pickupSite, deliverySite, items, drivers, alerts, conversations: threads, messages, events,
     related, bundleOrderRefs, view, checks,

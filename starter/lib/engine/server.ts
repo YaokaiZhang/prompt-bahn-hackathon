@@ -21,6 +21,10 @@ import { openRouterTranscriberFromEnv, openRouterVoiceFromEnv } from "./voice-op
 import type { ModelGateway } from "@/lib/reviewer/gateway"
 import type { SuggestOptions } from "./inbox-agent"
 import { createPostgresSuggestionCache } from "./suggestion-cache"
+import { createPostgresPlainCache } from "./plain-cache"
+import { createPlainWords, type PlainItem, type PlainWordsService } from "./plain-words"
+import type { Group } from "./checks"
+import { applyPlain, type PlainWords, type Situation } from "@/lib/present/situation"
 
 // The snapshot is read once per server process (kept across dev reloads).
 // Restart the server after reseeding. Reviews are read from cr_review_results on
@@ -29,6 +33,7 @@ const cache = globalThis as unknown as {
   controlRoomEngine?: Promise<Engine>; controlRoomAudio?: AudioStore; controlRoomPump?: ReturnType<typeof setInterval>
   controlRoomPhones?: Map<PhonePersona, { since: number; seen: number }>
   controlRoomPublishing?: ReturnType<typeof setInterval>
+  controlRoomPlain?: PlainWordsService
 }
 
 /** A phone page counts as open while it polled within this many ms. */
@@ -160,4 +165,33 @@ export function getEngine(): Promise<Engine> {
 /** The inbox agent's model and cache (inbox-agent.ts): the reviewer's gateway; template suggestions without a key. */
 export function inboxAgentOptions(): SuggestOptions {
   return { gateway: openRouterFromEnv(), cache: createPostgresSuggestionCache(db) }
+}
+
+/** The situation cards' plain words (plain-words.ts): the reviewer's gateway; code text without a key. */
+export function plainWords(): PlainWordsService {
+  cache.controlRoomPlain ??= createPlainWords({ gateway: openRouterFromEnv(), cache: createPostgresPlainCache(db) })
+  return cache.controlRoomPlain
+}
+
+const PLAIN_KIND: Partial<Record<Group, PlainItem["kind"]>> = { needs_action: "decide", solved: "review", in_progress: "agent" }
+
+export type PlainRow = { situation: Situation | null; group: Group }
+
+/** The model's rewrite for each card that has one cached (null otherwise); asks for the rest in the background. */
+export async function plainFor(rows: PlainRow[]): Promise<(PlainWords | null)[]> {
+  const items: { at: number; item: PlainItem }[] = []
+  rows.forEach((row, at) => {
+    const kind = PLAIN_KIND[row.group]
+    if (row.situation && kind) items.push({ at, item: { situation: row.situation, kind } })
+  })
+  const found = await plainWords().lookup(items.map(({ item }) => item)).catch(() => new Map<number, PlainWords>())
+  const out: (PlainWords | null)[] = rows.map(() => null)
+  items.forEach(({ at }, index) => { out[at] = found.get(index) ?? null })
+  return out
+}
+
+/** The cards in the model's words where a rewrite is cached. */
+export async function inPlainWords<T extends PlainRow>(rows: T[]): Promise<(Situation | null)[]> {
+  const plain = await plainFor(rows)
+  return rows.map((row, index) => row.situation && applyPlain(row.situation, plain[index]))
 }

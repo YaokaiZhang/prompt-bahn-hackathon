@@ -307,6 +307,19 @@ function inProgress(input: SituationInput): Situation {
   return { headline: "Agent at work", body: planned?.reason ? clip(sentence(planned.reason)) : null, step: null, others: [] }
 }
 
+// ── Plain words ──────────────────────────────────────────────────────────────
+
+/** The model's rewrite of a card's headline and body (lib/engine/plain-words.ts), for the code text in `for`. */
+export type PlainWords = { headline: string; body: string | null; for: string }
+
+/** What a rewrite is for: the card's code text. */
+export const plainFor = (situation: Situation) => `${situation.headline}\n${situation.body ?? ""}`
+
+/** The card in the model's words when its rewrite is for this very text; else as code wrote it. */
+export function applyPlain(situation: Situation, plain: PlainWords | null | undefined): Situation {
+  return plain && plain.for === plainFor(situation) ? { ...situation, headline: plain.headline, body: plain.body } : situation
+}
+
 /** The card for an order in Blocked, Fixed, review it or In progress; null otherwise. */
 export function situationFor(input: SituationInput): Situation | null {
   if (input.group === "needs_action") return needsAction(input)

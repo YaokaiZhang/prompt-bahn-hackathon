@@ -179,7 +179,6 @@ function Thread({ thread, onBack, onChange }: { thread: InboxThreadView; onBack:
     <section className="mail-agent" aria-label="The agent's suggestion" aria-busy={thinking}>
       <div className="mail-agent-head">
         <h3>Agent suggestion</h3>
-        {suggestion && !thinking && <span className="mail-agent-source">{suggestion.source === "model" ? `Drafted by the agent${suggestion.cached ? " (cached)" : ""}` : suggestion.fallback}</span>}
       </div>
       {thinking && !suggestion && <p className="mail-agent-note">The agent is reading the thread{thread.linked.length ? " and its orders" : ""}…</p>}
       {suggestError && <p className="sit-error" role="alert">{suggestError}</p>}

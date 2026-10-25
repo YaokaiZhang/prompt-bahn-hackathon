@@ -94,7 +94,7 @@ export function DemoClock({ operator, snapshotAt }: { operator: boolean; snapsho
 
   if (!operator) {
     return <div className="clock">{snapshotAt
-      ? <><b>{stamp(snapshotAt)}</b><span>Snapshot · fictional data</span></>
+      ? <b>{stamp(snapshotAt)}</b>
       : <span>Fictional snapshot</span>}</div>
   }
 
@@ -104,7 +104,7 @@ export function DemoClock({ operator, snapshotAt }: { operator: boolean; snapsho
     <summary aria-label={now ? `Demo time ${stamp(now)}. Open demo controls` : "Open demo controls"}>
       <span className="demo-clock-text">
         <b><span className="demo-clock-long">{now ? stamp(now) : "Demo time"}</span><span className="demo-clock-short">{now ? `Demo ${time(now)}` : "Demo"}</span></b>
-        <span>Demo time{moved ? ` · from ${time(clock.snapshotAt)}` : " · fictional data"}</span>
+        {moved && <span>Moved from {time(clock.snapshotAt)}</span>}
       </span>
       <Icon name="chevron" size={12} className="persona-chevron" />
     </summary>

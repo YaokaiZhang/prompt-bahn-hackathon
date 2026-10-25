@@ -112,10 +112,6 @@ function FindingCard({ finding, orderId, samePage }: { finding: ReviewFinding; o
   </article>
 }
 
-function money(value: number): string {
-  return value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(3)}`
-}
-
 /** One line on what the reviewer did, for the compact preview and the panel head. */
 export function reviewLine(review: OrderReview): string {
   if (review.status !== "reviewed") return "Not reviewed yet"
@@ -131,10 +127,10 @@ export function ReviewBlock({ orderId, review, compact = false, shown = new Set(
     <div className="check">
       <Icon name="bot" className={reviewed ? (review.findings.length ? "tone-danger" : "tone-ok") : "tone-neutral"} />
       <div>
-        <div className="check-title">{reviewLine(review)}{!compact && reviewed && review.cost > 0 && <span className="check-kind">{money(review.cost)}</span>}</div>
+        <div className="check-title">{reviewLine(review)}</div>
         {reviewed
           ? review.summary && <More label="Full analysis"><div className="check-detail">{review.summary}</div></More>
-          : <div className="check-detail">{(review.reason ?? "Not reviewed yet").replace(/^not reviewed yet:?\s*/i, "").replace(/^./, (c) => c.toUpperCase()) || "The reviewer has not read this order."}</div>}
+          : review.reason && !/^not reviewed yet\.?$/i.test(review.reason.trim()) && <div className="check-detail">{review.reason.replace(/^not reviewed yet:?\s*/i, "").replace(/^./, (c) => c.toUpperCase())}</div>}
       </div>
     </div>
     {!compact && rest.map((finding) => <FindingCard key={finding.id} finding={finding} orderId={orderId} samePage />)}

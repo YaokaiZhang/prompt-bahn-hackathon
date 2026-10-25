@@ -12,7 +12,7 @@ import type { BlockedCall, Call, CallLineView } from "@/lib/engine/calls"
 import type { EffectEvent, HistoryEntry } from "@/lib/engine/engine"
 import type { DemandCheck, Publication } from "@/lib/engine/publishing"
 import type { TravelPlan } from "@/lib/engine/travel-planner"
-import type { Situation } from "./situation"
+import type { PlainWords, Situation } from "./situation"
 
 export type Tone = "danger" | "warn" | "accent" | "ok" | "neutral"
 
@@ -39,6 +39,8 @@ export type OrderChecks = {
   blockedCalls: BlockedCall[]
   /** Its stage after grouping: call results waiting for a yes, on the market, demand filter, travel plan (spec .scratch/publishing). */
   publication: Publication
+  /** The situation card in the model's plain words, when a rewrite is cached (lib/engine/plain-words.ts). */
+  plain?: PlainWords | null
   /** Committed changes laid over the snapshot (ticket 09), oldest first. */
   effects: EffectEvent[]
   /** The order's history in sequence: proposals, approvals, answers, effect events. */

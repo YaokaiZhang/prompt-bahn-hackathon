@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
-import { situationFor } from "@/lib/present/situation"
+import { applyPlain, situationFor } from "@/lib/present/situation"
 import type { OrderChecks, RecordView } from "@/lib/present/types"
 import { dueText, SituationCard } from "./situation"
 import { ChecksPanel } from "./checks"
@@ -35,7 +35,8 @@ function useOpenLinkedSection() {
 export function OrderPane({ detail }: { detail: Detail }) {
   const { view, checks } = detail
   useOpenLinkedSection()
-  const situation = checks ? situationFor(checks) : null
+  const code = checks ? situationFor(checks) : null
+  const situation = code && applyPlain(code, checks?.plain)
   return <CitedProvider ids={checks?.review?.highlights ?? []}>
     <RecordHero view={view} lead={situation && <SituationCard orderId={detail.order.id} situation={situation} samePage lead
       due={checks?.group === "needs_action" ? dueText(checks.urgency.dueAt, checks.now) : null} urgent={checks?.group === "needs_action" && checks.urgency.urgent} />} />

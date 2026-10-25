@@ -59,7 +59,7 @@ function RuleItem({ orderId, rule, samePage }: { orderId: string; rule: RuleResu
     <Icon name={OUTCOME_ICON[rule.outcome]} className={`tone-${tone}`} />
     <div>
       <div className="check-title">{rule.title}</div>
-      <div className="check-detail">{rule.detail}</div>
+      {!rule.sources.some((source) => source.close) && <div className="check-detail">{rule.detail}</div>}
       <Sources orderId={orderId} sources={rule.sources} samePage={samePage} />
     </div>
   </li>
@@ -87,7 +87,6 @@ export function ChecksPanel({ orderId, checks, compact = false, led = false }: {
     <div className="checks-head">
       <h2 className="checks-title">Checks</h2>
       {!led && <GroupPill group={checks.group} urgent={urgent} />}
-      <span className="checks-count">{checks.rules.length} rules · {passed.length} passed{unknown.length ? ` · ${unknown.length} couldn't check` : ""}{failed.length ? ` · ${failed.length} didn't pass` : ""}</span>
     </div>
     {!led && <p className={`checks-reason tone-${groupTone(checks.group, urgent)}`}>{checks.reason}</p>}
     {checks.publication && <PublishingBlock orderId={orderId} publication={checks.publication} group={checks.group} calls={checks.calls ?? []} bare={compact} />}
@@ -106,7 +105,9 @@ export function ChecksPanel({ orderId, checks, compact = false, led = false }: {
     {checks.review && <ReviewBlock orderId={orderId} review={checks.review} compact={compact}
       shown={new Set((checks.proposals ?? []).map((proposal) => proposal.findingId).filter((id): id is string => !!id))} />}
     {failed.length > 0 && <div className="checks-block"><h3>Didn&apos;t pass</h3>{list(failed)}</div>}
-    {unknown.length > 0 && <div className="checks-block"><h3>Couldn&apos;t check</h3>{list(unknown)}</div>}
+    {unknown.length > 0 && (led
+      ? <More label={`Couldn't check (${unknown.length})`}>{list(unknown)}</More>
+      : <div className="checks-block"><h3>Couldn&apos;t check</h3>{list(unknown)}</div>)}
     {passed.length > 0 && <More label={`Passed (${passed.length})`}>{list(passed)}</More>}
   </section>
 }

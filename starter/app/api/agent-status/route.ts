@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import type { Group } from "@/lib/engine/checks"
-import { getEngine } from "@/lib/engine/server"
+import { getEngine, inPlainWords } from "@/lib/engine/server"
 import { buildBoardCard } from "@/lib/present/board"
 import { situationFor } from "@/lib/present/situation"
 
@@ -21,7 +21,9 @@ export async function GET(request: NextRequest) {
   const ids = new Set((request.nextUrl.searchParams.get("ids") ?? "").split(",").map((id) => id.trim()).filter(Boolean))
   const engine = await getEngine()
   const { orders } = await engine.state()
-  const tasks = orders.filter((order) => ids.has(order.id)).map((order): AgentTask => {
+  const chosen = orders.filter((order) => ids.has(order.id))
+  const situations = await inPlainWords(chosen.map((order) => ({ situation: situationFor(order), group: order.group })))
+  const tasks = chosen.map((order, index): AgentTask => {
     const bundle = engine.bundle(order.id)
     const card = bundle ? buildBoardCard(bundle) : null
     return {
@@ -30,7 +32,7 @@ export async function GET(request: NextRequest) {
       vehicle: card?.vehicle ?? "Vehicle not linked",
       route: card ? `${card.from.city} → ${card.to.city}` : "",
       group: order.group,
-      text: situationFor(order)?.headline ?? order.reason,
+      text: situations[index]?.headline ?? order.reason,
     }
   }).sort((a, b) => RANK[a.group] - RANK[b.group] || a.reference.localeCompare(b.reference))
   const inProgress = tasks.filter((task) => task.group === "in_progress").length

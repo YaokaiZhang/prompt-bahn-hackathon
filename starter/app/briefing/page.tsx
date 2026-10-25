@@ -123,9 +123,6 @@ const COUNT_TILES: { key: Group | "urgent" | "couldnt_check"; label: string }[] 
   { key: "urgent", label: "Urgent" },
   { key: "in_progress", label: GROUP_LABEL.in_progress },
   { key: "solved", label: GROUP_LABEL.solved },
-  { key: "normal", label: GROUP_LABEL.normal },
-  { key: "done", label: GROUP_LABEL.done },
-  { key: "couldnt_check", label: "Couldn't fully check" },
 ]
 
 function Digest({ item, cards, now }: { item: DigestItem; cards: Map<string, BoardCard>; now: string | null }) {
@@ -135,10 +132,9 @@ function Digest({ item, cards, now }: { item: DigestItem; cards: Map<string, Boa
   return <>
     <header className="mail-head">
       <h2>{item.title}</h2>
-      <p className="mail-meta">{facts.slot} · counts from the rule checks{prose.source === "model" ? " · prose by the model" : ""}</p>
     </header>
 
-    <dl className="digest-counts">{COUNT_TILES.map((tile) => <div key={tile.key} className={(tile.key === "needs_action" || tile.key === "urgent") && facts.counts[tile.key] ? "tone-danger" : ""}>
+    <dl className="digest-counts">{COUNT_TILES.filter((tile) => facts.counts[tile.key] > 0).map((tile) => <div key={tile.key} className={(tile.key === "needs_action" || tile.key === "urgent") && facts.counts[tile.key] ? "tone-danger" : ""}>
       <dt>{tile.label}</dt><dd>{facts.counts[tile.key]}</dd>
     </div>)}</dl>
 
@@ -161,7 +157,6 @@ function Digest({ item, cards, now }: { item: DigestItem; cards: Map<string, Boa
     {facts.needsActionBy.length > 0 && <More label="Blocked, by cause">
       <ul className="digest-causes">{facts.needsActionBy.map((cause) => <li key={cause.label}><span>{cause.label}</span><b>{cause.count}</b></li>)}</ul>
     </More>}
-    {prose.note && <p className="digest-note">{prose.note}</p>}
   </>
 }
 
