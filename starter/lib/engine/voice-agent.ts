@@ -14,6 +14,14 @@
 // Fallback: when the audio model fails (or none is configured), the ear listens, the
 // checker decides and writes the reply, and text to speech speaks it.
 //
+// Simulated calls talk too, in text: a model plays the callee (simulated-person.ts) and
+// its words go straight to step 2 ("text" path). No ear, no audio model, no speech; the
+// checker writes every reply, exactly as in the fallback.
+//
+// The opener: the agent does not start from zero. It says what it already knows (the
+// order, the keypad answers, why the call escalated) and asks one specific question. The
+// checker's model writes it from the brief; a template stands in when that fails.
+//
 // The voice agent gathers information only. It never agrees to a change: a change
 // the callee wants becomes a change proposal (needs the operator's yes) when the call
 // ends, and what they said becomes the call result (engine `callEnded`).
@@ -83,8 +91,12 @@ export type TurnCheck = {
 /** An ETA the callee stated: local "HH:MM" in their zone (or `at`, ISO UTC, when known) and their words. */
 export type CheckedEta = { local: string; at?: string; claim: string }
 
-/** Who made the words the agent said: the audio model ("voice"), the checker because the audio model's reply was not allowed ("replaced"), or the checker because the audio model failed ("fallback"). */
-export type TurnPath = "voice" | "replaced" | "fallback"
+/**
+ * Who made the words the agent said: the audio model ("voice"), the checker because the
+ * audio model's reply was not allowed ("replaced"), the checker because the audio model
+ * failed ("fallback"), or the checker on a simulated callee's text turn ("text").
+ */
+export type TurnPath = "voice" | "replaced" | "fallback" | "text"
 
 export type TurnResult = {
   heard: Heard
@@ -100,10 +112,19 @@ export type TurnResult = {
   said: { text: string; audioId: string | null; seconds: number; cost: number; model: string | null; from: "voice" | "speech" }
 }
 
+/** The agent's first words at tier 2, and what writing them cost. */
+export type Opener = { text: string; cost: number; model: string | null; error: string | null }
+
+/** What the callee said: a recording (live phone) or text (a simulated callee). */
+export type TurnInput = { clip: AudioClip } | { text: Heard }
+
 export type VoiceAgent = {
-  /** The first words at tier 2 (fixed text, so its speech is generated once). */
-  opener(call: Call): string
-  turn(input: { call: Call; brief: string; history: VoiceTurn[]; clip: AudioClip; speech: Speech | null; turn: number }): Promise<TurnResult>
+  /**
+   * The first words at tier 2: what the agent already knows, then one specific question.
+   * Per call, so its speech is generated per call (the cache only helps a repeat).
+   */
+  opener(input: { call: Call; brief: string }): Promise<Opener>
+  turn(input: TurnInput & { call: Call; brief: string; history: VoiceTurn[]; speech: Speech | null; turn: number }): Promise<TurnResult>
   /** Turns a call may take before the agent hands it over. */
   maxTurns: number
 }
@@ -118,7 +139,6 @@ export type VoiceAgentOptions = {
   maxTurns?: number
 }
 
-export const TIER2_OPENER = "I understand there is a problem. Please tell me in your own words what's happening. Hold the talk button while you speak."
 const SAFE_REPLY = "Thank you. Could you tell me a little more about that?"
 
 /** The rules every reply follows; the audio model's system prompt and the checker's policy. */
@@ -134,14 +154,27 @@ export function createVoiceAgent(options: VoiceAgentOptions): VoiceAgent {
   const maxTurns = options.maxTurns ?? 4
   return {
     maxTurns,
-    opener: () => TIER2_OPENER,
-    async turn({ call, brief, history, clip, speech, turn }) {
+    async opener({ call, brief }) {
+      const fallback = openerTemplate(call)
+      try {
+        const response = await options.checker.chat({ job: "call-opener", subject: call.reference, model, effort: "none", maxTokens: 200, messages: openerMessages(brief) })
+        const written = (response.message.content ?? "").trim().replace(/^["']|["']$/g, "").trim()
+        // One sentence of context and one question: anything else is the template's job.
+        const usable = written.length >= 20 && written.length <= 400 && written.includes("?") && !written.includes("\n")
+        return { text: usable ? written : fallback, cost: response.usage.cost, model: response.model, error: usable ? null : "The opener was not one short spoken question" }
+      } catch (error) {
+        return { text: fallback, cost: 0, model: null, error: message(error) }
+      }
+    },
+    async turn(input) {
+      const { call, brief, history, speech, turn } = input
       const subject = call.reference
       // The ear and the audio model run side by side: the transcript does not wait for the reply.
-      const [heard, voiced] = await Promise.all([
-        options.ear.transcribe(clip, subject),
+      // A text turn (simulated callee) has neither: the checker writes the reply.
+      const [heard, voiced] = "text" in input ? [input.text, { reply: null, error: null }] as const : await Promise.all([
+        options.ear.transcribe(input.clip, subject),
         options.voice
-          ? options.voice.reply({ brief, history, clip, subject }).then((reply) => ({ reply, error: null }), (error: unknown) => ({ reply: null, error: message(error) }))
+          ? options.voice.reply({ brief, history, clip: input.clip, subject }).then((reply) => ({ reply, error: null }), (error: unknown) => ({ reply: null, error: message(error) }))
           : Promise.resolve({ reply: null, error: "no audio model configured" }),
       ])
       const draft = voiced.reply
@@ -164,6 +197,7 @@ export function createVoiceAgent(options: VoiceAgentOptions): VoiceAgent {
       if (turn >= maxTurns && check.next === "continue") {
         check = { ...check, next: "handover", openQuestion: check.openQuestion ?? "The call ran out of turns before the problem was settled.", reply: handoverReply() }
       }
+      if (check.next !== "continue") check = { ...check, reply: closing(check.reply) }
       const useVoice = draft !== null && check.replyOk === true && check.next === "continue"
       let said: TurnResult["said"]
       if (useVoice) {
@@ -173,7 +207,8 @@ export function createVoiceAgent(options: VoiceAgentOptions): VoiceAgent {
         const spoken = speech ? await speech.speak(text) : null
         said = { text, audioId: spoken?.audioId ?? null, seconds: spoken?.seconds ?? estimateSeconds(text), cost: (draft?.cost ?? 0) + (spoken?.cost ?? 0), model: spoken?.model ?? null, from: "speech" }
       }
-      return { heard, check, checkCost, checkModel, checkError, path: !draft ? "fallback" : useVoice ? "voice" : "replaced", voiceError: voiced.error, said }
+      const path: TurnPath = "text" in input ? "text" : !draft ? "fallback" : useVoice ? "voice" : "replaced"
+      return { heard, check, checkCost, checkModel, checkError, path, voiceError: voiced.error, said }
     },
   }
 }
@@ -200,21 +235,76 @@ export function briefFor(bundle: Bundle, call: Call): string {
     const end = str(slot?.details.end_at)
     if (start && end) facts.push(`Booked pickup slot: ${local(start)} to ${local(end)} (${call.zone}).`)
   }
-  const keypad = call.transcript.filter((line) => line.tier === 1 && line.by === "callee" && line.text.startsWith("Pressed")).map((line) => line.text)
-  const escalation = call.transcript.find((line) => line.by === "system" && line.text.startsWith("Moved to tier 2"))?.text
+  const keypad = keypadSoFar(call).map(({ question, label }) => `"${question}" ${label}.`)
+  const escalation = escalationOf(call)
   return [
     `Order ${call.reference}${call.car ? `, a ${call.car}` : ""}.`,
     `You are the car delivery control room's assistant on the phone with ${name}, the ${call.line === "driver" ? "assigned driver" : `contact at the pickup site${call.callee.role ? ` (${call.callee.role})` : ""}`}.`,
     `Why we called (control room note, UTC times): ${call.reason}`,
     ...(keypad.length ? [`Keypad answers so far: ${keypad.join(" ")}`] : []),
-    ...(escalation ? [escalation] : []),
+    ...(escalation ? [`Moved to tier 2: ${escalation}.`] : []),
     ...facts,
     "Goal: find out what the problem is, what it means for the delivery, and what they will do next.",
   ].join("\n")
 }
 
+/** The tier-1 questions the callee answered on the keypad, without the "Press 1 for..." part. */
+function keypadSoFar(call: Call): { question: string; label: string }[] {
+  return call.answers.filter((answer) => answer.ask.startsWith("q")).flatMap((answer) => {
+    const question = call.questions[Number(answer.ask.slice(1))]
+    return question ? [{ question: question.text.replace(/\s*Press \d.*$/, ""), label: answer.label || `pressed ${answer.digit}` }] : []
+  })
+}
+
+/** Why the call moved to tier 2: the escalation the call logged ("Moved to tier 2: <why>."). */
+function escalationOf(call: Call): string | null {
+  const line = call.transcript.find((row) => row.by === "system" && row.text.startsWith("Moved to tier 2: "))?.text
+  return line ? line.slice("Moved to tier 2: ".length).replace(/\.$/, "") : null
+}
+
+/** The one question the template asks per escalation (call-script.ts escalate effects). */
+const OPENER_QUESTION: Record<string, string> = {
+  "Driver cannot deliver within the promised window": "What time do you now expect to arrive?",
+  "Driver reports a problem": "What is the problem with the delivery?",
+  "The car will not be ready in the booked slot": "When will the car be ready for collection?",
+  "No signed release at the site yet": "When will the signed release be ready for our driver?",
+  "Says they are not the pickup contact": "Who should our driver ask for at pickup?",
+  "Key collection is more complicated": "Where exactly should our driver collect the keys?",
+}
+
+/** The opener without a model: the order, the last keypad answer, one question for the escalation. */
+export function openerTemplate(call: Call): string {
+  const last = keypadSoFar(call).at(-1)
+  const why = escalationOf(call)
+  const heard = last ? ` You answered "${last.label}" when I asked: ${last.question}` : ""
+  // A reviewer question (or an unclear answer) has no fixed follow-up: ask it in words.
+  const question = (why && OPENER_QUESTION[why]) ?? (last && why === "Can answer, needs a conversation" ? `Go ahead: ${last.question}` : "Could you tell me in a few words what is going on?")
+  return `About order ${call.reference}${call.car ? `, the ${call.car}` : ""}.${heard} ${question}`
+}
+
+function openerMessages(brief: string): ChatMessage[] {
+  const system = [
+    "You are the car delivery control room's voice assistant. A phone call has just moved from keypad questions to a spoken conversation. Write the first words you say now.",
+    "First, in one short sentence, say what you already know: the order, what the person answered on the keypad and why that needs a conversation. Then ask exactly one specific question that helps find out what the problem is, what it means for the delivery, or what they will do next.",
+    "Do not greet them again and do not introduce yourself: you are already on the call. Use the times as written in the brief (the person's local time).",
+    "Policy:", VOICE_POLICY,
+    "Reply with only the words to say, no quotes.",
+  ].join("\n")
+  return [{ role: "system", content: system }, { role: "user", content: brief }]
+}
+
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * The last words of a call ask nothing: the checker now and then leaves a question in
+ * front of "Goodbye." (seen live), which the callee could never answer. Drop it.
+ */
+function closing(reply: string): string {
+  const kept = reply.split(/(?<=[.!?])\s+/).filter((sentence) => !sentence.trim().endsWith("?")).join(" ").trim()
+  if (!kept) return "Thank you, I've noted that. Goodbye."
+  return /goodbye[.!]?$/i.test(kept) ? kept : `${kept} Goodbye.`
 }
 
 function handoverReply(): string {

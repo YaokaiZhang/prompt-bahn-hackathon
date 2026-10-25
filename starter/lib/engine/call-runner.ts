@@ -8,17 +8,20 @@
 // Live calls ring on a persona's phone (ticket 11, phone.ts): one at a time per
 // phone, the rest queued; each round also rings out a live call that rang
 // `ringTimeoutMs` on an open phone ("no answer", so the agent schedules a callback).
-// Tier 2 (ticket 12): with a `voice` agent, an escalation on a LIVE call moves it to
-// state "tier2" and the agent speaks first; then each `voice(callId, clip)` is one
-// turn (the callee's recording in, the agent's reply out). The round leaves tier-2
-// calls alone. Simulated calls cannot talk: their escalations end as a handover.
+// Tier 2 (ticket 12): with a `voice` agent, an escalation moves the call to state
+// "tier2" and the agent opens (what it knows, one question). On a live call each
+// `voice(callId, clip)` is then one turn (the callee's recording in, the agent's reply
+// out); the round leaves live tier-2 calls alone. On a simulated call the round takes
+// the turns: the person's `talk` (a model playing the callee) says the next words in
+// text, and the same voice agent checks and answers them, without any audio. A
+// simulated person without `talk` cannot talk: its escalations end as a handover.
 
 import type { Bundle } from "@/lib/present/bundle"
 import {
   agentTurn, calleeEvent, DEFAULT_RATES, foldCall, newCallHeader, refuseInput, tier2Said,
   type Answerer, type Call, type CalleeInput, type CallHeader, type CostRates, type OrderCalls, type StoredCallEvent,
 } from "./calls"
-import { simulatedPerson, type SimulatedPerson } from "./simulated-person"
+import { simulatedPerson, type SimulatedPerson, type Talked } from "./simulated-person"
 import type { Speech } from "./speech"
 import { estimateSeconds } from "./speech"
 import { briefFor, type AudioClip, type TurnResult, type VoiceAgent, type VoiceTurn } from "./voice-agent"
@@ -32,7 +35,7 @@ export type CallOptions = {
   speech?: Speech | null
   /** Decides, when a call starts, whether the simulated person or a live phone answers. Default: simulated. */
   answererFor?: (header: Omit<CallHeader, "answerer">) => Answerer
-  /** The voice agent that takes live calls at tier 2 (ticket 12). Without it an escalation ends the call as a handover. */
+  /** The voice agent that takes calls at tier 2 (ticket 12): live ones, and simulated ones whose person can `talk`. Without it an escalation ends the call as a handover. */
   voice?: VoiceAgent | null
   rates?: Partial<CostRates>
   /**
@@ -119,20 +122,34 @@ export function createCallRunner(deps: CallRunnerDeps): CallRunner {
   async function agentStep(events: StoredCallEvent[]): Promise<boolean> {
     const call = foldCall(events, rates)
     const now = await deps.clock()
-    const opener = options.voice && call.answerer === "live" ? options.voice.opener(call) : null
-    const steps = agentTurn(call, now, opener, events[events.length - 1])
+    const steps = agentTurn(call, now, canTalk(call), events[events.length - 1])
     if (!steps.length) return false
     const base = { callId: call.id, orderId: call.orderId, at: now, wallAt: iso(wall()), by: "agent" as const }
     const out: StoredCallEvent[] = []
     let seq = events.length
+    let tier = call.tier
     for (const step of steps) {
-      if (step.kind === "said") {
-        const spoken = speech ? await speech.speak(step.text) : null
+      // A simulated call's tier 2 is text only: nobody listens, so nothing is spoken.
+      const voiced = tier < 2 || call.answerer === "live" ? speech : null
+      if (step.kind === "opener") {
+        // Written now, from the call with its escalation logged: the brief says why it moved to tier 2.
+        const sofar = foldCall([...events, ...out], rates)
+        const bundle = deps.bundles.get(call.orderId)
+        if (!bundle || !options.voice) throw new Error(`No voice agent to open ${call.id}`)
+        const opened = await options.voice.opener({ call: sofar, brief: briefFor(bundle, sofar) })
+        const spoken = voiced ? await voiced.speak(opened.text) : null
+        out.push({ ...base, seq: seq++, kind: "said", text: opened.text, data: {
+          audioId: spoken?.audioId ?? null, seconds: spoken?.seconds ?? estimateSeconds(opened.text), cost: opened.cost + (spoken?.cost ?? 0),
+          cached: spoken?.cached ?? false, model: opened.model, error: opened.error,
+        } })
+      } else if (step.kind === "said") {
+        const spoken = voiced ? await voiced.speak(step.text) : null
         out.push({ ...base, seq: seq++, kind: "said", text: step.text, data: {
           ...(step.ask ? { ask: step.ask } : {}), audioId: spoken?.audioId ?? null, seconds: spoken?.seconds ?? estimateSeconds(step.text),
           cost: spoken?.cost ?? 0, cached: spoken?.cached ?? false,
         } })
       } else if (step.kind === "tier") {
+        tier = step.tier
         out.push({ ...base, seq: seq++, kind: "tier", text: step.text, data: { tier: step.tier } })
       } else if (step.kind === "callback") {
         out.push({ ...base, seq: seq++, kind: "callback", text: step.text, data: { callbackAt: step.callbackAt } })
@@ -157,22 +174,37 @@ export function createCallRunner(deps: CallRunnerDeps): CallRunner {
     return true
   }
 
-  /** One tier-2 turn, stored as heard -> checked -> said (-> ended). */
-  async function voiceStep(events: StoredCallEvent[], clip: AudioClip): Promise<void> {
+  /** Can the voice agent take this call at tier 2: a live callee, or a simulated one who can talk. */
+  function canTalk(call: Call): boolean {
+    return !!options.voice && (call.answerer === "live" || !!person.talk)
+  }
+
+  /**
+   * One tier-2 turn, stored as heard -> checked -> said (-> ended). A clip comes from the
+   * phone page; text from the simulated callee (no ear, no audio model, no speech).
+   */
+  async function voiceStep(events: StoredCallEvent[], input: { clip: AudioClip } | { text: Talked }): Promise<void> {
     const agent = options.voice
     if (!agent) throw new Error("No voice agent takes tier 2")
     const call = foldCall(events, rates)
     if (call.state !== "tier2" || call.expecting?.type !== "speech") throw new Error(`${call.id} is not listening for speech`)
     const bundle = deps.bundles.get(call.orderId)
     if (!bundle) throw new Error(`Unknown order ${call.orderId}`)
-    const history: VoiceTurn[] = call.transcript.filter((line) => line.tier === 2 && line.by !== "system").map((line) => ({ by: line.by === "agent" ? "agent" : "callee", text: line.text }))
+    const history = historyOf(call)
     const turn = events.filter((event) => event.kind === "heard").length + 1
-    const result = await agent.turn({ call, brief: briefFor(bundle, call), history, clip, speech, turn })
+    const context = { call, brief: briefFor(bundle, call), history, turn }
+    // The simulated callee's model is not the agent's cost (a real callee is a person): it stays off the meter.
+    const result = "clip" in input
+      ? await agent.turn({ ...context, clip: input.clip, speech })
+      : await agent.turn({ ...context, text: { ...input.text, cost: 0 }, speech: null })
     const now = await deps.clock()
     const base = { callId: call.id, orderId: call.orderId, at: now, wallAt: iso(wall()) }
     let seq = events.length
+    const heardError = "text" in input ? input.text.error ?? null : null
     const out: StoredCallEvent[] = [
-      { ...base, seq: seq++, by: "callee", kind: "heard", text: result.heard.text || "(nothing heard)", data: { seconds: result.heard.seconds, cost: result.heard.cost, model: result.heard.model } },
+      { ...base, seq: seq++, by: "callee", kind: "heard", text: result.heard.text || "(nothing heard)", data: {
+        seconds: result.heard.seconds, cost: result.heard.cost, model: result.heard.model, ...(heardError ? { error: heardError } : {}),
+      } },
       { ...base, seq: seq++, by: "agent", kind: "checked", text: checkLine(result), data: { check: result.check, cost: result.checkCost, model: result.checkModel, error: result.checkError, seconds: 0 } },
       { ...base, seq: seq++, by: "agent", kind: "said", text: result.said.text, data: {
         audioId: result.said.audioId, seconds: result.said.seconds, cost: result.said.cost, model: result.said.model, path: result.path, error: result.voiceError,
@@ -194,6 +226,22 @@ export function createCallRunner(deps: CallRunnerDeps): CallRunner {
     }
     if (!(await store.appendCallEvents(out))) throw new Error(`${call.id} moved on while the agent was answering`)
     if (out.some((event) => event.kind === "ended")) await deps.ended(foldCall([...events, ...out], rates))
+  }
+
+  /** The simulated callee's tier-2 turn: once the agent's last words have had time to be said, it answers in text. */
+  async function talkStep(events: StoredCallEvent[]): Promise<boolean> {
+    const call = foldCall(events, rates)
+    const bundle = deps.bundles.get(call.orderId)
+    if (!person.talk || !bundle || wall() < new Date(call.lastWallAt).getTime() + call.lastSeconds * 1000 * pace) return false
+    const text = await person.talk({ call, bundle, history: historyOf(call) })
+    try {
+      await voiceStep(events, { text })
+      return true
+    } catch (error) {
+      // Another process took this turn first: its step stands, this one is dropped.
+      if (error instanceof Error && /moved on/.test(error.message)) return false
+      throw error
+    }
   }
 
   async function startLine(bundle: Bundle, header: CallHeader): Promise<boolean> {
@@ -238,7 +286,8 @@ export function createCallRunner(deps: CallRunnerDeps): CallRunner {
     // Calls are independent: take their turns side by side, so one slow prompt holds up no other call.
     const steps = [...(await eventsByCall()).values()].map(async (events) => {
       const call = foldCall(events, rates)
-      if (call.state === "ended" || call.state === "tier2") return false
+      if (call.state === "ended") return false
+      if (call.state === "tier2") return call.expecting?.type === "speech" && call.answerer === "simulated" ? talkStep(events) : false
       if (!call.expecting) return agentStep(events)
       if (call.answerer !== "simulated") return false
       const reply = person.respond(call)
@@ -295,11 +344,16 @@ export function createCallRunner(deps: CallRunnerDeps): CallRunner {
       if (!events) throw new Error(`No call ${callId}`)
       const behind = queuedBehind([...(await read()).values()].flat(), foldCall(events, rates))
       if (behind) throw new Error(behind)
-      await voiceStep(events, clip)
+      await voiceStep(events, { clip })
       return foldCall((await eventsByCall()).get(callId)!, rates)
     }),
     phone,
   }
+}
+
+/** The tier-2 conversation so far, as text: the opener, then each turn's words and reply. */
+function historyOf(call: Call): VoiceTurn[] {
+  return call.transcript.filter((line) => line.tier === 2 && line.by !== "system").map((line) => ({ by: line.by === "agent" ? "agent" : "callee", text: line.text }))
 }
 
 /** The "checked" line in the transcript: the checker's result in one sentence. */

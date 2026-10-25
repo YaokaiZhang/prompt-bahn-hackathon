@@ -7,16 +7,32 @@
 // every other order gets a stable mix (most answer and confirm; some are busy, some
 // decline or don't answer, a few report a problem), so callbacks show up on the
 // demo clock without anyone at a phone. Call `n` on a line uses `scripts[ref][n-1]`.
+//
+// Tier 2 (ticket 12): a person with `talk` can hold the voice agent's conversation in
+// text. `modelCallee` makes a model play the callee: it stays in character and answers
+// from the order's records. Without `talk` a simulated escalation ends as a handover.
 
+import type { Bundle } from "@/lib/present/bundle"
+import { bundleRecords } from "@/lib/reviewer/case-file"
+import type { ChatMessage, ModelGateway } from "@/lib/reviewer/gateway"
+import { renderRecord, sortRecords } from "@/lib/reviewer/records"
+import { DEFAULT_REVIEWER_MODEL } from "@/lib/reviewer/reviewer"
 import { bucket, type Call, type CalleeInput } from "./calls"
+import { estimateSeconds } from "./speech"
+import type { Heard, VoiceTurn } from "./voice-agent"
 
 export type Move = "answer" | "decline" | "no_answer" | string
 
 export type PersonReply = { input: CalleeInput; seconds: number }
 
+/** What the callee says next at tier 2, as text; `error` when it could not be had (the agent hears nothing). */
+export type Talked = Heard & { error?: string }
+
 export interface SimulatedPerson {
   /** The callee's next move on a call that expects one. */
   respond(call: Call): PersonReply
+  /** Tier 2: the callee's next words to the voice agent (the agent's latest is last in `history`). */
+  talk?(input: { call: Call; bundle: Bundle; history: VoiceTurn[] }): Promise<Talked>
 }
 
 /** Seconds the person takes: ringing until answered, a press after the prompt ends. */
@@ -72,6 +88,50 @@ export function defaultMoves(call: Call): Move[] {
   }
 }
 
-export function simulatedPerson(scripts: Scripts = DEMO_SCRIPTS): SimulatedPerson {
-  return scriptedPerson(scripts, defaultMoves)
+/** The app's person: the scripts and the stable mix; with `talk` (e.g. `modelCallee`) it holds tier 2 too. */
+export function simulatedPerson(scripts: Scripts = DEMO_SCRIPTS, talk?: SimulatedPerson["talk"]): SimulatedPerson {
+  return { ...scriptedPerson(scripts, defaultMoves), ...(talk ? { talk } : {}) }
+}
+
+/**
+ * Records the callee plausibly knows: not the support inbox or the customer's account.
+ * The callee answers like the person would, not like the reviewer.
+ */
+const CALLEE_DROPS = new Set(["inbox_thread", "customer"])
+
+/** The callee played by a model (Haiku through the reviewer's gateway), in text. */
+export function modelCallee(gateway: ModelGateway, model = DEFAULT_REVIEWER_MODEL): NonNullable<SimulatedPerson["talk"]> {
+  return async ({ call, bundle, history }) => {
+    try {
+      const response = await gateway.chat({ job: "call-callee", subject: call.reference, model, effort: "none", maxTokens: 200, messages: calleeMessages(call, bundle, history) })
+      // Stage directions ("*sighs*") slip through now and then: nobody says them on the phone.
+      const text = (response.message.content ?? "").replace(/\*[^*]*\*/g, " ").replace(/\s+/g, " ").trim()
+      if (!text) throw new Error("The simulated callee said nothing")
+      return { text, cost: response.usage.cost, seconds: estimateSeconds(text), model: response.model }
+    } catch (error) {
+      return { text: "", cost: 0, seconds: 0, model, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+}
+
+function calleeMessages(call: Call, bundle: Bundle, history: VoiceTurn[]): ChatMessage[] {
+  const name = call.callee.name ? call.callee.name.split(",")[0] : call.callee.handle
+  const role = call.line === "driver" ? "the driver delivering this car" : `the contact at the pickup site${call.callee.role ? ` (${call.callee.role})` : ""}`
+  const keypad = call.transcript.filter((line) => line.tier === 1 && line.by !== "system").map((line) => `${line.by === "agent" ? "Assistant" : "You"}: ${line.text}`)
+  const escalation = call.transcript.find((line) => line.by === "system" && line.text.startsWith("Moved to tier 2: "))?.text.slice("Moved to tier 2: ".length)
+  const records = sortRecords(bundleRecords(bundle, call.zone).filter((record) => !CALLEE_DROPS.has(record.kind))).map(renderRecord)
+  const persona = [
+    `You play ${name}, ${role}, on order ${call.reference}${call.car ? ` (a ${call.car})` : ""}. The car delivery control room's voice assistant is on the phone with you. This is a simulation: stay in character as a real, busy person on the phone and never mention being simulated.`,
+    "The call so far, on the keypad:", ...keypad,
+    `The call moved to a conversation because: ${escalation ?? "your keypad answer needs a conversation"}`,
+    "How you answer: one to three short spoken sentences, plain English, no lists, no stage directions. Answer the question you are asked, consistently with your keypad answers.",
+    `Answer from the order's records below; times are your local time (${call.zone}). Where the records say nothing, give an ordinary, plausible detail that fits them and never contradicts them. Do not invent dramatic events.`,
+    "If you have nothing more to add, say so briefly. You cannot change the customer's delivery promise yourself.",
+  ].join("\n")
+  return [
+    // The records are the same every turn: cached after the first.
+    { role: "system", content: [{ type: "text", text: persona }, { type: "text", text: `The order's records:\n${records.join("\n")}`, cache_control: { type: "ephemeral" } }] },
+    // The assistant is the other party: its words are the user turns, the callee's are ours.
+    ...history.map((turn): ChatMessage => turn.by === "agent" ? { role: "user", content: turn.text } : { role: "assistant", content: turn.text }),
+  ]
 }

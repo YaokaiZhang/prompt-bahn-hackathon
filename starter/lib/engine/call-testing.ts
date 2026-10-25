@@ -9,6 +9,35 @@ import { wavSeconds } from "./voice-audio"
 
 export { scriptedPerson } from "./simulated-person"
 
+/**
+ * A fake model gateway for the whole simulated tier 2: per job ("call-opener",
+ * "call-callee", "call-check") it replies with the next scripted content, $0.001 a
+ * reply. A job that runs out of replies fails, like a provider error.
+ */
+export function jobGateway(replies: Record<string, string[]>): ModelGateway & { readonly calls: ChatRequest[] } {
+  const calls: ChatRequest[] = []
+  const used = new Map<string, number>()
+  return {
+    calls,
+    async chat(request) {
+      calls.push(request)
+      const index = used.get(request.job) ?? 0
+      used.set(request.job, index + 1)
+      const content = replies[request.job]?.[index]
+      if (content === undefined) throw new Error(`no scripted ${request.job} reply ${index + 1}`)
+      return { model: `fake-${request.job}`, finishReason: "stop", usage: { ...NO_USAGE, promptTokens: 1000, completionTokens: 50, cost: 0.001 }, message: { role: "assistant", content } }
+    },
+  }
+}
+
+/** A checker reply as the gateway returns it (JSON), with safe defaults for missing fields. */
+export function checkJson(check: Partial<TurnCheck>): string {
+  return JSON.stringify({
+    heard: "", claims: [], changes: [], conflicts: [], replyOk: null, replyIssue: null, reply: "Thank you. Anything else I should know?",
+    next: "continue", openQuestion: null, nextStep: null, summary: "Talking.", ...check,
+  })
+}
+
 export type ScriptedSpeech = Speech & { readonly spoken: string[] }
 
 /**
@@ -68,12 +97,25 @@ export function scriptedVoice(replies: string[], fail?: string): VoiceModel & { 
   }
 }
 
-/** The checker (Haiku): replies with `checks` in order as JSON, $0.001 a turn. Missing fields get safe defaults. */
-export function scriptedChecker(checks: Partial<TurnCheck>[]): ModelGateway & { readonly calls: ChatRequest[] } {
+/** What the scripted checker's model writes as the tier-2 opener (job "call-opener"), $0.0005 each. */
+export const SCRIPTED_OPENER = "About order {ref}: you told me there is a problem on the keypad. What exactly is holding you up?"
+
+/**
+ * The checker (Haiku): replies with `checks` in order as JSON, $0.001 a turn. Missing
+ * fields get safe defaults. The opener (same gateway, job "call-opener") is answered
+ * with `opener` ({ref} filled in) and kept apart in `openers`, so it uses up no check.
+ */
+export function scriptedChecker(checks: Partial<TurnCheck>[], opener = SCRIPTED_OPENER): ModelGateway & { readonly calls: ChatRequest[]; readonly openers: ChatRequest[] } {
   const calls: ChatRequest[] = []
+  const openers: ChatRequest[] = []
   return {
     calls,
+    openers,
     async chat(request) {
+      if (request.job === "call-opener") {
+        openers.push(request)
+        return { model: "scripted-checker", finishReason: "stop", usage: { ...NO_USAGE, promptTokens: 400, completionTokens: 40, cost: 0.0005 }, message: { role: "assistant", content: opener.replace("{ref}", request.subject) } }
+      }
       calls.push(request)
       const check = checks[calls.length - 1] ?? {}
       const content = JSON.stringify({
