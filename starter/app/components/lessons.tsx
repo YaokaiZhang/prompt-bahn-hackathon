@@ -2,8 +2,8 @@
 
 // The Lessons section of the Rules page (spec .scratch/self-improving-agents): what the
 // agents learned from the operator's corrections. A candidate shows the lesson (the only
-// part a prompt gets), why it should hold, the eval before and after, and the mistakes it
-// came from; the operator approves or rejects it, and retires an approved one. Approved
+// part a prompt gets), why it should hold and the mistakes it came from (the gate's eval
+// scores stay in the store and `npm run lessons`, not on the page); the operator approves or rejects it, and retires an approved one. Approved
 // lessons are listed too, since they are in the prompts now; the rest fold away.
 
 import Link from "next/link"
@@ -29,8 +29,6 @@ async function send(body: LessonAction): Promise<LessonsView> {
   if (!response.ok || !data) throw new Error(data?.error ?? "The lesson did not change")
   return data
 }
-
-const score = (value: number | null) => value === null ? "not run" : String(Math.round(value * 100) / 100)
 
 function Tags({ lesson }: { lesson: LessonView }) {
   if (!lesson.appliesTo.length) return <span className="lesson-tags">Every {lesson.agent === "reviewer" ? "order" : "card"}</span>
@@ -73,10 +71,7 @@ function LessonCard({ lesson, onChange }: { lesson: LessonView; onChange: (view:
     </div>
     <blockquote className="lesson-text">{lesson.text}</blockquote>
     <p className="lesson-why">{lesson.explanation}</p>
-    <p className="lesson-meta">
-      Eval {score(lesson.evalBefore)} without, {score(lesson.evalAfter)} with it
-      {decided ? ` · ${decided.kind} ${fmtDateTime(decided.at, null, false)}` : ""}
-    </p>
+    {decided && <p className="lesson-meta">{decided.kind[0].toUpperCase()}{decided.kind.slice(1)} {fmtDateTime(decided.at, null, false)}</p>}
     {lesson.sources.length > 0 && <More label={`Source mistakes (${lesson.sources.length})`}>
       <ul className="lesson-sources">{lesson.sources.map((source) => <Source key={source.id} source={source} />)}</ul>
     </More>}
