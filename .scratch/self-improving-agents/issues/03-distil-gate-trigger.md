@@ -8,7 +8,7 @@ a time, daily spend cap. `npm run lessons` runs the same step by hand.
 
 **Blocked by:** 01, 02
 
-**Status:** ready-for-agent
+**Status:** done (real run pending: needs ANTHROPIC_API_KEY)
 
 - [ ] Grouping and thresholds counted in code
 - [ ] Distiller call and output validation
