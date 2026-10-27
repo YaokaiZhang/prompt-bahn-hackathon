@@ -7,13 +7,15 @@
 //   starts a batch for the rest; the next read (the pages poll) picks them up.
 // - A rewrite may only use numbers that are in the card it rewrites (every digit run
 //   must appear there), so a time, count or reference can't drift. A rejected or
-//   failed card keeps its code text.
+//   failed card keeps its code text. A rejected card is recorded as a mistake (the
+//   validator's reason, tagged with the card's kind), once per card.
 // - Rewrites are cached by a hash of the prompt version, the model and the card.
 
 import { createHash } from "node:crypto"
 import type { ModelGateway } from "@/lib/reviewer/gateway"
 import { DEFAULT_REVIEWER_MODEL } from "@/lib/reviewer/reviewer"
 import { plainFor, type PlainWords, type Situation } from "@/lib/present/situation"
+import type { MistakeLog } from "./mistakes"
 
 export const PLAIN_VERSION = "plain-words-v2"
 const BATCH = 8
@@ -36,7 +38,7 @@ export function createMemoryPlainCache(): PlainCache {
   }
 }
 
-export type PlainOptions = { gateway?: ModelGateway | null; cache: PlainCache; model?: string }
+export type PlainOptions = { gateway?: ModelGateway | null; cache: PlainCache; model?: string; mistakes?: Pick<MistakeLog, "record"> | null }
 
 export class PlainRejected extends Error {}
 
@@ -107,6 +109,18 @@ export function createPlainWords(options: PlainOptions): PlainWordsService {
   const failed = new Set<string>()
   const running = new Set<Promise<void>>()
 
+  /** The validator's rejection as a mistake: objective, so usable as it is. Its id is the card's key: once per card. */
+  async function rejected(key: string, item: PlainItem, raw: unknown, reason: string, by: string): Promise<void> {
+    if (!options.mistakes) return
+    const now = new Date().toISOString()
+    await options.mistakes.record({
+      id: `pw-${key.slice(0, 32)}`, agent: "plain-words", orderId: null, at: now, recordedAt: now, operator: null,
+      promptVersion: PLAIN_VERSION, model: by, kind: "rejected", tags: [`card:${item.kind}`],
+      input: { kind: item.kind, headline: item.situation.headline, body: item.situation.body }, agentOutput: raw,
+      operatorNote: null, editDiff: null, validatorReason: reason, restatement: null, status: "usable", unusableReason: null, caseFile: null,
+    })
+  }
+
   async function batch(rows: { key: string; item: PlainItem }[]): Promise<void> {
     if (!gateway) return
     const cards = rows.map(({ item }, index) => ({
@@ -119,11 +133,14 @@ export function createPlainWords(options: PlainOptions): PlainWordsService {
       })
       const replies = new Map(parseReply(response.message.content).map((reply) => [String((reply as { id?: unknown })?.id ?? ""), reply]))
       await Promise.all(rows.map(async ({ key, item }, index) => {
+        const raw = replies.get(String(index + 1))
         try {
-          const text = checkPlain(replies.get(String(index + 1)), item)
+          const text = checkPlain(raw, item)
           await cache.put(key, text, response.model || model)
-        } catch {
+        } catch (error) {
           failed.add(key)
+          // A card the model left out is not a wrong rewrite.
+          if (error instanceof PlainRejected && raw !== undefined) await rejected(key, item, raw, error.message, response.model || model)
         }
       }))
     } catch {

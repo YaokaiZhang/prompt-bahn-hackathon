@@ -23,6 +23,7 @@ import type { SuggestOptions } from "./inbox-agent"
 import { createPostgresSuggestionCache } from "./suggestion-cache"
 import { createPostgresPlainCache } from "./plain-cache"
 import { createPlainWords, type PlainItem, type PlainWordsService } from "./plain-words"
+import { createMistakeLog } from "./mistakes"
 import type { Group } from "./checks"
 import { applyPlain, type PlainWords, type Situation } from "@/lib/present/situation"
 
@@ -154,6 +155,8 @@ export function getEngine(): Promise<Engine> {
         },
         // Travel plans (spec .scratch/publishing): the same gateway; template plans without a key.
         travel: { gateway, cache: createPostgresPlanCache(db), reference },
+        // Mistakes (spec .scratch/self-improving-agents): the same gateway restates the operator's reasons; pending without a key.
+        mistakes: { gateway },
       })
       startPump(engine)
       startPublishing(engine)
@@ -168,9 +171,11 @@ export function inboxAgentOptions(): SuggestOptions {
   return { gateway: anthropicFromEnv(), cache: createPostgresSuggestionCache(db) }
 }
 
-/** The situation cards' plain words (plain-words.ts): the reviewer's gateway; code text without a key. */
+/** The situation cards' plain words (plain-words.ts): the reviewer's gateway; code text without a key. Rejected cards are kept as mistakes. */
 export function plainWords(): PlainWordsService {
-  cache.controlRoomPlain ??= createPlainWords({ gateway: anthropicFromEnv(), cache: createPostgresPlainCache(db) })
+  cache.controlRoomPlain ??= createPlainWords({
+    gateway: anthropicFromEnv(), cache: createPostgresPlainCache(db), mistakes: createMistakeLog(createPostgresStore(db)),
+  })
   return cache.controlRoomPlain
 }
 

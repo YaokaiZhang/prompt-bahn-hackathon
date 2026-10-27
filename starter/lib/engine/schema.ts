@@ -1,7 +1,8 @@
 // The control room's own tables. ADR 0002: none of them has a foreign key into the
 // starter's tables, so reseeding keeps working, and the snapshot is never edited.
-// Every table is prefixed `cr_` and listed in ENGINE_TABLES (state, which reset truncates)
-// or CACHE_TABLES (content-keyed caches, which reset keeps).
+// Every table is prefixed `cr_` and listed in ENGINE_TABLES (state, which reset truncates),
+// CACHE_TABLES (content-keyed caches, which reset keeps) or LEARNING_TABLES (what the
+// agents learn from, which reset keeps).
 
 import { bigserial, boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core"
 
@@ -152,3 +153,37 @@ export const ENGINE_TABLES = [demoClock, briefingItems, proposalEvents, effectEv
  * current, proposals, calls) in ENGINE_TABLES, not here.
  */
 export const CACHE_TABLES = [reviewResults, digestProse, travelPlans, inboxSuggestions]
+
+/**
+ * Mistakes (spec .scratch/self-improving-agents, lib/engine/mistakes.ts): an operator's
+ * override of an agent (a dismissal with a reason, an edited script) or a validator's
+ * rejection. Appended once per id; only the restatement fields are written later, once.
+ */
+export const mistakes = pgTable("cr_mistakes", {
+  seq: bigserial("seq", { mode: "number" }).primaryKey(),
+  id: text("id").notNull().unique(),
+  agent: text("agent").notNull(),
+  orderId: text("order_id"),
+  at: timestamp("at", { withTimezone: true }).notNull(),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull(),
+  operator: text("operator"),
+  promptVersion: text("prompt_version").notNull(),
+  model: text("model"),
+  kind: text("kind").notNull(),
+  tags: jsonb("tags").$type<string[]>().notNull(),
+  input: jsonb("input").$type<unknown>(),
+  agentOutput: jsonb("agent_output").$type<unknown>(),
+  operatorNote: text("operator_note"),
+  editDiff: jsonb("edit_diff").$type<{ before: string; after: string }>(),
+  validatorReason: text("validator_reason"),
+  restatement: text("restatement"),
+  status: text("status").notNull(),
+  unusableReason: text("unusable_reason"),
+  caseFile: jsonb("case_file").$type<Record<string, unknown>>(),
+}, (table) => [index("cr_mistakes_agent_idx").on(table.agent)])
+
+/**
+ * What the agents learn from. Neither engine state nor a cache: a demo reset keeps it,
+ * so learning is not wiped. Not in ENGINE_TABLES on purpose.
+ */
+export const LEARNING_TABLES = [mistakes]

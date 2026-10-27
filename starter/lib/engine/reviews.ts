@@ -15,7 +15,7 @@
 
 import type { Bundle } from "@/lib/present/bundle"
 import { createMemoryReviewCache, type ReviewCache } from "@/lib/reviewer/cache"
-import type { PriorState, RuleResult as ReviewerRuleResult } from "@/lib/reviewer/case-file"
+import type { CaseFile, PriorState, RuleResult as ReviewerRuleResult } from "@/lib/reviewer/case-file"
 import type { ModelGateway } from "@/lib/reviewer/gateway"
 import type { CaseRecord } from "@/lib/reviewer/records"
 import { createReviewer, NOT_REVIEWED_YET, type Finding, type Reviewed, type ReviewResult } from "@/lib/reviewer/reviewer"
@@ -119,6 +119,8 @@ export type ReviewLayer = {
    * applied) and the time it is read as of (its last effect event). Forgets its review.
    */
   replace(bundle: Bundle, reviewAt: string): void
+  /** The order's case file as its review reads it now (a mistake keeps it, to become an eval case). */
+  caseFile(orderId: string, inputs: ReviewInputs): CaseFile
 }
 
 const OPEN_ALERT = (status: string) => status !== "RESOLVED"
@@ -352,7 +354,13 @@ export function createReviewLayer(bundles: Bundle[], snapshotAt: string, options
     forget(id)
   }
 
-  return { canReview: gateway !== null, read, run, forget, replace }
+  function caseFile(orderId: string, inputs: ReviewInputs): CaseFile {
+    const bundle = byId.get(orderId)
+    if (!bundle) throw new Error(`Unknown order ${orderId}`)
+    return reader.caseFile(orderId, inputFor(bundle, inputs))
+  }
+
+  return { canReview: gateway !== null, read, run, forget, replace, caseFile }
 }
 
 export function reviewTotals(canReview: boolean, reviews: OrderReview[]): ReviewTotals {

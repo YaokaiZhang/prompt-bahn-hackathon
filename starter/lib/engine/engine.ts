@@ -10,8 +10,10 @@
 // `OrderState` / `EngineState` and compute them in `state`. `assertNever` makes
 // the compiler point at every switch that misses a new command.
 
+import { randomUUID } from "node:crypto"
 import type { Bundle } from "@/lib/present/bundle"
 import type { AskRole, ContactType } from "@/lib/reviewer/policy"
+import { PROMPT_VERSION } from "@/lib/reviewer/prompt"
 import { compareUrgency, GROUPS, verdictFor, type Group, type RuleResult, type Verdict } from "./checks"
 import { briefingAsOf, digestFacts, digestTimes, digestTitle, pushId, sendPush, type Briefing, type DigestItem, type PushInput } from "./briefing"
 import { writeProse, type ProseOptions } from "./digest-prose"
@@ -31,6 +33,7 @@ import { answeredRecords, callbackItems, orderCalls, reportedEta, statedByCallee
 import { demandCheck, pendingChanges, publicationOf, solvedText, type Publication, type StoredPublicationEvent } from "./publishing"
 import { planInput, planTrip, type TravelOptions } from "./travel-planner"
 import { MAX_REPLY, operatorLinks, type InboxEvent } from "./inbox"
+import { createMistakeLog, type Mistake, type MistakeOptions } from "./mistakes"
 
 /** The snapshot as the engine reads it: one bundle per order. */
 export type Snapshot = { snapshotAt: string; bundles: Bundle[] }
@@ -231,6 +234,10 @@ export type Engine = {
   phone(persona: PhonePersona): Promise<PhoneView>
   /** Every support inbox event (links and replies the operator made), oldest first. */
   inboxEvents(): Promise<InboxEvent[]>
+  /** Every mistake recorded so far (operator overrides of the reviewer), oldest first. Kept across reset. */
+  mistakes(): Promise<Mistake[]>
+  /** Resolves when every background restatement has settled (tests and scripts). */
+  settleMistakes(): Promise<void>
 }
 
 export type EngineDeps = {
@@ -244,6 +251,8 @@ export type EngineDeps = {
   calls?: CallOptions
   /** The travel planner's gateway, cache and reference data. Absent: template plans. */
   travel?: TravelOptions
+  /** The model that restates the operator's reasons on mistakes. Absent: restatements stay pending. */
+  mistakes?: MistakeOptions
 }
 
 const MINUTE = 60_000
@@ -261,11 +270,12 @@ function isoOf(value: Date | string): string {
   return date.toISOString()
 }
 
-export function createEngine({ snapshot, store, reviews: reviewOptions, briefing: proseOptions, calls: callOptions = {}, travel: travelOptions = {} }: EngineDeps): Engine {
+export function createEngine({ snapshot, store, reviews: reviewOptions, briefing: proseOptions, calls: callOptions = {}, travel: travelOptions = {}, mistakes: mistakeOptions }: EngineDeps): Engine {
   const start = isoOf(snapshot.snapshotAt)
   const bundles = new Map(snapshot.bundles.map((bundle) => [bundle.order.id, bundle]))
   const fleet = buildFleet(snapshot.bundles)
   const reviews = createReviewLayer(snapshot.bundles, start, reviewOptions)
+  const mistakeLog = createMistakeLog(store, mistakeOptions)
   const nextChecks = nextCheckItems(snapshot.bundles)
   const digestSlots = digestTimes(start).map((slot) => ({ ...slot, title: digestTitle(slot.slot) }))
   const digestItems = digestDueItems(digestSlots)
@@ -669,6 +679,31 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     for (const orderId of new Set(effects.map((effect) => effect.orderId))) await rereview(orderId)
   }
 
+  /**
+   * The operator overrode the reviewer (spec .scratch/self-improving-agents): a mistake
+   * with the order's case file and tags. A dismissal's reason is restated in the background.
+   */
+  async function recordMistake(proposal: Proposal, override: { kind: "dismissed"; operatorNote: string } | { kind: "edited"; editDiff: { before: string; after: string } }): Promise<void> {
+    if (proposal.source !== "reviewer") return
+    const inputs = await currentInputs()
+    const review = (await reviews.read(inputs)).get(proposal.orderId)
+    const caseFile = reviews.caseFile(proposal.orderId, inputs)
+    const failing = caseFile.rules.filter((rule) => rule.status === "failed").map((rule) => `rule:${rule.rule}`)
+    const { status: _s, waitingOn: _w, onApprove: _o, instructions: _i, answer: _a, history: _h, ...said } = proposal
+    const mistake: Mistake = {
+      id: `rv-${randomUUID()}`, agent: "reviewer", orderId: proposal.orderId, at: await clock(), recordedAt: new Date().toISOString(),
+      operator: "operator", promptVersion: PROMPT_VERSION, model: review?.model ?? null, kind: override.kind,
+      tags: [...new Set([...failing, `policy:${proposal.policyRow}`, `contact:${proposal.contact.type}`, `proposal:${proposal.kind}`])].sort(),
+      input: null, agentOutput: { proposal: said, finding: review?.findings.find((finding) => finding.id === proposal.findingId) ?? null },
+      operatorNote: override.kind === "dismissed" ? override.operatorNote : null,
+      editDiff: override.kind === "edited" ? override.editDiff : null,
+      validatorReason: null, restatement: null,
+      // An edit's diff says what would have been right as it is; a typed reason waits for its restatement.
+      status: override.kind === "edited" ? "usable" : "pending", unusableReason: null, caseFile,
+    }
+    await mistakeLog.record(mistake)
+  }
+
   async function findProposal(proposalId: string): Promise<Proposal> {
     for (const order of await ordersAt(await clock())) {
       const found = order.proposals.find((proposal) => proposal.id === proposalId)
@@ -898,6 +933,7 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
         stillOpen(proposal, "edited")
         if (script === proposal.script) break
         await store.appendProposalEvents([await eventFor(proposal, "edited", `Script changed from "${proposal.script}" to "${script}".`, { script })])
+        await recordMistake(proposal, { kind: "edited", editDiff: { before: proposal.script, after: script } })
         break
       }
       case "dismiss": {
@@ -905,6 +941,8 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
         stillOpen(proposal, "dismissed")
         const note = command.note?.trim()
         await store.appendProposalEvents([await eventFor(proposal, "dismissed", note ? `Dismissed: ${note}` : "Dismissed.")])
+        // A dismissal without a reason says nothing about what was wrong: not a mistake.
+        if (note) await recordMistake(proposal, { kind: "dismissed", operatorNote: note })
         break
       }
       case "instruct": {
@@ -1025,5 +1063,7 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     overlaid: async (bundle) => (await overlaidAll([bundle]))[0], overlaidAll,
     phone: (persona) => callRunner.phone(persona),
     inboxEvents: () => store.readInboxEvents(),
+    mistakes: () => store.readMistakes(),
+    settleMistakes: () => mistakeLog.settled(),
   }
 }
