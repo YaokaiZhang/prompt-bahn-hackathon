@@ -3,7 +3,7 @@
 // replies as fixtures in lib/reviewer/fixtures/cases/, which tests replay offline.
 // The score is a report, not a gate.
 //
-//   npm run review:eval              real model; needs OPENROUTER_API_KEY
+//   npm run review:eval              real model; needs ANTHROPIC_API_KEY
 //   npm run review:eval -- --replay  score the committed fixtures offline
 //   npm run review:eval -- --dry     real model, but do not write fixtures
 //
@@ -14,7 +14,7 @@ import "dotenv/config"
 import { writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { CASE_FIXTURE_DIR, loadFixtures, writeFixture } from "../lib/reviewer/fixtures"
-import { openRouterFromEnv } from "../lib/reviewer/openrouter"
+import { anthropicFromEnv } from "../lib/reviewer/anthropic"
 import { formatReview, formatScore } from "../lib/reviewer/report"
 import { createReviewer, type ReviewResult } from "../lib/reviewer/reviewer"
 import { createRecordingGateway, createScriptedGateway } from "../lib/reviewer/scripted"
@@ -38,9 +38,9 @@ async function main(): Promise<void> {
     return
   }
 
-  const real = openRouterFromEnv()
+  const real = anthropicFromEnv()
   if (!real) {
-    console.error("OPENROUTER_API_KEY is not set: the reviewer eval needs the real model.")
+    console.error("ANTHROPIC_API_KEY is not set: the reviewer eval needs the real model.")
     console.error("Run `npm run review:eval -- --replay` to score the committed fixtures offline.")
     process.exit(2)
   }

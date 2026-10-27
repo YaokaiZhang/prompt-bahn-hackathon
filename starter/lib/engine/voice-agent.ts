@@ -127,12 +127,15 @@ export type VoiceAgent = {
   turn(input: TurnInput & { call: Call; brief: string; history: VoiceTurn[]; speech: Speech | null; turn: number }): Promise<TurnResult>
   /** Turns a call may take before the agent hands it over. */
   maxTurns: number
+  /** Can it take recordings (has an ear)? Without one it talks with simulated callees only. */
+  listens: boolean
 }
 
 export type VoiceAgentOptions = {
   /** The audio model; null or a failure uses the fallback. */
   voice?: VoiceModel | null
-  ear: Transcriber
+  /** The ear; null when no transcription model is configured (text turns only). */
+  ear: Transcriber | null
   /** Haiku's gateway (the reviewer's ModelGateway). */
   checker: ModelGateway
   model?: string
@@ -153,8 +156,10 @@ export const VOICE_POLICY = [
 export function createVoiceAgent(options: VoiceAgentOptions): VoiceAgent {
   const model = options.model ?? DEFAULT_REVIEWER_MODEL
   const maxTurns = options.maxTurns ?? 4
+  const ear = options.ear
   return {
     maxTurns,
+    listens: ear !== null,
     async opener({ call, brief }) {
       const fallback = openerTemplate(call)
       try {
@@ -172,8 +177,9 @@ export function createVoiceAgent(options: VoiceAgentOptions): VoiceAgent {
       const subject = call.reference
       // The ear and the audio model run side by side: the transcript does not wait for the reply.
       // A text turn (simulated callee) has neither: the checker writes the reply.
+      if (!("text" in input) && !ear) throw new Error("No transcription model: the voice agent cannot hear a recording")
       const [heard, voiced] = "text" in input ? [input.text, { reply: null, error: null }] as const : await Promise.all([
-        options.ear.transcribe(input.clip, subject),
+        ear!.transcribe(input.clip, subject),
         options.voice
           ? options.voice.reply({ brief, history, clip: input.clip, subject }).then((reply) => ({ reply, error: null }), (error: unknown) => ({ reply: null, error: message(error) }))
           : Promise.resolve({ reply: null, error: "no audio model configured" }),

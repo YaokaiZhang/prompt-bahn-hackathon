@@ -174,9 +174,9 @@ export function createCallRunner(deps: CallRunnerDeps): CallRunner {
     return true
   }
 
-  /** Can the voice agent take this call at tier 2: a live callee, or a simulated one who can talk. */
+  /** Can the voice agent take this call at tier 2: a live callee (when it can hear), or a simulated one who can talk. */
   function canTalk(call: Call): boolean {
-    return !!options.voice && (call.answerer === "live" || !!person.talk)
+    return !!options.voice && (call.answerer === "live" ? options.voice.listens : !!person.talk)
   }
 
   /**

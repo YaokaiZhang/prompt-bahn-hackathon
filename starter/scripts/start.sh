@@ -29,7 +29,7 @@ step() { printf '\n==> %s\n' "$*"; }
 step "Environment"
 if [[ ! -f .env ]]; then
   cp .env.example .env
-  echo "Created .env from .env.example. Set OPENROUTER_API_KEY in it for the reviewer and voice agent."
+  echo "Created .env from .env.example. Set ANTHROPIC_API_KEY in it for the reviewer and voice agent."
 fi
 
 step "Dependencies"

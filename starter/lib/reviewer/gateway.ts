@@ -1,7 +1,7 @@
 // The ModelGateway port: every model call in the control room goes through it and
-// reports its cost. Messages follow the OpenAI-compatible chat-completions shape
-// OpenRouter speaks, so the OpenRouter adapter is a thin mapping and the scripted
-// adapter (tests) replays recorded replies in the same shape.
+// reports its cost. Messages follow the OpenAI-compatible chat-completions shape (the
+// app first ran on OpenRouter); the Anthropic adapter maps it onto the Messages API and
+// the scripted adapter (tests) replays recorded replies in the same shape.
 
 export type CacheControl = { type: "ephemeral" }
 export type TextPart = { type: "text"; text: string; cache_control?: CacheControl }
@@ -49,7 +49,7 @@ export type Usage = {
   /** Prompt tokens written to the provider's prompt cache. */
   cacheWriteTokens: number
   reasoningTokens: number
-  /** What the call cost, in the provider's credits (USD on OpenRouter). */
+  /** What the call cost, in USD. */
   cost: number
 }
 

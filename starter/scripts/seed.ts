@@ -48,7 +48,7 @@ async function seed(): Promise<void> {
 
 // The one-time reviewer sweep (ticket 06): every order not reviewed yet, so "Normal" means
 // checked. It calls the real model on up to 100 orders, so it is opt-in: `npm run db:seed --
-// --review` (or SEED_REVIEW=1); cap with REVIEW_SWEEP_LIMIT=N. Without OPENROUTER_API_KEY it
+// --review` (or SEED_REVIEW=1); cap with REVIEW_SWEEP_LIMIT=N. Without ANTHROPIC_API_KEY it
 // only reports "not reviewed yet". A few named orders: `npm run review:sweep -- CD-420516`.
 async function reviewAfterSeed(): Promise<void> {
   if (!process.argv.includes("--review") && process.env.SEED_REVIEW !== "1") {

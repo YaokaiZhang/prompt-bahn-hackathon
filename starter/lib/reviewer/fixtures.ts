@@ -1,7 +1,7 @@
 // Reviewer fixtures: the model's replies for one order, turn by turn, as the eval
 // script recorded them (origin "recorded") or as written by hand from the PRD's
 // expected findings (origin "hand-written"). The scripted gateway replays them.
-// Running `npm run review:eval` with OPENROUTER_API_KEY overwrites them.
+// Running `npm run review:eval` with ANTHROPIC_API_KEY overwrites them.
 
 import { readdir, readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"

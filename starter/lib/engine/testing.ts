@@ -100,7 +100,7 @@ export function failingGateway(message: string): CountingGateway {
     calls,
     async chat(request) {
       calls.push(request)
-      throw new GatewayError(`OpenRouter request failed: ${message}`)
+      throw new GatewayError(`Anthropic request failed: ${message}`)
     },
   }
 }

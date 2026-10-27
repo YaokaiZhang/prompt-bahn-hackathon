@@ -7,7 +7,7 @@
 //   npm run review:sweep -- --limit 5          at most 5 (records-triggered orders first)
 //   npm run review:sweep -- CD-420516 CD-420437
 //
-// Without OPENROUTER_API_KEY nothing is called and orders stay "not reviewed yet".
+// Without ANTHROPIC_API_KEY nothing is called and orders stay "not reviewed yet".
 // Failing model calls fail fast: 4 in flight, and the sweep stops after 3 failures in
 // a row. Restart a running app server only if it should drop its 5 s "not reviewed" memo.
 
@@ -16,7 +16,7 @@ import { drizzle } from "drizzle-orm/postgres-js"
 import postgres from "postgres"
 import { createEngine, type EngineState } from "../lib/engine/engine"
 import { createPostgresStore } from "../lib/engine/postgres"
-import { createOpenRouterGateway } from "../lib/reviewer/openrouter"
+import { createAnthropicGateway } from "../lib/reviewer/anthropic"
 import { createPostgresReviewCache } from "../lib/reviewer/postgres-cache"
 import { reviewSourceFromDatabase } from "../lib/reviewer/source"
 
@@ -44,8 +44,8 @@ export async function sweep(options: SweepOptions): Promise<EngineState | null> 
       log(`Review sweep skipped: the review cache is missing (${(error as Error).message}). Run \`npx drizzle-kit push\`.`)
       return null
     }
-    const apiKey = process.env.OPENROUTER_API_KEY?.trim()
-    const gateway = apiKey ? createOpenRouterGateway({ apiKey, appUrl: process.env.OPENROUTER_APP_URL, timeoutMs: 90_000 }) : null
+    const apiKey = process.env.ANTHROPIC_API_KEY?.trim()
+    const gateway = apiKey ? createAnthropicGateway({ apiKey, timeoutMs: 90_000 }) : null
     const source = await reviewSourceFromDatabase(db)
     const engine = createEngine({
       snapshot: source.snapshot,
@@ -60,7 +60,7 @@ export async function sweep(options: SweepOptions): Promise<EngineState | null> 
       .sort((a, b) => Number(b.review.trigger === "records") - Number(a.review.trigger === "records") || a.reference.localeCompare(b.reference))
     if (options.limit !== undefined) pending = pending.slice(0, Math.max(0, options.limit))
     if (!gateway) {
-      log(`Review sweep: no OPENROUTER_API_KEY, so ${before.reviews.notReviewed} orders stay "not reviewed yet" (${before.reviews.reviewed} already reviewed).`)
+      log(`Review sweep: no ANTHROPIC_API_KEY, so ${before.reviews.notReviewed} orders stay "not reviewed yet" (${before.reviews.reviewed} already reviewed).`)
       return before
     }
     if (pending.length === 0) {

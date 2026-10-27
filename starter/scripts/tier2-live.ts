@@ -6,7 +6,7 @@
 import "dotenv/config"
 import { readFileSync } from "node:fs"
 import path from "node:path"
-import { openRouterFromEnv } from "@/lib/reviewer/openrouter"
+import { anthropicFromEnv } from "@/lib/reviewer/anthropic"
 import { createDiskAudioStore, openRouterSpeechFromEnv } from "@/lib/engine/speech"
 import { createVoiceAgent } from "@/lib/engine/voice-agent"
 import { openRouterTranscriberFromEnv, openRouterVoiceFromEnv } from "@/lib/engine/voice-openrouter"
@@ -18,9 +18,9 @@ async function main() {
   const args = process.argv.slice(2)
   const fallback = args.includes("--fallback")
   const files = args.filter((arg) => !arg.startsWith("--"))
-  const gateway = openRouterFromEnv()
+  const gateway = anthropicFromEnv()
   const ear = openRouterTranscriberFromEnv()
-  if (!gateway || !ear) throw new Error("Set OPENROUTER_API_KEY")
+  if (!gateway || !ear) throw new Error("Set ANTHROPIC_API_KEY (Haiku) and OPENROUTER_API_KEY (speech)")
   const store = createDiskAudioStore(process.env.AUDIO_CACHE_DIR || path.join(process.cwd(), ".cache", "tts"))
   const engine = await testEngine({
     calls: {

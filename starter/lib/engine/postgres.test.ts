@@ -60,7 +60,7 @@ test("our tables hold no foreign keys, and the starter's seed runs beside them w
   await store.writeClock("2026-10-21T11:00:00.000Z")
   const seed = spawnSync("npx", ["tsx", "scripts/seed.ts"], {
     // No model key: the seed sweep only reports "not reviewed yet" and calls no model.
-    env: { ...process.env, DATABASE_URL: process.env.TEST_DATABASE_URL, OPENROUTER_API_KEY: "" }, encoding: "utf8",
+    env: { ...process.env, DATABASE_URL: process.env.TEST_DATABASE_URL, ANTHROPIC_API_KEY: "" }, encoding: "utf8",
   })
   assert.equal(seed.status, 0, seed.stderr)
   assert.equal(await store.readClock(), "2026-10-21T11:00:00.000Z")
@@ -70,7 +70,7 @@ test("our tables hold no foreign keys, and the starter's seed runs beside them w
 test("the seed never sweeps orders with the model unless asked with --review, even with a model key set", { skip }, async () => {
   const seed = spawnSync("npx", ["tsx", "scripts/seed.ts"], {
     // A key that is set but not real: a default sweep would start calling the model with it.
-    env: { ...process.env, DATABASE_URL: process.env.TEST_DATABASE_URL, OPENROUTER_API_KEY: "not-a-real-key", SEED_REVIEW: "" }, encoding: "utf8",
+    env: { ...process.env, DATABASE_URL: process.env.TEST_DATABASE_URL, ANTHROPIC_API_KEY: "not-a-real-key", SEED_REVIEW: "" }, encoding: "utf8",
   })
   assert.equal(seed.status, 0, seed.stderr)
   assert.doesNotMatch(seed.stdout, /reviewing \d+ order/i)

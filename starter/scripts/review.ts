@@ -5,7 +5,7 @@
 //   npm run review -- CD-420516 --no-cache skip the cr_review_results cache
 //   npm run review -- CD-420516 --now 2026-10-21T10:00:00Z
 //
-// Reads the dataset files (DATASET_DIR honoured). Uses OPENROUTER_API_KEY; without it
+// Reads the dataset files (DATASET_DIR honoured). Uses ANTHROPIC_API_KEY; without it
 // the order is reported "not reviewed yet" (unless the cache already has it).
 // Rule results are not wired in yet (ticket 06 passes them in).
 
@@ -14,7 +14,7 @@ import { drizzle } from "drizzle-orm/postgres-js"
 import postgres from "postgres"
 import { createPostgresStore } from "../lib/engine/postgres"
 import { createMemoryReviewCache, type ReviewCache } from "../lib/reviewer/cache"
-import { openRouterFromEnv } from "../lib/reviewer/openrouter"
+import { anthropicFromEnv } from "../lib/reviewer/anthropic"
 import { createPostgresReviewCache } from "../lib/reviewer/postgres-cache"
 import { formatReview } from "../lib/reviewer/report"
 import { createReviewer } from "../lib/reviewer/reviewer"
@@ -51,7 +51,7 @@ async function main(): Promise<void> {
     }
   }
 
-  const reviewer = createReviewer({ gateway: openRouterFromEnv(), source, cache })
+  const reviewer = createReviewer({ gateway: anthropicFromEnv(), source, cache })
   try {
     const result = await reviewer.review(order, { now })
     console.log(process.argv.includes("--json") ? JSON.stringify(result, null, 2) : formatReview(result))

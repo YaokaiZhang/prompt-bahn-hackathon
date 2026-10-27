@@ -6,7 +6,7 @@
 //   const reviewer = createReviewer({ gateway, source, cache })
 //   const result = await reviewer.review("CD-420516", { now, rules, prior })
 //
-// With no gateway (no OPENROUTER_API_KEY) a cached result is still served; anything
+// With no gateway (no ANTHROPIC_API_KEY) a cached result is still served; anything
 // else comes back as "not reviewed yet" instead of failing.
 
 import { createHash } from "node:crypto"
@@ -20,8 +20,8 @@ import { checkFinding, type Finding, type RecordIndex } from "./validate"
 
 export type { Finding } from "./validate"
 
-/** OpenRouter model id for reasoning jobs (spec: ModelGateway table). Override with REVIEWER_MODEL. */
-export const DEFAULT_REVIEWER_MODEL = "anthropic/claude-haiku-5.5"
+/** Anthropic model id for reasoning jobs (spec: ModelGateway table). Override with REVIEWER_MODEL. */
+export const DEFAULT_REVIEWER_MODEL = "claude-haiku-5-5"
 export const DEFAULT_MAX_TOOL_CALLS = 8
 export const NOT_REVIEWED_YET = "not reviewed yet"
 
@@ -160,7 +160,7 @@ export function createReviewer(options: ReviewerOptions): Reviewer {
 
     const hit = await cache.get(cacheKey(hash))
     if (hit) return { ...hit, cached: true, cost: 0 }
-    if (!gateway) return { status: "not_reviewed", ...base, cost: 0, reason: `${NOT_REVIEWED_YET}: OPENROUTER_API_KEY is not set` }
+    if (!gateway) return { status: "not_reviewed", ...base, cost: 0, reason: `${NOT_REVIEWED_YET}: ANTHROPIC_API_KEY is not set` }
 
     const index: RecordIndex = new Map(file.records.map((record) => [record.id, record]))
     const ctx = { index, customerId: file.customer.id }

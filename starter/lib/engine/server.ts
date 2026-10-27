@@ -6,7 +6,7 @@ import path from "node:path"
 import { and, inArray, isNull } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { relatedRecords } from "@/lib/schema"
-import { openRouterFromEnv } from "@/lib/reviewer/openrouter"
+import { anthropicFromEnv } from "@/lib/reviewer/anthropic"
 import { createPostgresReviewCache } from "@/lib/reviewer/postgres-cache"
 import { reviewSourceFromDatabase } from "@/lib/reviewer/source"
 import { createEngine, type Engine } from "./engine"
@@ -91,15 +91,16 @@ function startPump(engine: Engine): void {
 }
 
 /**
- * Tier 2 (ticket 12): the audio model answers live calls aloud, the ear transcribes,
- * Haiku (the reviewer's gateway) writes the opener and checks each turn; simulated
- * calls skip the audio and talk in text. Needs the key; TIER2_AUDIO_MODEL=off runs the
+ * Tier 2 (ticket 12): Haiku (the reviewer's gateway, on Anthropic) writes the opener,
+ * checks each turn and writes the replies; simulated calls talk in text. Anthropic has
+ * no speech models, so the live phone's audio (the ear, the audio model, text to
+ * speech) stays on OpenRouter and is on only with OPENROUTER_API_KEY: without it a
+ * live call that reaches tier 2 is handed over. TIER2_AUDIO_MODEL=off runs the
  * fallback (ear, Haiku, text to speech) only.
  */
 function voiceAgent(gateway: ModelGateway | null): VoiceAgent | null {
-  const ear = openRouterTranscriberFromEnv()
-  if (!gateway || !ear) return null
-  return createVoiceAgent({ voice: openRouterVoiceFromEnv(getAudioStore()), ear, checker: gateway })
+  if (!gateway) return null
+  return createVoiceAgent({ voice: openRouterVoiceFromEnv(getAudioStore()), ear: openRouterTranscriberFromEnv(), checker: gateway })
 }
 
 /** How often the publishing loop runs (ms); PUBLISH_PUMP_MS=0 turns it off. */
@@ -135,7 +136,7 @@ async function travelReference() {
 export function getEngine(): Promise<Engine> {
   cache.controlRoomEngine ??= Promise.all([reviewSourceFromDatabase(db), travelReference()])
     .then(([source, reference]) => {
-      const gateway = openRouterFromEnv()
+      const gateway = anthropicFromEnv()
       const engine = createEngine({
         snapshot: source.snapshot,
         store: createPostgresStore(db),
@@ -164,12 +165,12 @@ export function getEngine(): Promise<Engine> {
 
 /** The inbox agent's model and cache (inbox-agent.ts): the reviewer's gateway; template suggestions without a key. */
 export function inboxAgentOptions(): SuggestOptions {
-  return { gateway: openRouterFromEnv(), cache: createPostgresSuggestionCache(db) }
+  return { gateway: anthropicFromEnv(), cache: createPostgresSuggestionCache(db) }
 }
 
 /** The situation cards' plain words (plain-words.ts): the reviewer's gateway; code text without a key. */
 export function plainWords(): PlainWordsService {
-  cache.controlRoomPlain ??= createPlainWords({ gateway: openRouterFromEnv(), cache: createPostgresPlainCache(db) })
+  cache.controlRoomPlain ??= createPlainWords({ gateway: anthropicFromEnv(), cache: createPostgresPlainCache(db) })
   return cache.controlRoomPlain
 }
 

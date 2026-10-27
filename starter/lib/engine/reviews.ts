@@ -73,7 +73,7 @@ export type OrderReview = {
 }
 
 export type ReviewTotals = {
-  /** False when no model gateway is configured (no OPENROUTER_API_KEY). */
+  /** False when no model gateway is configured (no ANTHROPIC_API_KEY). */
   canReview: boolean
   reviewed: number
   notReviewed: number

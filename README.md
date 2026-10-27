@@ -27,7 +27,7 @@ npm run dev
 
 Open http://localhost:3000.
 
-The seed does not run the reviewer. With `OPENROUTER_API_KEY` set, review a few orders with
+The seed does not run the reviewer. With `ANTHROPIC_API_KEY` set, review a few orders with
 `npm run review:sweep -- CD-420516 CD-420437`, or opt in to the full one-time sweep of every order
 (it calls the model on all 100) with `npm run db:seed -- --review`.
 
