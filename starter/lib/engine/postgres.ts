@@ -1,12 +1,13 @@
-import { asc, eq, getTableName, inArray, sql } from "drizzle-orm"
+import { and, asc, eq, getTableName, inArray, sql } from "drizzle-orm"
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js"
 import type { BriefingItem } from "./briefing"
 import type { EffectEvent } from "./effects"
 import type { StoredCallEvent } from "./calls"
 import type { InboxEvent } from "./inbox"
+import type { Mistake } from "./mistakes"
 import type { StoredProposalEvent } from "./proposals"
 import type { StoredPublicationEvent } from "./publishing"
-import { briefingItems, callEvents, demoClock, effectEvents, ENGINE_TABLES, inboxEvents, proposalEvents, publicationEvents } from "./schema"
+import { briefingItems, callEvents, demoClock, effectEvents, ENGINE_TABLES, inboxEvents, mistakes, proposalEvents, publicationEvents } from "./schema"
 import type { EngineStore } from "./store"
 
 /** Any drizzle postgres-js client, whatever schema it was built with. */
@@ -122,6 +123,24 @@ export function createPostgresStore(db: Database): EngineStore {
     async reset() {
       const names = ENGINE_TABLES.map((table) => `"${getTableName(table)}"`).join(", ")
       await db.execute(sql.raw(`TRUNCATE ${names} RESTART IDENTITY`))
+    },
+    async readMistakes() {
+      const found = await db.select().from(mistakes).orderBy(asc(mistakes.seq))
+      return found.map(({ seq: _seq, at, recordedAt, ...row }) => ({
+        ...row, at: at.toISOString(), recordedAt: recordedAt.toISOString(),
+        agent: row.agent as Mistake["agent"], kind: row.kind as Mistake["kind"], status: row.status as Mistake["status"],
+        input: row.input ?? null, agentOutput: row.agentOutput ?? null, editDiff: row.editDiff ?? null, caseFile: (row.caseFile ?? null) as Mistake["caseFile"],
+      }))
+    },
+    async appendMistakes(added) {
+      if (!added.length) return
+      await db.insert(mistakes).values(added.map((mistake) => ({
+        ...mistake, at: new Date(mistake.at), recordedAt: new Date(mistake.recordedAt),
+        caseFile: (mistake.caseFile ?? null) as Record<string, unknown> | null,
+      }))).onConflictDoNothing({ target: mistakes.id })
+    },
+    async settleMistake(id, restated) {
+      await db.update(mistakes).set(restated).where(and(eq(mistakes.id, id), eq(mistakes.status, "pending")))
     },
   }
 }

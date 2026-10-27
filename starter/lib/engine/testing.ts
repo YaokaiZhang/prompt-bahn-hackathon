@@ -18,6 +18,7 @@ import type { CallOptions } from "./call-runner"
 import type { ProseOptions } from "./digest-prose"
 import { createEngine, type Engine, type Snapshot } from "./engine"
 import { createMemoryStore } from "./memory"
+import type { MistakeOptions } from "./mistakes"
 import { createPostgresStore, type Database } from "./postgres"
 import type { EngineStore } from "./store"
 
@@ -35,6 +36,8 @@ export type TestEngineOptions = {
   briefing?: ProseOptions
   /** Who answers calls and speech (ticket 10). Absent: the default simulated person, no speech. */
   calls?: CallOptions
+  /** The model that restates operator reasons on mistakes. Absent: restatements stay pending. */
+  mistakes?: MistakeOptions
 }
 
 export async function testEngine(options: TestEngineOptions = {}): Promise<Engine> {
@@ -45,6 +48,7 @@ export async function testEngine(options: TestEngineOptions = {}): Promise<Engin
     reviews: { gateway: options.gateway ?? null, cache: options.reviewCache, inboxMessages: source.inboxMessages },
     briefing: options.briefing,
     calls: options.calls,
+    mistakes: options.mistakes,
   })
 }
 

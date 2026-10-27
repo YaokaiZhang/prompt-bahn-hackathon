@@ -131,6 +131,10 @@ One line of the approval policy that says, for a contact type and action type, w
 An operator's direction to the agent, saved on a proposal, explaining how to act differently.
 _Avoid_: Comment, note, feedback
 
+**Mistake**:
+A stored record that an agent got something wrong: an operator dismissed one of its proposals with a reason or edited its script, or a validator rejected its output. The operator's reason is kept as typed and restated as a neutral correction, checked by code; only usable mistakes may feed a lesson. Mistakes survive a demo reset.
+_Avoid_: Error, failure, feedback
+
 **Effect event**:
 The append-only record of something committed on an order, layered over the snapshot. A change to the order (a contact confirmed or changed, a window moved, a cost approved) is written only after an operator's yes; the operator's own answers are committed when given. A call result and a reported ETA are written by the agent at once, without a yes, because they are attributed statements (what the person said on the call), not changes to the order. Proposal text is never a fact; an effect event is.
 _Avoid_: Update, change, mutation, operational event (that is the dataset's history)

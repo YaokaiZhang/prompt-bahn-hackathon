@@ -9,6 +9,7 @@ import type { BriefingItem } from "./briefing"
 import type { EffectEvent } from "./effects"
 import type { StoredCallEvent } from "./calls"
 import type { InboxEvent } from "./inbox"
+import type { Mistake, Restated } from "./mistakes"
 import type { StoredProposalEvent } from "./proposals"
 import type { StoredPublicationEvent } from "./publishing"
 
@@ -45,6 +46,12 @@ export interface EngineStore {
   readInboxEvents(): Promise<InboxEvent[]>
   /** Appends inbox events in one go. */
   appendInboxEvents(events: InboxEvent[]): Promise<void>
-  /** Empties every engine table. The snapshot is never touched. */
+  /** Empties every engine table. The snapshot is never touched; nor are the mistakes (LEARNING_TABLES). */
   reset(): Promise<void>
+  /** Every mistake (mistakes.ts), in the order they were recorded. Kept across reset. */
+  readMistakes(): Promise<Mistake[]>
+  /** Stores mistakes; one whose id exists already is skipped. */
+  appendMistakes(mistakes: Mistake[]): Promise<void>
+  /** Writes a pending mistake's restatement and status, once (a settled mistake is left as it is). */
+  settleMistake(id: string, restated: Restated): Promise<void>
 }
