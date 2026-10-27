@@ -26,6 +26,7 @@ import { createPostgresSuggestionCache } from "./suggestion-cache"
 import { createPostgresPlainCache } from "./plain-cache"
 import { createPlainWords, type PlainItem, type PlainWordsService } from "./plain-words"
 import { createMistakeLog } from "./mistakes"
+import { createLearning } from "./learning"
 import type { Group } from "./checks"
 import { applyPlain, type PlainWords, type Situation } from "@/lib/present/situation"
 
@@ -157,6 +158,8 @@ export function getEngine(): Promise<Engine> {
   cache.controlRoomEngine ??= Promise.all([reviewSourceFromDatabase(db), travelReference()])
     .then(([source, reference]) => {
       const gateway = anthropicFromEnv()
+      // Lessons (ticket 03): a usable mistake may start a distil and gate in the background; nothing without a key.
+      const learning = createLearning({ store: getStore(), gateway, source, now: async () => (await getStore().readClock()) ?? source.snapshot.snapshotAt })
       const engine = createEngine({
         snapshot: source.snapshot,
         store: getStore(),
@@ -175,7 +178,7 @@ export function getEngine(): Promise<Engine> {
         // Travel plans (spec .scratch/publishing): the same gateway; template plans without a key.
         travel: { gateway, cache: createPostgresPlanCache(db), reference },
         // Mistakes (spec .scratch/self-improving-agents): the same gateway restates the operator's reasons; pending without a key.
-        mistakes: { gateway },
+        mistakes: { gateway, onUsable: learning.consider },
       })
       startPump(engine)
       startPublishing(engine)

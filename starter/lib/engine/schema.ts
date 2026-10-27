@@ -211,7 +211,25 @@ export const lessonEvents = pgTable("cr_lesson_events", {
 }, (table) => [index("cr_lesson_events_lesson_idx").on(table.lessonId)])
 
 /**
+ * Lessons runs (lib/engine/learning.ts): one row per distil, written when it starts and
+ * finished once. Its cost is what the daily spend cap sums; its start what the cooldown
+ * and "new since the last candidate" count from.
+ */
+export const distilRuns = pgTable("cr_distil_runs", {
+  seq: bigserial("seq", { mode: "number" }).primaryKey(),
+  id: text("id").notNull().unique(),
+  groupKey: text("group_key").notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+  outcome: text("outcome").notNull(),
+  lessonId: text("lesson_id"),
+  mistakeIds: jsonb("mistake_ids").$type<string[]>().notNull(),
+  cost: doublePrecision("cost").notNull(),
+  detail: text("detail").notNull(),
+}, (table) => [index("cr_distil_runs_started_idx").on(table.startedAt)])
+
+/**
  * What the agents learn from (mistakes) and what they learned (lessons). Reset keeps these on purpose: learning is
  * neither demo state nor a content cache, and a new demo take should not wipe it.
  */
-export const LEARNING_TABLES = [mistakes, lessons, lessonEvents]
+export const LEARNING_TABLES = [mistakes, lessons, lessonEvents, distilRuns]

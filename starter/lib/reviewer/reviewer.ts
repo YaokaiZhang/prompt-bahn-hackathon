@@ -7,11 +7,13 @@
 //
 //   const reviewer = createReviewer({ gateway, source, cache })
 //   const result = await reviewer.review("CD-420516", { now, rules, prior })
+//   const again = await reviewer.reviewFile(mistake.caseFile)   // a kept case file, as read then
 //
 // With no gateway (no ANTHROPIC_API_KEY) a cached result is still served; anything
 // else comes back as "not reviewed yet" instead of failing.
 
 import { createHash } from "node:crypto"
+import type { Bundle } from "@/lib/present/bundle"
 import { lessonsFor, lessonsHash, renderLessons, type InjectedLesson, type LessonFeed } from "./lessons"
 import { buildCaseFile, caseFileHash, renderCaseFile, type CaseFile, type CaseInput } from "./case-file"
 import { createMemoryReviewCache, type ReviewCache } from "./cache"
@@ -25,6 +27,8 @@ export type { Finding } from "./validate"
 
 /** Anthropic model id for reasoning jobs (spec: ModelGateway table). Override with REVIEWER_MODEL. */
 export const DEFAULT_REVIEWER_MODEL = "claude-haiku-5-5"
+/** The lesson writer (lib/engine/distil.ts): a stronger model with medium thinking. Override with LESSONS_MODEL. */
+export const DEFAULT_LESSONS_MODEL = "claude-opus-5-5"
 export const DEFAULT_MAX_TOOL_CALLS = 8
 export const NOT_REVIEWED_YET = "not reviewed yet"
 
@@ -86,6 +90,8 @@ export type Reviewer = {
   /** The case file the reviewer would send, e.g. to show "Reviewer read N records". */
   caseFile(orderIdOrReference: string, input: CaseInput): CaseFile
   review(orderIdOrReference: string, input: CaseInput): Promise<ReviewResult>
+  /** Reviews a case file kept from earlier (a mistake's), exactly as it was read then. */
+  reviewFile(file: CaseFile): Promise<ReviewResult>
 }
 
 const MAX_TOKENS = 8000
@@ -167,9 +173,13 @@ export function createReviewer(options: ReviewerOptions): Reviewer {
     return createHash("sha256").update(`${PROMPT_VERSION}\n${model}\n${hash}${lessons ? `\n${lessons}` : ""}`).digest("hex")
   }
 
-  async function review(key: string, input: CaseInput): Promise<ReviewResult> {
+  function review(key: string, input: CaseInput): Promise<ReviewResult> {
     const bundle = bundleFor(key)
-    const file = buildCaseFile(bundle, source, input)
+    return run(bundle, buildCaseFile(bundle, source, input))
+  }
+
+  async function run(bundle: Bundle, file: CaseFile): Promise<ReviewResult> {
+    const input: CaseInput = { now: file.now, rules: file.rules }
     const hash = caseFileHash(file)
     const base = { orderId: file.orderId, reference: file.reference, hash, recordsRead: file.records.length }
 
@@ -292,5 +302,5 @@ export function createReviewer(options: ReviewerOptions): Reviewer {
     return result
   }
 
-  return { caseFile, review }
+  return { caseFile, review, reviewFile: (file) => run(bundleFor(file.orderId), file) }
 }

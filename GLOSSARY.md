@@ -135,6 +135,16 @@ _Avoid_: Comment, note, feedback
 A stored record that an agent got something wrong: an operator dismissed one of its proposals with a reason or edited its script, or a validator rejected its output. The operator's reason is kept as typed and restated as a neutral correction, checked by code; only usable mistakes may feed a lesson. Mistakes survive a demo reset.
 _Avoid_: Error, failure, feedback
 
+**Mistake group**:
+The usable mistakes of one agent that share a failing rule and a contact type. A lesson is written from a group once it has enough mistakes on enough orders and days.
+
+**Lesson**:
+One or two plain sentences an agent reads in its prompt, written by the distiller from a mistake group, kept only if the reviewer eval does not get worse with it (the gate), and used only after the operator approves it. Lessons survive a demo reset.
+_Avoid_: Rule (a rule check is code), memory, training
+
+**Learned case**:
+An eval case made from a lesson's source mistake: the order's case file as the agent read it, and what the operator's correction makes checkable. Learned cases are added beside the spec's cases and never replace one.
+
 **Effect event**:
 The append-only record of something committed on an order, layered over the snapshot. A change to the order (a contact confirmed or changed, a window moved, a cost approved) is written only after an operator's yes; the operator's own answers are committed when given. A call result and a reported ETA are written by the agent at once, without a yes, because they are attributed statements (what the person said on the call), not changes to the order. Proposal text is never a fact; an effect event is.
 _Avoid_: Update, change, mutation, operational event (that is the dataset's history)
