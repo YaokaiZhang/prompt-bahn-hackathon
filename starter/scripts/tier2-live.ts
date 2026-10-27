@@ -7,9 +7,10 @@ import "dotenv/config"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { anthropicFromEnv } from "@/lib/reviewer/anthropic"
-import { createDiskAudioStore, openRouterSpeechFromEnv } from "@/lib/engine/speech"
+import { createDiskAudioStore } from "@/lib/engine/speech"
 import { createVoiceAgent } from "@/lib/engine/voice-agent"
-import { openRouterTranscriberFromEnv, openRouterVoiceFromEnv } from "@/lib/engine/voice-openrouter"
+import { speechFromEnv, transcriberFromEnv } from "@/lib/engine/voice-azure"
+import { openRouterVoiceFromEnv } from "@/lib/engine/voice-openrouter"
 import { demoAnswerer } from "@/lib/engine/phone"
 import { scriptedPerson } from "@/lib/engine/simulated-person"
 import { testEngine } from "@/lib/engine/testing"
@@ -19,12 +20,12 @@ async function main() {
   const fallback = args.includes("--fallback")
   const files = args.filter((arg) => !arg.startsWith("--"))
   const gateway = anthropicFromEnv()
-  const ear = openRouterTranscriberFromEnv()
-  if (!gateway || !ear) throw new Error("Set ANTHROPIC_API_KEY (Haiku) and OPENROUTER_API_KEY (speech)")
+  const ear = transcriberFromEnv()
+  if (!gateway || !ear) throw new Error("Set ANTHROPIC_API_KEY (Haiku) and AZURE_SPEECH_KEY with AZURE_SPEECH_REGION (or OPENROUTER_API_KEY) for speech")
   const store = createDiskAudioStore(process.env.AUDIO_CACHE_DIR || path.join(process.cwd(), ".cache", "tts"))
   const engine = await testEngine({
     calls: {
-      person: scriptedPerson({}), speech: openRouterSpeechFromEnv(store), answererFor: demoAnswerer({ "CD-420437": ["driver"] }),
+      person: scriptedPerson({}), speech: speechFromEnv(store), answererFor: demoAnswerer({ "CD-420437": ["driver"] }),
       voice: createVoiceAgent({ voice: fallback ? null : openRouterVoiceFromEnv(store), ear, checker: gateway }),
     },
   })
