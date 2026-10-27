@@ -24,7 +24,7 @@
 //   Each run's trace is kept with the distil run, for engineers.
 
 import { runEval, type EvalRun, type LearnedCase } from "@/lib/reviewer/eval"
-import type { AgentSaid, Verdict } from "@/lib/reviewer/judge"
+import { editCorrection, type AgentSaid, type Verdict } from "@/lib/reviewer/judge"
 import type { RuleResult } from "@/lib/reviewer/case-file"
 import type { ModelGateway, Usage } from "@/lib/reviewer/gateway"
 import { CONTACT_TYPE_LABEL, type ContactType } from "@/lib/reviewer/policy"
@@ -272,7 +272,7 @@ type ProposalSaid = { title?: string; script?: string; contact?: { typeLabel?: s
 /** What was wrong, as the judge reads it: the restatement, the edit, or the validator's reason. */
 export function correctionOf(mistake: Mistake): string | null {
   if (mistake.restatement) return mistake.restatement
-  if (mistake.editDiff) return `The operator kept the proposal but changed the question from "${mistake.editDiff.before}" to "${mistake.editDiff.after}".`
+  if (mistake.editDiff) return editCorrection(mistake.editDiff.before, mistake.editDiff.after)
   return mistake.validatorReason
 }
 

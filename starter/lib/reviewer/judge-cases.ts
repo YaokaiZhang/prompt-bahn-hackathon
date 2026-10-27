@@ -6,7 +6,7 @@
 import { createHash } from "node:crypto"
 import { readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
-import { JUDGE_SYSTEM, type JudgeCase, type Verdict } from "./judge"
+import { editCorrection, JUDGE_SILENT_SYSTEM, JUDGE_SYSTEM, type JudgeCase, type Verdict } from "./judge"
 import type { ContactType } from "./policy"
 import type { Reviewed } from "./reviewer"
 
@@ -24,8 +24,15 @@ const SETTLED: JudgeCase = {
   agentSaid: { title: "No authorised receiver named", question: "Who at Calverona Auto may sign for the car?", asked: "Paying customer: Calverona Auto" },
 }
 const EDITED: JudgeCase = {
-  correction: 'The operator kept the proposal but changed the question from "Is the car ready?" to "Is the car ready with both keys at the Lahti branch by 10:30?".',
+  correction: editCorrection("Is the car ready?", "Is the car ready with both keys at the Lahti branch by 10:30?"),
   agentSaid: { title: "Pickup readiness unconfirmed", question: "Is the car ready?", asked: "Third-party site or seller: Auvelloria Lahti" },
+}
+// From the second real gate run: the judge read an added deadline as a wrong-person mistake.
+const DEADLINE: JudgeCase = {
+  correction: editCorrection(
+    "For order CD-420154, which attended delivery window at Lahti did you agree? The window on file is a system-set delivery target, not one you gave us.",
+    "For order CD-420154, which attended delivery window at Lahti did you agree? The window on file is a system-set delivery target, not one you gave us. Please reply by 14:00 today so we can plan the driver's route."),
+  agentSaid: { title: "Customer's agreed delivery window not matched by system promise", question: "For order CD-420154, which attended delivery window at Lahti did you agree? The window on file is a system-set delivery target, not one you gave us.", asked: "Paying customer: Auvelloria Motor Collection" },
 }
 
 export const JUDGE_CASES: JudgeEvalCase[] = [
@@ -41,6 +48,10 @@ export const JUDGE_CASES: JudgeEvalCase[] = [
     findings: [{ title: "Driver ETA after the delivery window", contactType: "driver", name: "the driver", question: "Can you still reach the delivery address before 18:00?" }] },
   { id: "edit-carried", ...EDITED, expected: ["fixed"],
     findings: [{ title: "Pickup readiness unconfirmed", contactType: "third_party_site", name: "Auvelloria Lahti", question: "Is the car ready with both keys at the Lahti branch by 10:30?" }] },
+  { id: "deadline-carried", ...DEADLINE, expected: ["fixed"],
+    findings: [{ title: "Agreed delivery window at Lahti not confirmed", contactType: "paying_customer", name: "Auvelloria Motor Collection", question: "For order CD-420154, could you tell us which delivery window at Lahti you agreed? The window on file was set by our system. Please reply by 13:00 today so we can plan the driver's route." }] },
+  { id: "deadline-dropped", ...DEADLINE, expected: ["repeats"],
+    findings: [{ title: "Agreed delivery window at Lahti not confirmed", contactType: "paying_customer", name: "Auvelloria Motor Collection", question: "For order CD-420154, which delivery window at Lahti did you agree? The one on file is a system target." }] },
   { id: "edit-dropped", ...EDITED, expected: ["repeats"],
     findings: [{ title: "Pickup readiness unconfirmed", contactType: "third_party_site", name: "Auvelloria Lahti", question: "Is the car ready for pickup?" }] },
 ]
@@ -56,10 +67,10 @@ export function judgeEvalReview(item: JudgeEvalCase): Reviewed {
   } as unknown as Reviewed
 }
 
-/** `promptHash`: the judge's system prompt the replies answer; a changed prompt needs a new recording. */
+/** `promptHash`: the judge's system prompts the replies answer; a changed prompt needs a new recording. */
 export type JudgeReplies = { model: string | null; recordedAt: string | null; promptHash: string; replies: Record<string, string> }
 
-export const judgePromptHash = () => createHash("sha256").update(JUDGE_SYSTEM).digest("hex").slice(0, 16)
+export const judgePromptHash = () => createHash("sha256").update(JUDGE_SYSTEM).update(JUDGE_SILENT_SYSTEM).digest("hex").slice(0, 16)
 
 export const JUDGE_REPLIES = join(process.cwd(), "lib", "reviewer", "fixtures", "judge", "replies.json")
 

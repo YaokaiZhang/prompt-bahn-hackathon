@@ -95,9 +95,9 @@ async function loopGateway(options: { distilReply?: (input: DistillerInput) => s
       return respond((options.distilReply ?? reply)(input), options.distilCost ?? 0.1)
     }
     if (request.job === "judge") {
-      const input = JSON.parse(request.messages[1].content as string) as { new_review: { findings: unknown[] } }
-      const verdict = input.new_review.findings.length ? "repeats" : "fixed"
-      return respond(JSON.stringify({ verdict, reason: `${verdict}, scripted` }), 0.0003)
+      const input = JSON.parse(request.messages[1].content as string) as { new_review?: { findings: unknown[] } }
+      if (!input.new_review) return respond(JSON.stringify({ needed: false, reason: "not needed, scripted" }), 0.0003)
+      return respond(JSON.stringify({ verdict: "repeats", reason: "repeats, scripted" }), 0.0003)
     }
     const system = request.messages[0].content as TextPart[]
     const injected = system.length > 1
@@ -229,7 +229,7 @@ test("a learned case is the kept case file and its correction: the restatement, 
   assert.deepEqual(cases.map((row) => row.mistakeId), [dismissed.id, edited.id], "no case file or no correction: no case")
   assert.equal(cases[0].correction, RESTATED)
   assert.deepEqual(cases[0].agentSaid, { title: TITLE, question: "Is Celia Hollowmere authorised to sign?", asked: "Paying customer: Calverona Auto" })
-  assert.equal(cases[1].correction, 'The operator kept the proposal but changed the question from "Who may sign?" to "Who at Calverona Auto may sign before 18:00?".')
+  assert.equal(cases[1].correction, 'The operator kept the proposal, its contact and its conflict, and changed only the question from "Who may sign?" to "Who at Calverona Auto may sign before 18:00?". Removed: "may sign?". Added: "at Calverona Auto may sign before 18:00?".')
   assert.equal(correctionOf(mistake({ restatement: null, validatorReason: "a gendered pronoun" })), "a gendered pronoun")
 })
 
