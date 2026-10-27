@@ -17,9 +17,10 @@ import { createPostgresPlanCache } from "./plan-cache"
 import { createPostgresProseCache } from "./prose-cache"
 import { demoAnswerer, RING_TIMEOUT_MS, type PhonePersona } from "./phone"
 import { DEMO_SCRIPTS, modelCallee, simulatedPerson } from "./simulated-person"
-import { createDiskAudioStore, openRouterSpeechFromEnv, type AudioStore } from "./speech"
+import { createDiskAudioStore, type AudioStore } from "./speech"
 import { createVoiceAgent, type VoiceAgent } from "./voice-agent"
-import { openRouterTranscriberFromEnv, openRouterVoiceFromEnv } from "./voice-openrouter"
+import { speechFromEnv, transcriberFromEnv } from "./voice-azure"
+import { openRouterVoiceFromEnv } from "./voice-openrouter"
 import type { ModelGateway } from "@/lib/reviewer/gateway"
 import type { SuggestOptions } from "./inbox-agent"
 import { createPostgresSuggestionCache } from "./suggestion-cache"
@@ -114,14 +115,15 @@ function startPump(engine: Engine): void {
 /**
  * Tier 2 (ticket 12): Haiku (the reviewer's gateway, on Anthropic) writes the opener,
  * checks each turn and writes the replies; simulated calls talk in text. Anthropic has
- * no speech models, so the live phone's audio (the ear, the audio model, text to
- * speech) stays on OpenRouter and is on only with OPENROUTER_API_KEY: without it a
- * live call that reaches tier 2 is handed over. TIER2_AUDIO_MODEL=off runs the
- * fallback (ear, Haiku, text to speech) only.
+ * no speech models: the ear and text to speech are Azure AI Speech (AZURE_SPEECH_KEY,
+ * AZURE_SPEECH_REGION), or OpenRouter without it; with neither, a live call that
+ * reaches tier 2 is handed over. The audio-in, audio-out model is OpenRouter's only
+ * (OPENROUTER_API_KEY); without it every live turn is the fallback (ear, Haiku, text
+ * to speech). TIER2_AUDIO_MODEL=off forces the fallback.
  */
 function voiceAgent(gateway: ModelGateway | null): VoiceAgent | null {
   if (!gateway) return null
-  return createVoiceAgent({ voice: openRouterVoiceFromEnv(getAudioStore()), ear: openRouterTranscriberFromEnv(), checker: gateway })
+  return createVoiceAgent({ voice: openRouterVoiceFromEnv(getAudioStore()), ear: transcriberFromEnv(), checker: gateway })
 }
 
 /** How often the publishing loop runs (ms); PUBLISH_PUMP_MS=0 turns it off. */
@@ -171,7 +173,7 @@ export function getEngine(): Promise<Engine> {
         // At tier 2 a model plays the background callee in text (ticket 12), so a
         // simulated escalation is talked through rather than handed over at once.
         calls: {
-          person: simulatedPerson(DEMO_SCRIPTS, gateway ? modelCallee(gateway) : undefined), speech: openRouterSpeechFromEnv(getAudioStore()), pace: 1,
+          person: simulatedPerson(DEMO_SCRIPTS, gateway ? modelCallee(gateway) : undefined), speech: speechFromEnv(getAudioStore()), pace: 1,
           ...(LIVE_DEMO ? { answererFor: demoAnswerer() } : {}),
           phoneOpenSince, ringTimeoutMs: RING_TIMEOUT, voice: voiceAgent(gateway),
         },

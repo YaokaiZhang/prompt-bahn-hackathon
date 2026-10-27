@@ -3,7 +3,8 @@
 // one generation ever. Audio bytes live behind the `AudioStore` port (disk in the
 // app, memory in tests; S3 or Postgres can implement the same two methods).
 //
-// Adapters:
+// Adapters (both through `cachedSpeech`, which owns the cache and the wait):
+// - `azureSpeech` (voice-azure.ts): Azure AI Speech neural voices, the default.
 // - `openRouterSpeech` POSTs to OpenRouter's OpenAI-compatible
 //   `/api/v1/audio/speech` (binary MP3 back). The response carries no usage, so the
 //   cost is the model's listed price per character times the characters sent.
@@ -132,14 +133,11 @@ export const DEFAULT_SPEECH_PRICE_PER_CHAR = 15 / 1_000_000
 export function openRouterSpeech(options: OpenRouterSpeechOptions): Speech {
   const model = options.model ?? DEFAULT_SPEECH_MODEL
   const voice = options.voice ?? DEFAULT_SPEECH_VOICE
-  const price = options.pricePerChar ?? DEFAULT_SPEECH_PRICE_PER_CHAR
   const base = options.baseUrl ?? "https://openrouter.ai/api/v1"
   const doFetch = options.fetch ?? fetch
-  const pending = new Map<string, Promise<Spoken>>()
-  async function generate(text: string, id: string): Promise<Spoken> {
-    const hit = await options.store.get(id)
-    if (hit) return { audioId: id, seconds: hit.seconds, cost: 0, cached: true, model }
-    try {
+  return cachedSpeech({
+    store: options.store, model, voice, pricePerChar: options.pricePerChar ?? DEFAULT_SPEECH_PRICE_PER_CHAR, waitMs: options.waitMs,
+    async synthesize(text) {
       const response = await doFetch(`${base}/audio/speech`, {
         method: "POST",
         headers: { Authorization: `Bearer ${options.apiKey}`, "Content-Type": "application/json" },
@@ -147,10 +145,40 @@ export function openRouterSpeech(options: OpenRouterSpeechOptions): Speech {
         signal: AbortSignal.timeout(options.timeoutMs ?? 45_000),
       })
       if (!response.ok) throw new Error(`speech ${response.status}: ${(await response.text()).slice(0, 200)}`)
-      const bytes = new Uint8Array(await response.arrayBuffer())
+      return { bytes: new Uint8Array(await response.arrayBuffer()), contentType: response.headers.get("content-type") ?? "audio/mpeg" }
+    },
+  })
+}
+
+export type CachedSpeechOptions = {
+  store: AudioStore
+  /** Model and voice name the cache key and the cost line. */
+  model: string
+  voice: string
+  /** USD per character sent. */
+  pricePerChar: number
+  /** How long a call waits for audio before the prompt goes out as text (the generation still fills the cache). */
+  waitMs?: number
+  /** One generation: MP3 bytes for the text; throws on failure. */
+  synthesize(text: string): Promise<{ bytes: Uint8Array; contentType: string }>
+}
+
+/**
+ * Speech around one provider's `synthesize`: cache by model, voice and text, one
+ * generation at a time per prompt, priced per character, and never longer than
+ * `waitMs` for the call.
+ */
+export function cachedSpeech(options: CachedSpeechOptions): Speech {
+  const { model, voice } = options
+  const pending = new Map<string, Promise<Spoken>>()
+  async function generate(text: string, id: string): Promise<Spoken> {
+    const hit = await options.store.get(id)
+    if (hit) return { audioId: id, seconds: hit.seconds, cost: 0, cached: true, model }
+    try {
+      const { bytes, contentType } = await options.synthesize(text)
       const seconds = mp3Seconds(bytes) ?? estimateSeconds(text)
-      await options.store.put(id, { bytes, contentType: response.headers.get("content-type") ?? "audio/mpeg", seconds, model, text })
-      return { audioId: id, seconds, cost: text.length * price, cached: false, model }
+      await options.store.put(id, { bytes, contentType, seconds, model, text })
+      return { audioId: id, seconds, cost: text.length * options.pricePerChar, cached: false, model }
     } catch (error) {
       return { audioId: null, seconds: estimateSeconds(text), cost: 0, cached: false, model, error: error instanceof Error ? error.message : String(error) }
     }
