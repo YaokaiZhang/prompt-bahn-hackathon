@@ -10,7 +10,7 @@ agent, and the cache keys include a hash of the injected lessons.
 
 **Blocked by:** None (can start immediately; source-mistake display reads 01's table once merged)
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] Lessons table + store methods, kept across reset
 - [ ] Rules page section and API: approve / reject / retire

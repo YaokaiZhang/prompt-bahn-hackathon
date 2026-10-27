@@ -8,7 +8,7 @@ marked unusable. Reviewer mistakes keep enough of the case file to become an eva
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] Mistakes table + store methods (memory and Postgres), kept across reset
 - [ ] Dismiss with reason / edit record a mistake with tags (failing rule ids, policy row, contact type, proposal kind)

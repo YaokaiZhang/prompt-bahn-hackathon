@@ -9,6 +9,9 @@
 //   reason it was not urgent for at the start, at most once per order per reason.
 //   Ticket 14 sends handover pushes through the same `push` (reason "handover").
 //
+// - A lesson candidate (lib/engine/lessons.ts) brings "A new lesson needs your yes",
+//   linking to its place in the Lessons section of the Rules page, once per lesson.
+//
 // Delivery is stored (cr_briefing_items) and at-most-once by item id, so a reset
 // clears the inbox and the next delivery brings the 09:00 digest back.
 
@@ -87,7 +90,31 @@ export type PushItem = ItemBase & {
   dueAt: string | null
 }
 
-export type BriefingItem = DigestItem | PushItem
+export type LessonItem = ItemBase & {
+  kind: "lesson"
+  lessonId: string
+  /** "reviewer" or "plain-words". */
+  agent: string
+  /** The lesson itself, one or two sentences. */
+  text: string
+  /** Where the operator decides: the lesson on the Rules page. */
+  href: string
+}
+
+export type BriefingItem = DigestItem | PushItem | LessonItem
+
+export const LESSON_ITEM_TITLE = "A new lesson needs your yes"
+
+export function lessonItemId(lessonId: string): string {
+  return `lesson:${lessonId}`
+}
+
+export function lessonItem(lesson: { id: string; agent: string; text: string }, at: string, deliveredAt: string): LessonItem {
+  return {
+    id: lessonItemId(lesson.id), kind: "lesson", at, read: false, deliveredAt, title: LESSON_ITEM_TITLE,
+    lessonId: lesson.id, agent: lesson.agent, text: lesson.text, href: `/rules#lesson-${lesson.id}`,
+  }
+}
 
 export type Briefing = {
   /** Newest first; only items that arrived at or before `now`. */
@@ -144,7 +171,7 @@ export async function sendPush(store: EngineStore, input: PushInput): Promise<bo
 /** The inbox as of `now`: newest first, then digests before pushes of the same time, then by id. */
 export function briefingAsOf(items: BriefingItem[], now: string): Briefing {
   const visible = items.filter((item) => item.at <= now)
-    .sort((a, b) => b.at.localeCompare(a.at) || (a.kind === b.kind ? a.id.localeCompare(b.id) : a.kind === "digest" ? -1 : 1))
+    .sort((a, b) => b.at.localeCompare(a.at) || (a.kind === b.kind ? a.id.localeCompare(b.id) : a.kind === "digest" ? -1 : b.kind === "digest" ? 1 : a.kind.localeCompare(b.kind)))
   return { items: visible, unread: visible.filter((item) => !item.read).length }
 }
 

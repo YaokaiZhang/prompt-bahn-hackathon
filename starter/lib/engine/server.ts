@@ -10,6 +10,8 @@ import { anthropicFromEnv } from "@/lib/reviewer/anthropic"
 import { createPostgresReviewCache } from "@/lib/reviewer/postgres-cache"
 import { reviewSourceFromDatabase } from "@/lib/reviewer/source"
 import { createEngine, type Engine } from "./engine"
+import { createLessonFeeds, type LessonFeeds } from "./lessons"
+import type { EngineStore } from "./store"
 import { createPostgresStore } from "./postgres"
 import { createPostgresPlanCache } from "./plan-cache"
 import { createPostgresProseCache } from "./prose-cache"
@@ -35,6 +37,23 @@ const cache = globalThis as unknown as {
   controlRoomPhones?: Map<PhonePersona, { since: number; seen: number }>
   controlRoomPublishing?: ReturnType<typeof setInterval>
   controlRoomPlain?: PlainWordsService
+  controlRoomStore?: EngineStore; controlRoomLessons?: LessonFeeds
+}
+
+/** The engine's store (Postgres). */
+export function getStore(): EngineStore {
+  cache.controlRoomStore ??= createPostgresStore(db)
+  return cache.controlRoomStore
+}
+
+/**
+ * Approved lessons per agent (lessons.ts), cached in the process for a short while so
+ * reviews and cards don't read the store on every call. The lessons route refreshes
+ * it after each decision.
+ */
+export function lessonFeeds(): LessonFeeds {
+  cache.controlRoomLessons ??= createLessonFeeds(getStore())
+  return cache.controlRoomLessons
 }
 
 /** A phone page counts as open while it polled within this many ms. */
@@ -140,8 +159,8 @@ export function getEngine(): Promise<Engine> {
       const gateway = anthropicFromEnv()
       const engine = createEngine({
         snapshot: source.snapshot,
-        store: createPostgresStore(db),
-        reviews: { gateway, cache: createPostgresReviewCache(db), inboxMessages: source.inboxMessages },
+        store: getStore(),
+        reviews: { gateway, cache: createPostgresReviewCache(db), inboxMessages: source.inboxMessages, lessons: lessonFeeds().reviewer },
         // Digest prose (ticket 13): the same gateway, low effort, template text after about 5 s.
         briefing: { gateway, cache: createPostgresProseCache(db) },
         // Calls (ticket 10): background calls are answered by the simulated person; demo
@@ -174,7 +193,8 @@ export function inboxAgentOptions(): SuggestOptions {
 /** The situation cards' plain words (plain-words.ts): the reviewer's gateway; code text without a key. Rejected cards are kept as mistakes. */
 export function plainWords(): PlainWordsService {
   cache.controlRoomPlain ??= createPlainWords({
-    gateway: anthropicFromEnv(), cache: createPostgresPlainCache(db), mistakes: createMistakeLog(createPostgresStore(db)),
+    gateway: anthropicFromEnv(), cache: createPostgresPlainCache(db),
+    lessons: lessonFeeds().plainWords, mistakes: createMistakeLog(getStore()),
   })
   return cache.controlRoomPlain
 }

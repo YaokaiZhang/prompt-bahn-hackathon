@@ -4,10 +4,11 @@
 // 12:00 and 16:00 on the demo clock and urgent pushes, newest first. Every count
 // comes from the rule checks; the model only writes the opener and first move.
 // Each order a digest or push names shows as the board's situation card, as it stands now.
+// A new lesson links to the Lessons section of the Rules page, where the operator decides.
 
 import Link from "next/link"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import type { DigestItem, PushItem } from "@/lib/engine/engine"
+import type { DigestItem, LessonItem, PushItem } from "@/lib/engine/engine"
 import type { Group } from "@/lib/engine/checks"
 import type { BoardCard, BriefingView } from "@/lib/present/types"
 import { fmtDateTime } from "@/lib/present/time"
@@ -86,7 +87,7 @@ export default function BriefingPage() {
       <ul className="mail-rows">{view?.items.map((entry) => <li key={entry.id}>
         <button type="button" className={`mail-row${entry.read ? "" : " unread"}`} onClick={() => choose(entry.id)} aria-current={entry.id === selected ? "true" : undefined}>
           <span className="mail-row-top">
-            <span className="mail-row-who">{!entry.read && <span className="unread-dot" aria-label="Unread" />}{entry.kind === "digest" ? entry.title : `${entry.reference} · ${PUSH_LABEL[entry.reason]}`}</span>
+            <span className="mail-row-who">{!entry.read && <span className="unread-dot" aria-label="Unread" />}{entry.kind === "push" ? `${entry.reference} · ${PUSH_LABEL[entry.reason]}` : entry.title}</span>
             <span className="mail-row-when">{time(entry.at)}</span>
           </span>
           <span className="mail-row-preview">{entry.kind === "push" ? (cards.get(entry.orderId)?.situation?.headline ?? entry.text) : itemSummary(entry)}</span>
@@ -98,7 +99,9 @@ export default function BriefingPage() {
       {view && view.items.length > 0 && !item && <p className="empty">Choose an item.</p>}
       {item && <article>
         <button type="button" className="mail-back btn btn-tertiary btn-s" onClick={() => setShowList(true)}><Icon name="chevron" size={13} style={{ transform: "rotate(180deg)" }} /> All items</button>
-        {item.kind === "digest" ? <Digest item={item} cards={cards} now={now} /> : <Push item={item} card={cards.get(item.orderId) ?? null} now={now} />}
+        {item.kind === "digest" ? <Digest item={item} cards={cards} now={now} />
+          : item.kind === "lesson" ? <Lesson item={item} />
+          : <Push item={item} card={cards.get(item.orderId) ?? null} now={now} />}
       </article>}
     </section>
   </main></Shell>
@@ -168,5 +171,18 @@ function Push({ item, card, now }: { item: PushItem; card: BoardCard | null; now
     </header>
     <p className="digest-prose">{item.text}</p>
     <div className="push-card"><OrderSituation orderId={item.orderId} reference={item.reference} card={card} now={now} /></div>
+  </>
+}
+
+const AGENT_LABEL: Record<string, string> = { reviewer: "Reviewer", "plain-words": "Card wording" }
+
+function Lesson({ item }: { item: LessonItem }) {
+  return <>
+    <header className="mail-head">
+      <h2>{item.title}</h2>
+      <p className="mail-meta">{stamp(item.at)} · {AGENT_LABEL[item.agent] ?? item.agent}</p>
+    </header>
+    <blockquote className="lesson-text">{item.text}</blockquote>
+    <p className="digest-move"><Icon name="arrow" size={15} /><Link className="ref-link" href={item.href}>Read it and decide on the Rules page</Link></p>
   </>
 }

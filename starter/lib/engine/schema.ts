@@ -4,7 +4,7 @@
 // CACHE_TABLES (content-keyed caches, which reset keeps) or LEARNING_TABLES (what the
 // agents learn from, which reset keeps).
 
-import { bigserial, boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core"
+import { bigserial, boolean, doublePrecision, index, integer, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core"
 
 /** One row (id "current") once the demo clock has moved; no row means the clock is at its start. */
 export const demoClock = pgTable("cr_demo_clock", {
@@ -183,7 +183,35 @@ export const mistakes = pgTable("cr_mistakes", {
 }, (table) => [index("cr_mistakes_agent_idx").on(table.agent)])
 
 /**
- * What the agents learn from. Neither engine state nor a cache: a demo reset keeps it,
- * so learning is not wiped. Not in ENGINE_TABLES on purpose.
+ * Lessons (spec .scratch/self-improving-agents, lib/engine/lessons.ts): one row per
+ * candidate the distiller wrote, never updated. `text` is the only part a prompt gets;
+ * `applies_to` holds rule ids (reviewer) or card kinds (plain-words), empty for every call.
  */
-export const LEARNING_TABLES = [mistakes]
+export const lessons = pgTable("cr_lessons", {
+  id: text("id").primaryKey(),
+  agent: text("agent").notNull(),
+  text: text("text").notNull(),
+  explanation: text("explanation").notNull(),
+  appliesTo: jsonb("applies_to").$type<string[]>().notNull(),
+  sourceMistakeIds: jsonb("source_mistake_ids").$type<string[]>().notNull(),
+  evalBefore: doublePrecision("eval_before"),
+  evalAfter: doublePrecision("eval_after"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  by: text("by").notNull(),
+})
+
+/** The operator's decisions on lessons, append-only: approved, rejected, retired. A lesson's status is folded from these. */
+export const lessonEvents = pgTable("cr_lesson_events", {
+  seq: bigserial("seq", { mode: "number" }).primaryKey(),
+  lessonId: text("lesson_id").notNull(),
+  at: timestamp("at", { withTimezone: true }).notNull(),
+  by: text("by").notNull(),
+  kind: text("kind").notNull(),
+  text: text("text").notNull(),
+}, (table) => [index("cr_lesson_events_lesson_idx").on(table.lessonId)])
+
+/**
+ * What the agents learn from (mistakes) and what they learned (lessons). Reset keeps these on purpose: learning is
+ * neither demo state nor a content cache, and a new demo take should not wipe it.
+ */
+export const LEARNING_TABLES = [mistakes, lessons, lessonEvents]

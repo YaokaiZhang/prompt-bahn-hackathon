@@ -15,6 +15,7 @@ import "dotenv/config"
 import { drizzle } from "drizzle-orm/postgres-js"
 import postgres from "postgres"
 import { createEngine, type EngineState } from "../lib/engine/engine"
+import { createLessonFeeds } from "../lib/engine/lessons"
 import { createPostgresStore } from "../lib/engine/postgres"
 import { createAnthropicGateway } from "../lib/reviewer/anthropic"
 import { createPostgresReviewCache } from "../lib/reviewer/postgres-cache"
@@ -47,10 +48,12 @@ export async function sweep(options: SweepOptions): Promise<EngineState | null> 
     const apiKey = process.env.ANTHROPIC_API_KEY?.trim()
     const gateway = apiKey ? createAnthropicGateway({ apiKey, timeoutMs: 90_000 }) : null
     const source = await reviewSourceFromDatabase(db)
+    const store = createPostgresStore(db)
     const engine = createEngine({
       snapshot: source.snapshot,
-      store: createPostgresStore(db),
-      reviews: { gateway, cache, inboxMessages: source.inboxMessages },
+      store,
+      // The approved lessons, as the app injects them: the same keys, so the app reads what the sweep wrote.
+      reviews: { gateway, cache, inboxMessages: source.inboxMessages, lessons: createLessonFeeds(store).reviewer },
     })
     const before = await engine.state()
     const wanted = options.orders?.length
