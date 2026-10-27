@@ -139,7 +139,7 @@ _Avoid_: Error, failure, feedback
 The usable mistakes of one agent that share a failing rule and a contact type. A lesson is written from a group once it has enough mistakes on enough orders and days.
 
 **Lesson**:
-One or two plain sentences an agent reads in its prompt, written by the distiller from a mistake group, kept only if the reviewer eval does not get worse with it (the gate), and used only after the operator approves it. Lessons survive a demo reset.
+One or two plain sentences an agent reads in its prompt, written by the distiller from a mistake group and starting with the group's contact type ("Only for questions to the paying customer:"), kept only if the reviewer eval does not get worse with it (the gate), and used only after the operator approves it. Lessons survive a demo reset.
 _Avoid_: Rule (a rule check is code), memory, training
 
 **Learned case**:

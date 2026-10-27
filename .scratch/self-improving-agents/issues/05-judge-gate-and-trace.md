@@ -54,5 +54,7 @@ operator's correction, read by a judge, says what was wrong for any kind of mist
 - Re-review of three orders with the lesson injected ($0.02): every new question ends
   with a reply-by time and why. It also reached questions to sites and customer-given
   contacts, though the lesson names the paying customer: `appliesTo` was every call.
-- Open: the 1-check tolerance from the first run still stands; a lesson that names one
-  contact type but applies to every call spreads beyond it.
+- Fixed after: code now puts the group's contact in front of every lesson ("Only for
+  questions to the paying customer: ..."); the distiller writes the rest in at most 240
+  characters. One real distiller call ($0.02) gave a 251-character scoped lesson.
+- Open: the 1-check tolerance from the first run still stands.

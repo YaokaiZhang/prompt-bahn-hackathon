@@ -10,11 +10,11 @@ import { parseVerdict } from "@/lib/reviewer/judge"
 import { createReviewer, type Reviewed } from "@/lib/reviewer/reviewer"
 import { testReviewSource } from "@/lib/reviewer/testing"
 import {
-  checkDistilled, correctionOf, distil, distillerInput, DistilRejected, gateDecision, NO_HARM_TOLERANCE, groupHistory, groupKeys, groupMistakes, learnedCases, qualifies, runGate,
+  checkDistilled, correctionOf, lessonScope, distil, distillerInput, DistilRejected, gateDecision, NO_HARM_TOLERANCE, groupHistory, groupKeys, groupMistakes, learnedCases, qualifies, runGate,
   type DistillerInput, type DistilRun, type MistakeGroup,
 } from "./distil"
 import { createLearning, spentOn, type LearningOptions } from "./learning"
-import { decideLesson, readLessons } from "./lessons"
+import { decideLesson, MAX_LESSON_CHARS, readLessons } from "./lessons"
 import { createMemoryStore } from "./memory"
 import { createMistakeLog, restatePending, type Mistake } from "./mistakes"
 import { createPostgresStore } from "./postgres"
@@ -64,6 +64,8 @@ async function learnedFile(): Promise<CaseFile> {
 }
 
 const LESSON = "When the customer has already named who signs, the reviewer should not ask the customer side about the receiver again."
+/** The lesson as stored: the code puts the group's contact in front. */
+const SCOPED = `Only for questions to the paying customer: ${LESSON}`
 const EXPLANATION = "Three times the operator dismissed a question to the customer about who may sign, because it was already settled by phone."
 
 function reply(input: DistillerInput, over: Record<string, unknown> = {}): string {
@@ -189,7 +191,7 @@ test("the distiller reads restatements, edits and what the agent said as quoted 
   assert.deepEqual(input.mistakes.map((row) => row.order), ["order 1", "order 1", "order 2"])
   assert.deepEqual(input.mistakes[2].what_was_wrong, { edit: { before: "Who may sign?", after: "Who at Calverona Auto may sign before 18:00?" } })
   assert.equal(input.group.rule_title, "Delivery promise matches the customer's requested slot")
-  assert.deepEqual(distilled, { lesson: LESSON, explanation: EXPLANATION, appliesTo: ["R7"], mistakeIds: mistakes.map((row) => row.id) })
+  assert.deepEqual(distilled, { lesson: SCOPED, explanation: EXPLANATION, appliesTo: ["R7"], mistakeIds: mistakes.map((row) => row.id) })
 })
 
 test("the distiller's reply is checked: ids, group, thresholds, rule, readability and steering", async () => {
@@ -201,7 +203,7 @@ test("the distiller's reply is checked: ids, group, thresholds, rule, readabilit
   const check = (over: Record<string, unknown>) => () => checkDistilled(reply(input, over), g, all, input)
   assert.deepEqual(checkDistilled(reply(input), g, all, input)?.mistakeIds, mistakes.map((row) => row.id))
   assert.equal(checkDistilled(JSON.stringify({ no_lesson: "They share nothing." }), g, all, input), null)
-  assert.equal(checkDistilled(`Here it is:\n${reply(input)}`, g, all, input)?.lesson, LESSON)
+  assert.equal(checkDistilled(`Here it is:\n${reply(input)}`, g, all, input)?.lesson, SCOPED)
   const rejects: [Record<string, unknown> | string, RegExp][] = [
     [{ mistake_ids: [...mistakes.map((row) => row.id), "rv-nope"] }, /unknown mistake id rv-nope/],
     [{ mistake_ids: [...mistakes.map((row) => row.id), outsider.id] }, /is not in the group/],
@@ -231,6 +233,20 @@ test("a learned case is the kept case file and its correction: the restatement, 
   assert.deepEqual(cases[0].agentSaid, { title: TITLE, question: "Is Celia Hollowmere authorised to sign?", asked: "Paying customer: Calverona Auto" })
   assert.equal(cases[1].correction, 'The operator kept the proposal, its contact and its conflict, and changed only the question from "Who may sign?" to "Who at Calverona Auto may sign before 18:00?". Removed: "may sign?". Added: "at Calverona Auto may sign before 18:00?".')
   assert.equal(correctionOf(mistake({ restatement: null, validatorReason: "a gendered pronoun" })), "a gendered pronoun")
+})
+
+test("a lesson names its group's contact first, so the reviewer does not carry it to other contacts", async () => {
+  const [g] = groupMistakes(await qualifying())
+  const all = g.mistakes
+  const input = distillerInput(g)
+  assert.equal(lessonScope("customer_owned_site"), "Only for questions to a site the customer owns:")
+  assert.equal(lessonScope(null), null)
+  assert.equal(checkDistilled(reply(input, { lesson: `Only for questions to the paying customer: ${LESSON}` }), g, all, input)?.lesson, SCOPED, "not twice")
+  const noContact = { ...g, contact: null }
+  assert.equal(checkDistilled(reply(input), noContact, all, input)?.lesson, LESSON)
+  const room = MAX_LESSON_CHARS - "Only for questions to the paying customer: ".length
+  const long = `When the customer has already named who signs, the reviewer should not ask ${"again ".repeat(40)}`.slice(0, room + 1).trim() + "."
+  assert.throws(() => checkDistilled(reply(input, { lesson: long }), g, all, input), /too long/, "the scope counts toward the lesson's length")
 })
 
 test("the judge's reply is parsed strictly; anything else is unclear", () => {
@@ -295,7 +311,7 @@ test("a qualifying group is distilled, gated and stored as a candidate with its 
   await loop.settled()
   const [lesson] = await readLessons(store)
   assert.equal(lesson.status, "candidate")
-  assert.equal(lesson.text, LESSON)
+  assert.equal(lesson.text, SCOPED)
   assert.deepEqual(lesson.appliesTo, ["R7"])
   assert.deepEqual(lesson.sourceMistakeIds, mistakes.map((row) => row.id))
   assert.equal(lesson.evalAfter, lesson.evalBefore, "the spec-case scores, kept for engineers")
@@ -398,7 +414,7 @@ test("a dry run distils and checks only: no eval, nothing stored", async () => {
   const loop = await learning(store, gateway)
   const [report] = await loop.runNow({ dry: true })
   assert.equal(report.outcome, "candidate")
-  assert.equal(report.distilled?.lesson, LESSON)
+  assert.equal(report.distilled?.lesson, SCOPED)
   assert.deepEqual(gateway.calls.map((call) => call.job), ["distil"])
   assert.equal((await store.readDistilRuns()).length, 0)
   assert.equal((await readLessons(store)).length, 0)

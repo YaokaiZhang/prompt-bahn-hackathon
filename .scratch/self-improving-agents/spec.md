@@ -30,7 +30,8 @@ A feedback loop. Nothing changes model weights; the agents learn through approve
    returns a lesson (one or two plain sentences, <= ~300 chars: the only part injected
    into prompts), an explanation for the operator, the tags it applies to, and the
    mistake ids it is based on. Code verifies the ids exist, belong to the group and meet
-   the thresholds, and runs the readability and instruction-word checks.
+   the thresholds, and runs the readability and instruction-word checks. Code then puts
+   the group's contact in front, like "Only for questions to the paying customer:".
 4. **Gate.** Two questions, each answered twice without and twice with the candidate
    (Haiku, the agents' own model):
    - *No harm*: the spec's reviewer eval cases. A candidate that loses more than one
@@ -65,6 +66,10 @@ A feedback loop. Nothing changes model weights; the agents learn through approve
 - Engineers see the whole loop on `/dev/learning` (mistakes, restatements, distil runs,
   gate traces, lessons and their events). It is not linked from the operator's UI and is
   off in production unless `DEV_PAGES=1`.
+- A lesson names its group's contact first, written by code. The reviewer picks whom to
+  ask inside one call, so the prompt cannot hold a lesson back for one contact type; only
+  the lesson's words can. Without them, a lesson about the paying customer reached
+  questions to sites too. The scope counts toward the 300 characters.
 - No per-operator identity exists yet (one "operator" persona): thresholds count
   distinct orders and days; an `operator` column is kept for when logins exist.
 
