@@ -463,6 +463,21 @@ ul, ol { padding: 0; list-style: none; }
 .rule-row .rule-name { font-size: 16px; font-weight: 700; color: var(--ink); }
 .rule-id { display: inline-block; margin-right: 8px; }
 .rule-types { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.lesson-counts { margin-top: 10px; font-size: 14px; font-weight: 600; color: var(--body); }
+.lesson-list { display: grid; gap: 8px; margin-top: 16px; }
+.lesson { padding: 16px 20px; border-radius: 18px; background: var(--sand-50); scroll-margin-top: calc(var(--bar-h) + 16px); }
+.lesson:target { box-shadow: inset 0 0 0 2px var(--ink); }
+.lesson-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.lesson-head > .pill:last-child { margin-left: auto; }
+.lesson-tags { display: inline-flex; flex-wrap: wrap; gap: 6px; font-size: 13.5px; color: var(--muted); }
+.lesson-text { margin: 12px 0 0; font-size: 16px; font-weight: 600; line-height: 1.45; color: var(--ink); max-width: 72ch; }
+.lesson-why { margin-top: 6px; font-size: 14.5px; color: var(--body); max-width: 72ch; }
+.lesson-meta { margin-top: 6px; font-size: 13.5px; color: var(--muted); }
+.lesson-sources { list-style: none; display: grid; gap: 4px; margin: 8px 0 0; padding: 0; font-size: 14px; color: var(--body); }
+.lesson-sources code { font-size: 13px; color: var(--muted); }
+.lesson-error { margin-top: 10px; padding: 10px 14px; border-radius: var(--r-sm); background: var(--red-bg); color: var(--red-ink); font-size: 14px; }
+.lesson-rejected .lesson-text, .lesson-retired .lesson-text { color: var(--muted); }
+.mail-read .lesson-text { margin-top: 14px; padding: 16px 18px; border-radius: var(--r-md); background: var(--birch); }
 @media (max-width: 900px) {
   .proposal { padding: 14px; }
   .proposal-script, .proposal-decide, .proposal-form, .proposal-error, .proposal .more, .finding .more { margin-left: 0; }
@@ -472,6 +487,8 @@ ul, ol { padding: 0; list-style: none; }
   .proposal-history li { grid-template-columns: minmax(0, 1fr); gap: 0; padding-bottom: 6px; border-bottom: 1px solid var(--sand-50); }
   .rules-page h1 { font-size: 34px; }
   .rule-row { grid-template-columns: minmax(0, 1fr); padding: 14px 16px; }
+  .lesson { padding: 14px 16px; }
+  .lesson-head > .pill:last-child { margin-left: 0; }
   .rule-cols { display: none; }
   .rule-row dt { position: static; width: auto; height: auto; overflow: visible; clip: auto; font-size: 13px; font-weight: 600; color: var(--muted); }
   /* On a phone the batch takes the queue's place: the preview panel shows, the list hides. */

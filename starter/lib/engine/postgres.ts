@@ -4,9 +4,10 @@ import type { BriefingItem } from "./briefing"
 import type { EffectEvent } from "./effects"
 import type { StoredCallEvent } from "./calls"
 import type { InboxEvent } from "./inbox"
+import type { LessonAgent, StoredLessonEvent } from "./lessons"
 import type { StoredProposalEvent } from "./proposals"
 import type { StoredPublicationEvent } from "./publishing"
-import { briefingItems, callEvents, demoClock, effectEvents, ENGINE_TABLES, inboxEvents, proposalEvents, publicationEvents } from "./schema"
+import { briefingItems, callEvents, demoClock, effectEvents, ENGINE_TABLES, inboxEvents, lessonEvents, lessons, proposalEvents, publicationEvents } from "./schema"
 import type { EngineStore } from "./store"
 
 /** Any drizzle postgres-js client, whatever schema it was built with. */
@@ -118,6 +119,27 @@ export function createPostgresStore(db: Database): EngineStore {
         threadId: event.threadId, orderId: event.orderId, at: new Date(event.at), by: event.by, kind: event.kind, text: event.text,
         data: (event.data ?? null) as Record<string, unknown> | null,
       })))
+    },
+    async readLessons() {
+      const rows = await db.select().from(lessons)
+      return rows.map((row) => ({
+        id: row.id, agent: row.agent as LessonAgent, text: row.text, explanation: row.explanation, appliesTo: row.appliesTo,
+        sourceMistakeIds: row.sourceMistakeIds, evalBefore: row.evalBefore, evalAfter: row.evalAfter, createdAt: row.createdAt.toISOString(), by: row.by,
+      }))
+    },
+    async addLesson(lesson) {
+      const added = await db.insert(lessons).values({ ...lesson, createdAt: new Date(lesson.createdAt) })
+        .onConflictDoNothing({ target: lessons.id })
+        .returning({ id: lessons.id })
+      return added.length > 0
+    },
+    async readLessonEvents() {
+      const found = await db.select().from(lessonEvents).orderBy(asc(lessonEvents.seq))
+      return found.map((row) => ({ lessonId: row.lessonId, at: row.at.toISOString(), by: row.by, kind: row.kind as StoredLessonEvent["kind"], text: row.text }))
+    },
+    async appendLessonEvents(events) {
+      if (!events.length) return
+      await db.insert(lessonEvents).values(events.map((event) => ({ ...event, at: new Date(event.at) })))
     },
     async reset() {
       const names = ENGINE_TABLES.map((table) => `"${getTableName(table)}"`).join(", ")

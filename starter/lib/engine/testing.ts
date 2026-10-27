@@ -7,11 +7,13 @@
 
 import "dotenv/config"
 import { after, test } from "node:test"
+import { getTableName, sql } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/postgres-js"
 import postgres from "postgres"
 import type { ReviewCache } from "@/lib/reviewer/cache"
 import { loadFixtures, SCENARIO_FIXTURE_DIR } from "@/lib/reviewer/fixtures"
 import { GatewayError, NO_USAGE, type ChatRequest, type ModelGateway } from "@/lib/reviewer/gateway"
+import type { LessonFeed } from "@/lib/reviewer/lessons"
 import { createScriptedGateway } from "@/lib/reviewer/scripted"
 import { testReviewSource } from "@/lib/reviewer/testing"
 import type { CallOptions } from "./call-runner"
@@ -19,6 +21,7 @@ import type { ProseOptions } from "./digest-prose"
 import { createEngine, type Engine, type Snapshot } from "./engine"
 import { createMemoryStore } from "./memory"
 import { createPostgresStore, type Database } from "./postgres"
+import { LEARNING_TABLES } from "./schema"
 import type { EngineStore } from "./store"
 
 /** The real dataset, read once per test process. */
@@ -35,6 +38,8 @@ export type TestEngineOptions = {
   briefing?: ProseOptions
   /** Who answers calls and speech (ticket 10). Absent: the default simulated person, no speech. */
   calls?: CallOptions
+  /** The approved reviewer lessons (lessons.ts). Absent: none. */
+  lessons?: LessonFeed
 }
 
 export async function testEngine(options: TestEngineOptions = {}): Promise<Engine> {
@@ -42,7 +47,7 @@ export async function testEngine(options: TestEngineOptions = {}): Promise<Engin
   return createEngine({
     snapshot: source.snapshot,
     store: options.store ?? createMemoryStore(),
-    reviews: { gateway: options.gateway ?? null, cache: options.reviewCache, inboxMessages: source.inboxMessages },
+    reviews: { gateway: options.gateway ?? null, cache: options.reviewCache, inboxMessages: source.inboxMessages, lessons: options.lessons },
     briefing: options.briefing,
     calls: options.calls,
   })
@@ -119,6 +124,11 @@ export function testDatabase(): Database | null {
   return database.db
 }
 
+/** Empties the lesson tables, which reset keeps: a test store starts with nothing learned. */
+export async function clearLearning(db: Database): Promise<void> {
+  await db.execute(sql.raw(`TRUNCATE ${LEARNING_TABLES.map((table) => `"${getTableName(table)}"`).join(", ")} RESTART IDENTITY`))
+}
+
 type StoreCase = { name: string; make: () => Promise<EngineStore> | null }
 
 const STORES: StoreCase[] = [
@@ -131,6 +141,7 @@ const STORES: StoreCase[] = [
       return (async () => {
         const store = createPostgresStore(db)
         await store.reset()
+        await clearLearning(db)
         return store
       })()
     },

@@ -2,6 +2,8 @@
 // system prompt and the prepared case file, lets the model use read-only tools at
 // most `maxToolCalls` times, takes its answer through submit_findings, checks the
 // evidence (one repair attempt, then drop), and caches the result by case-file hash.
+// Approved lessons whose rule tags match the order's failing rules follow the system
+// prompt as their own block (the cached prefix stays), and their hash joins the key.
 //
 //   const reviewer = createReviewer({ gateway, source, cache })
 //   const result = await reviewer.review("CD-420516", { now, rules, prior })
@@ -10,6 +12,7 @@
 // else comes back as "not reviewed yet" instead of failing.
 
 import { createHash } from "node:crypto"
+import { lessonsFor, lessonsHash, renderLessons, type InjectedLesson, type LessonFeed } from "./lessons"
 import { buildCaseFile, caseFileHash, renderCaseFile, type CaseFile, type CaseInput } from "./case-file"
 import { createMemoryReviewCache, type ReviewCache } from "./cache"
 import { addUsage, NO_USAGE, type ChatMessage, type Effort, type ModelGateway, type ToolCall, type Usage } from "./gateway"
@@ -75,6 +78,8 @@ export type ReviewerOptions = {
   maxToolCalls?: number
   /** Real time, for `reviewedAt`. */
   clock?: () => Date
+  /** The approved reviewer lessons; absent: none. */
+  lessons?: LessonFeed
 }
 
 export type Reviewer = {
@@ -85,8 +90,17 @@ export type Reviewer = {
 
 const MAX_TOKENS = 8000
 
-function systemMessage(): ChatMessage {
-  return { role: "system", content: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }] }
+function systemMessage(lessons: InjectedLesson[]): ChatMessage {
+  const block = renderLessons(lessons)
+  return {
+    role: "system",
+    content: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }, ...(block ? [{ type: "text" as const, text: block }] : [])],
+  }
+}
+
+/** The approved lessons for an order: tagged with one of its failing rules, or untagged. */
+export function reviewerLessons(lessons: InjectedLesson[], input: CaseInput): InjectedLesson[] {
+  return lessonsFor(lessons, (input.rules ?? []).filter((rule) => rule.status === "failed").map((rule) => rule.rule))
 }
 
 function parseArguments(call: ToolCall): { args: Record<string, unknown>; error: string | null } {
@@ -148,8 +162,9 @@ export function createReviewer(options: ReviewerOptions): Reviewer {
     return buildCaseFile(bundleFor(key), source, input)
   }
 
-  function cacheKey(hash: string): string {
-    return createHash("sha256").update(`${PROMPT_VERSION}\n${model}\n${hash}`).digest("hex")
+  /** No lessons: the key as before lessons existed, so cached reviews still hit. */
+  function cacheKey(hash: string, lessons: string): string {
+    return createHash("sha256").update(`${PROMPT_VERSION}\n${model}\n${hash}${lessons ? `\n${lessons}` : ""}`).digest("hex")
   }
 
   async function review(key: string, input: CaseInput): Promise<ReviewResult> {
@@ -158,13 +173,15 @@ export function createReviewer(options: ReviewerOptions): Reviewer {
     const hash = caseFileHash(file)
     const base = { orderId: file.orderId, reference: file.reference, hash, recordsRead: file.records.length }
 
-    const hit = await cache.get(cacheKey(hash))
+    const lessons = reviewerLessons(options.lessons ? await options.lessons() : [], input)
+    const resultKey = cacheKey(hash, lessonsHash(lessons))
+    const hit = await cache.get(resultKey)
     if (hit) return { ...hit, cached: true, cost: 0 }
     if (!gateway) return { status: "not_reviewed", ...base, cost: 0, reason: `${NOT_REVIEWED_YET}: ANTHROPIC_API_KEY is not set` }
 
     const index: RecordIndex = new Map(file.records.map((record) => [record.id, record]))
     const ctx = { index, customerId: file.customer.id }
-    const messages: ChatMessage[] = [systemMessage(), { role: "user", content: renderCaseFile(file) }]
+    const messages: ChatMessage[] = [systemMessage(lessons), { role: "user", content: renderCaseFile(file) }]
     let usage = NO_USAGE
     let usedTools = 0
     let refusedTools = 0
@@ -271,7 +288,7 @@ export function createReviewer(options: ReviewerOptions): Reviewer {
       toolCalls: usedTools, refusedToolCalls: refusedTools, turns,
       cost: usage.cost, usage, model: answeredModel, reviewedAt: clock().toISOString(), cached: false,
     }
-    await cache.put(cacheKey(hash), result)
+    await cache.put(resultKey, result)
     return result
   }
 

@@ -9,6 +9,7 @@ import type { BriefingItem } from "./briefing"
 import type { EffectEvent } from "./effects"
 import type { StoredCallEvent } from "./calls"
 import type { InboxEvent } from "./inbox"
+import type { StoredLesson, StoredLessonEvent } from "./lessons"
 import type { StoredProposalEvent } from "./proposals"
 import type { StoredPublicationEvent } from "./publishing"
 
@@ -45,6 +46,13 @@ export interface EngineStore {
   readInboxEvents(): Promise<InboxEvent[]>
   /** Appends inbox events in one go. */
   appendInboxEvents(events: InboxEvent[]): Promise<void>
-  /** Empties every engine table. The snapshot is never touched. */
+  /** Every lesson candidate ever added (lessons.ts), in no particular order. Reset keeps them. */
+  readLessons(): Promise<StoredLesson[]>
+  /** Stores a lesson unless one with its id exists; true when it was added. */
+  addLesson(lesson: StoredLesson): Promise<boolean>
+  /** The operator's decisions on lessons, in the order they were appended. Reset keeps them. */
+  readLessonEvents(): Promise<StoredLessonEvent[]>
+  appendLessonEvents(events: StoredLessonEvent[]): Promise<void>
+  /** Empties every engine table. The snapshot and what the agents learned are never touched. */
   reset(): Promise<void>
 }

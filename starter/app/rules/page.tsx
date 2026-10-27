@@ -1,14 +1,16 @@
-// The Rules page (ticket 07): read-only. The approval policy (who is contacted, the
+// The Rules page (ticket 07). The approval policy (who is contacted, the
 // kind of action, and whether the agent acts alone, needs a yes or may only propose)
 // and every rule check with its first action. Both are read from their one source:
 // POLICY in lib/reviewer/policy.ts and RULE_CATALOGUE in lib/engine/rules.ts.
-// Proposals link here as /rules#<policy row id>.
+// Proposals link here as /rules#<policy row id>. The one part that takes decisions is
+// Lessons (app/components/lessons.tsx): the operator approves what the agents learned.
 
 import type { Metadata } from "next"
 import Link from "next/link"
 import { RULE_CATALOGUE, type RuleInfo } from "@/lib/engine/rules"
 import { CONTACT_TYPE_LABEL, CONTACT_TYPES, POLICY, policyFor, type ActionType, type Decision } from "@/lib/reviewer/policy"
 import type { Tone } from "@/lib/present/types"
+import { Lessons } from "../components/lessons"
 import { Shell } from "../components/shell"
 import { Pill } from "../components/ui"
 
@@ -79,5 +81,7 @@ export default function RulesPage() {
       <Cols names={["Weak signal", "First action"]} />
       <ol className="rules-list">{weak.map((rule) => <RuleRow key={rule.id} rule={rule} />)}</ol>
     </section>
+
+    <Lessons />
   </main></Shell>
 }

@@ -9,9 +9,13 @@
 //   must appear there), so a time, count or reference can't drift. A rejected or
 //   failed card keeps its code text.
 // - Rewrites are cached by a hash of the prompt version, the model and the card.
+// - Approved plain-words lessons tagged with the card's kind (or untagged) follow the
+//   instructions; a batch holds cards that get the same lessons, and their hash joins
+//   the card's key (none: the key as before).
 
 import { createHash } from "node:crypto"
 import type { ModelGateway } from "@/lib/reviewer/gateway"
+import { lessonsFor, lessonsHash, renderLessons, type InjectedLesson, type LessonFeed } from "@/lib/reviewer/lessons"
 import { DEFAULT_REVIEWER_MODEL } from "@/lib/reviewer/reviewer"
 import { plainFor, type PlainWords, type Situation } from "@/lib/present/situation"
 
@@ -36,7 +40,11 @@ export function createMemoryPlainCache(): PlainCache {
   }
 }
 
-export type PlainOptions = { gateway?: ModelGateway | null; cache: PlainCache; model?: string }
+export type PlainOptions = {
+  gateway?: ModelGateway | null; cache: PlainCache; model?: string
+  /** The approved plain-words lessons; absent: none. */
+  lessons?: LessonFeed
+}
 
 export class PlainRejected extends Error {}
 
@@ -76,9 +84,21 @@ Rules:
 
 Reply with only a JSON object: {"cards": [{"id": "...", "headline": "...", "body": "..."}]}, one entry per card, ids as given.`
 
-export function plainKey(item: PlainItem, model: string): string {
+/** `lessons` is the hash of the lessons the card gets ("" for none: the key as before lessons existed). */
+export function plainKey(item: PlainItem, model: string, lessons = ""): string {
   const { headline, body } = item.situation
-  return createHash("sha256").update(JSON.stringify([PLAIN_VERSION, model, item.kind, headline, body])).digest("hex")
+  return createHash("sha256").update(JSON.stringify([PLAIN_VERSION, model, item.kind, headline, body, ...(lessons ? [lessons] : [])])).digest("hex")
+}
+
+/** The approved lessons for a card: tagged with its kind, or untagged. */
+export function plainLessons(lessons: InjectedLesson[], item: PlainItem): InjectedLesson[] {
+  return lessonsFor(lessons, [item.kind])
+}
+
+type Row = { key: string; item: PlainItem; lessons: InjectedLesson[] }
+
+function chunks<T>(list: T[], size: number): T[][] {
+  return Array.from({ length: Math.ceil(list.length / size) }, (_, at) => list.slice(at * size, at * size + size))
 }
 
 function parseReply(content: string | null): unknown[] {
@@ -107,15 +127,17 @@ export function createPlainWords(options: PlainOptions): PlainWordsService {
   const failed = new Set<string>()
   const running = new Set<Promise<void>>()
 
-  async function batch(rows: { key: string; item: PlainItem }[]): Promise<void> {
+  async function batch(rows: Row[]): Promise<void> {
     if (!gateway) return
+    // Every row of a batch gets the same lessons (see `start`).
+    const block = renderLessons(rows[0]?.lessons ?? [])
     const cards = rows.map(({ item }, index) => ({
       id: String(index + 1), kind: item.kind, headline: item.situation.headline, body: item.situation.body,
     }))
     try {
       const response = await gateway.chat({
         job: "plain-words", subject: `cards-${rows.length}`, model, effort: "none", maxTokens: 600 + rows.length * 200,
-        messages: [{ role: "system", content: SYSTEM }, { role: "user", content: JSON.stringify({ cards }) }],
+        messages: [{ role: "system", content: block ? `${SYSTEM}\n\n${block}` : SYSTEM }, { role: "user", content: JSON.stringify({ cards }) }],
       })
       const replies = new Map(parseReply(response.message.content).map((reply) => [String((reply as { id?: unknown })?.id ?? ""), reply]))
       await Promise.all(rows.map(async ({ key, item }, index) => {
@@ -132,18 +154,27 @@ export function createPlainWords(options: PlainOptions): PlainWordsService {
   }
 
   async function missing(items: PlainItem[]) {
-    const keys = items.map((item) => plainKey(item, model))
+    const approved = options.lessons ? await options.lessons().catch(() => []) : []
+    const rows = items.map((item) => {
+      const lessons = plainLessons(approved, item)
+      return { key: plainKey(item, model, lessonsHash(lessons)), item, lessons }
+    })
+    const keys = rows.map((row) => row.key)
     const hits = await cache.getMany([...new Set(keys)]).catch(() => new Map<string, PlainText>())
-    const todo = new Map<string, PlainItem>()
-    keys.forEach((key, index) => { if (!hits.has(key) && !busy.has(key) && !failed.has(key)) todo.set(key, items[index]) })
-    return { keys, hits, todo: [...todo].map(([key, item]) => ({ key, item })) }
+    const todo = new Map<string, Row>()
+    for (const row of rows) if (!hits.has(row.key) && !busy.has(row.key) && !failed.has(row.key)) todo.set(row.key, row)
+    return { keys, hits, todo: [...todo.values()] }
   }
 
-  function start(todo: { key: string; item: PlainItem }[]): Promise<void>[] {
+  function start(todo: Row[]): Promise<void>[] {
     if (!gateway) return []
     const runs: Promise<void>[] = []
-    for (let at = 0; at < todo.length; at += BATCH) {
-      const rows = todo.slice(at, at + BATCH)
+    const groups = new Map<string, Row[]>()
+    for (const row of todo) {
+      const group = lessonsHash(row.lessons)
+      groups.set(group, [...(groups.get(group) ?? []), row])
+    }
+    for (const rows of [...groups.values()].flatMap((group) => chunks(group, BATCH))) {
       for (const { key } of rows) busy.add(key)
       const run: Promise<void> = batch(rows).finally(() => { for (const { key } of rows) busy.delete(key); running.delete(run) })
       running.add(run)

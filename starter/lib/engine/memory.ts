@@ -2,6 +2,7 @@ import type { BriefingItem } from "./briefing"
 import type { EffectEvent } from "./effects"
 import type { StoredCallEvent } from "./calls"
 import type { InboxEvent } from "./inbox"
+import type { StoredLesson, StoredLessonEvent } from "./lessons"
 import type { StoredProposalEvent } from "./proposals"
 import type { StoredPublicationEvent } from "./publishing"
 import type { EngineStore } from "./store"
@@ -14,6 +15,9 @@ export function createMemoryStore(): EngineStore {
   let callEvents: StoredCallEvent[] = []
   let publicationEvents: StoredPublicationEvent[] = []
   let inboxEvents: InboxEvent[] = []
+  // Learning: reset keeps it.
+  const lessons = new Map<string, StoredLesson>()
+  let lessonEvents: StoredLessonEvent[] = []
   return {
     async readClock() { return clock },
     async writeClock(now) { clock = now },
@@ -42,6 +46,14 @@ export function createMemoryStore(): EngineStore {
     async appendPublicationEvents(events) { publicationEvents = [...publicationEvents, ...structuredClone(events)] },
     async readInboxEvents() { return structuredClone(inboxEvents) },
     async appendInboxEvents(events) { inboxEvents = [...inboxEvents, ...structuredClone(events)] },
+    async readLessons() { return [...lessons.values()].map((lesson) => structuredClone(lesson)) },
+    async addLesson(lesson) {
+      if (lessons.has(lesson.id)) return false
+      lessons.set(lesson.id, structuredClone(lesson))
+      return true
+    },
+    async readLessonEvents() { return structuredClone(lessonEvents) },
+    async appendLessonEvents(events) { lessonEvents = [...lessonEvents, ...structuredClone(events)] },
     async reset() { clock = null; briefing = new Map(); proposalEvents = []; effects = []; callEvents = []; publicationEvents = []; inboxEvents = [] },
   }
 }

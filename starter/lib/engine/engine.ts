@@ -13,7 +13,8 @@
 import type { Bundle } from "@/lib/present/bundle"
 import type { AskRole, ContactType } from "@/lib/reviewer/policy"
 import { compareUrgency, GROUPS, verdictFor, type Group, type RuleResult, type Verdict } from "./checks"
-import { briefingAsOf, digestFacts, digestTimes, digestTitle, pushId, sendPush, type Briefing, type DigestItem, type PushInput } from "./briefing"
+import { briefingAsOf, digestFacts, digestTimes, digestTitle, lessonItem, lessonItemId, pushId, sendPush, type Briefing, type DigestItem, type PushInput } from "./briefing"
+import { readLessons } from "./lessons"
 import { writeProse, type ProseOptions } from "./digest-prose"
 import { becameDue, digestDueItems, dueAsOf, nextCheckItems, nextDueAfter, type DueItem } from "./due"
 import { applyEffects, checkEffect, closeEffect, defaultFact, effectId, effectTarget, effectText, isCustomerStatement, statementsBy, type EffectEvent, type EffectInput, type EffectSpec, type EffectWrite } from "./effects"
@@ -187,7 +188,7 @@ export type {
 export type { CallOptions } from "./call-runner"
 export type { PhonePersona, PhoneView, QueuedCall } from "./phone"
 export type { AudioClip, TurnCheck, TurnPath, VoiceAgent } from "./voice-agent"
-export type { Briefing, BriefingItem, DigestFacts, DigestItem, DigestSlot, PushItem, PushReason, PushInput } from "./briefing"
+export type { Briefing, BriefingItem, DigestFacts, DigestItem, DigestSlot, LessonItem, PushItem, PushReason, PushInput } from "./briefing"
 export type { DigestProse, ProseSegment } from "./digest-prose"
 export type { Effect, EffectEvent, EffectInput, EffectSpec, EffectType, EffectWrite, Versioning } from "./effects"
 export type { DemandCheck, Publication, SolvedChange, Stage } from "./publishing"
@@ -817,6 +818,13 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
     }
   }
 
+  /** Lessons outlive a reset, the Briefing does not: every candidate still waiting gets its item back. */
+  async function deliverLessonItems(now: string, delivered: Set<string>): Promise<void> {
+    for (const lesson of await readLessons(store)) {
+      if (lesson.status === "candidate" && !delivered.has(lessonItemId(lesson.id))) await store.addBriefing(lessonItem(lesson, now, new Date().toISOString()))
+    }
+  }
+
   // One delivery at a time per process; the store's ids keep it at-most-once across processes.
   let delivering: Promise<void> = Promise.resolve()
   function deliverBriefing(): Promise<void> {
@@ -825,6 +833,7 @@ export function createEngine({ snapshot, store, reviews: reviewOptions, briefing
       const delivered = new Set((await store.readBriefing()).map((item) => item.id))
       await deliverPushes(now, delivered)
       await deliverDigests(now, delivered)
+      await deliverLessonItems(now, delivered)
     })
     delivering = run.catch(() => {})
     return run

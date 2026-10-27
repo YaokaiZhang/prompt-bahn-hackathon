@@ -92,7 +92,7 @@ export function useBriefingFeed(enabled: boolean): BriefingFeed {
 
 /** "Morning digest", or a push's title. */
 export function itemSummary(item: BriefingItem): string {
-  if (item.kind === "push") return item.text
+  if (item.kind === "push" || item.kind === "lesson") return item.text
   const { counts } = item.facts
   return `${counts.needs_action} blocked · ${counts.urgent} urgent · ${counts.in_progress} in progress`
 }
@@ -107,6 +107,8 @@ export function BriefingToasts({ feed }: { feed: BriefingFeed }) {
         <span className="toast-links">
           {item.kind === "push"
             ? <Link className="ref-link" href={`/orders/${encodeURIComponent(item.orderId)}`} onClick={() => feed.dismiss(item.id)}>Open {item.reference}</Link>
+            : item.kind === "lesson"
+            ? <Link className="ref-link" href={item.href} onClick={() => feed.dismiss(item.id)}>Open the lesson</Link>
             : <Link className="ref-link" href={`/briefing#${encodeURIComponent(item.id)}`} onClick={() => feed.dismiss(item.id)}>Read the digest</Link>}
         </span>
       </div>
