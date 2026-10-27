@@ -1,6 +1,7 @@
 import { and, asc, eq, getTableName, inArray, sql } from "drizzle-orm"
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js"
 import type { BriefingItem } from "./briefing"
+import type { DistilRun } from "./distil"
 import type { EffectEvent } from "./effects"
 import type { StoredCallEvent } from "./calls"
 import type { InboxEvent } from "./inbox"
@@ -8,7 +9,7 @@ import type { LessonAgent, StoredLessonEvent } from "./lessons"
 import type { Mistake } from "./mistakes"
 import type { StoredProposalEvent } from "./proposals"
 import type { StoredPublicationEvent } from "./publishing"
-import { briefingItems, callEvents, demoClock, effectEvents, ENGINE_TABLES, inboxEvents, lessonEvents, lessons, mistakes, proposalEvents, publicationEvents } from "./schema"
+import { briefingItems, callEvents, demoClock, distilRuns, effectEvents, ENGINE_TABLES, inboxEvents, lessonEvents, lessons, mistakes, proposalEvents, publicationEvents } from "./schema"
 import type { EngineStore } from "./store"
 
 /** Any drizzle postgres-js client, whatever schema it was built with. */
@@ -163,6 +164,19 @@ export function createPostgresStore(db: Database): EngineStore {
     },
     async settleMistake(id, restated) {
       await db.update(mistakes).set(restated).where(and(eq(mistakes.id, id), eq(mistakes.status, "pending")))
+    },
+    async readDistilRuns() {
+      const found = await db.select().from(distilRuns).orderBy(asc(distilRuns.seq))
+      return found.map(({ seq: _seq, groupKey, startedAt, finishedAt, ...row }) => ({
+        ...row, group: groupKey, startedAt: startedAt.toISOString(), finishedAt: finishedAt?.toISOString() ?? null, outcome: row.outcome as DistilRun["outcome"],
+      }))
+    },
+    async startDistilRun({ group, startedAt, finishedAt, ...run }) {
+      await db.insert(distilRuns).values({ ...run, groupKey: group, startedAt: new Date(startedAt), finishedAt: finishedAt ? new Date(finishedAt) : null })
+        .onConflictDoNothing({ target: distilRuns.id })
+    },
+    async finishDistilRun(id, { finishedAt, ...end }) {
+      await db.update(distilRuns).set({ ...end, finishedAt: finishedAt ? new Date(finishedAt) : null }).where(eq(distilRuns.id, id))
     },
   }
 }

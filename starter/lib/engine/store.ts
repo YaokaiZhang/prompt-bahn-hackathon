@@ -6,6 +6,7 @@
 // `postgres.ts` (with a `cr_` table in `schema.ts`). Times cross the port as ISO strings.
 
 import type { BriefingItem } from "./briefing"
+import type { DistilRun } from "./distil"
 import type { EffectEvent } from "./effects"
 import type { StoredCallEvent } from "./calls"
 import type { InboxEvent } from "./inbox"
@@ -62,4 +63,12 @@ export interface EngineStore {
   appendMistakes(mistakes: Mistake[]): Promise<void>
   /** Writes a pending mistake's restatement and status, once (a settled mistake is left as it is). */
   settleMistake(id: string, restated: Restated): Promise<void>
+  /** Every lessons run (learning.ts), oldest first. Kept across reset. */
+  readDistilRuns(): Promise<DistilRun[]>
+  /** Stores a run as it starts; one whose id exists already is skipped. */
+  startDistilRun(run: DistilRun): Promise<void>
+  /** Writes a run's end: outcome, lesson, mistakes read, cost and detail. */
+  finishDistilRun(id: string, end: DistilRunEnd): Promise<void>
 }
+
+export type DistilRunEnd = Pick<DistilRun, "finishedAt" | "outcome" | "lessonId" | "mistakeIds" | "cost" | "detail">

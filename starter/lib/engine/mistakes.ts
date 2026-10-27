@@ -10,6 +10,9 @@
 //   restatement keeps the mistake, marked unusable with the reason. Without a gateway
 //   it stays pending. An edit's diff and a validator's reason are usable as they are.
 // - Stored once per id and kept across a demo reset (LEARNING_TABLES).
+// - A usable mistake (on record, or once its restatement passes) goes to `onUsable`:
+//   the lessons trigger (learning.ts). `restatePending` restates what was recorded
+//   while no model was configured.
 // - Tags say what a mistake is about, as "<what>:<value>": `rule:R3` (a rule failing on
 //   the order), `policy:site-routine`, `contact:third_party_site`, `proposal:call` for
 //   the reviewer; `card:decide` for plain words. Lessons match on them.
@@ -148,7 +151,12 @@ export type MistakeStore = {
   settleMistake(id: string, restated: Restated): Promise<void>
 }
 
-export type MistakeOptions = { gateway?: ModelGateway | null; model?: string }
+export type MistakeOptions = {
+  gateway?: ModelGateway | null
+  model?: string
+  /** Told of every mistake that is (or became, after its restatement) usable: the lessons trigger (learning.ts). Must not throw or wait. */
+  onUsable?: (mistake: Mistake) => void
+}
 
 export type MistakeLog = {
   /** Stores the mistake (once per id) and starts its restatement in the background. Never throws. */
@@ -161,6 +169,10 @@ export function createMistakeLog(store: MistakeStore, options: MistakeOptions = 
   const gateway = options.gateway ?? null
   const model = options.model ?? process.env.REVIEWER_MODEL ?? DEFAULT_REVIEWER_MODEL
   const running = new Set<Promise<void>>()
+  const usable = (mistake: Mistake) => {
+    if (mistake.status !== "usable" || !options.onUsable) return
+    try { options.onUsable(mistake) } catch (error) { console.error("mistakes:", error instanceof Error ? error.message : error) }
+  }
   return {
     async record(mistake) {
       try {
@@ -170,9 +182,13 @@ export function createMistakeLog(store: MistakeStore, options: MistakeOptions = 
         console.error("mistakes:", error instanceof Error ? error.message : error)
         return
       }
+      usable(mistake)
       if (mistake.status !== "pending" || !gateway) return
       const run: Promise<void> = restate(gateway, model, mistake)
-        .then((restated) => store.settleMistake(mistake.id, restated))
+        .then(async (restated) => {
+          await store.settleMistake(mistake.id, restated)
+          usable({ ...mistake, ...restated })
+        })
         .catch((error) => console.error("mistakes:", error instanceof Error ? error.message : error))
         .finally(() => { running.delete(run) })
       running.add(run)
@@ -181,4 +197,22 @@ export function createMistakeLog(store: MistakeStore, options: MistakeOptions = 
       while (running.size) await Promise.all(running)
     },
   }
+}
+
+/**
+ * Restates every mistake still pending (recorded while no model was configured) and
+ * settles it; returns the ones that settled. Run by `npm run lessons` and at the start
+ * of a triggered lessons run. `stop` is asked before each call (the spend cap): a
+ * restatement refused for money would otherwise be kept as unusable for good.
+ */
+export async function restatePending(store: MistakeStore & { readMistakes(): Promise<Mistake[]> }, gateway: ModelGateway, model: string, stop: () => boolean = () => false): Promise<Mistake[]> {
+  const settled: Mistake[] = []
+  for (const mistake of await store.readMistakes()) {
+    if (mistake.status !== "pending") continue
+    if (stop()) break
+    const restated = await restate(gateway, model, mistake)
+    await store.settleMistake(mistake.id, restated)
+    settled.push({ ...mistake, ...restated })
+  }
+  return settled
 }

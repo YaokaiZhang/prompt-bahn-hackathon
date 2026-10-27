@@ -2,6 +2,7 @@ import type { BriefingItem } from "./briefing"
 import type { EffectEvent } from "./effects"
 import type { StoredCallEvent } from "./calls"
 import type { InboxEvent } from "./inbox"
+import type { DistilRun } from "./distil"
 import type { Mistake } from "./mistakes"
 import type { StoredLesson, StoredLessonEvent } from "./lessons"
 import type { StoredProposalEvent } from "./proposals"
@@ -21,6 +22,7 @@ export function createMemoryStore(): EngineStore {
 
   const lessons = new Map<string, StoredLesson>()
   let lessonEvents: StoredLessonEvent[] = []
+  let distilRuns: DistilRun[] = []
   return {
     async readClock() { return clock },
     async writeClock(now) { clock = now },
@@ -69,6 +71,13 @@ export function createMemoryStore(): EngineStore {
     },
     async settleMistake(id, restated) {
       mistakes = mistakes.map((mistake) => mistake.id === id && mistake.status === "pending" ? { ...mistake, ...structuredClone(restated) } : mistake)
+    },
+    async readDistilRuns() { return structuredClone(distilRuns) },
+    async startDistilRun(run) {
+      if (!distilRuns.some((row) => row.id === run.id)) distilRuns = [...distilRuns, structuredClone(run)]
+    },
+    async finishDistilRun(id, end) {
+      distilRuns = distilRuns.map((run) => run.id === id ? { ...run, ...structuredClone(end) } : run)
     },
   }
 }
