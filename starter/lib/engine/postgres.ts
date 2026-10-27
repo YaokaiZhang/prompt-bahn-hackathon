@@ -1,12 +1,15 @@
-import { asc, eq, getTableName, inArray, sql } from "drizzle-orm"
+import { and, asc, eq, getTableName, inArray, sql } from "drizzle-orm"
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js"
 import type { BriefingItem } from "./briefing"
+import type { DistilRun } from "./distil"
 import type { EffectEvent } from "./effects"
 import type { StoredCallEvent } from "./calls"
 import type { InboxEvent } from "./inbox"
+import type { LessonAgent, StoredLessonEvent } from "./lessons"
+import type { Mistake } from "./mistakes"
 import type { StoredProposalEvent } from "./proposals"
 import type { StoredPublicationEvent } from "./publishing"
-import { briefingItems, callEvents, demoClock, effectEvents, ENGINE_TABLES, inboxEvents, proposalEvents, publicationEvents } from "./schema"
+import { briefingItems, callEvents, demoClock, distilRuns, effectEvents, ENGINE_TABLES, inboxEvents, lessonEvents, lessons, mistakes, proposalEvents, publicationEvents } from "./schema"
 import type { EngineStore } from "./store"
 
 /** Any drizzle postgres-js client, whatever schema it was built with. */
@@ -119,9 +122,61 @@ export function createPostgresStore(db: Database): EngineStore {
         data: (event.data ?? null) as Record<string, unknown> | null,
       })))
     },
+    async readLessons() {
+      const rows = await db.select().from(lessons)
+      return rows.map((row) => ({
+        id: row.id, agent: row.agent as LessonAgent, text: row.text, explanation: row.explanation, appliesTo: row.appliesTo,
+        sourceMistakeIds: row.sourceMistakeIds, evalBefore: row.evalBefore, evalAfter: row.evalAfter, createdAt: row.createdAt.toISOString(), by: row.by,
+      }))
+    },
+    async addLesson(lesson) {
+      const added = await db.insert(lessons).values({ ...lesson, createdAt: new Date(lesson.createdAt) })
+        .onConflictDoNothing({ target: lessons.id })
+        .returning({ id: lessons.id })
+      return added.length > 0
+    },
+    async readLessonEvents() {
+      const found = await db.select().from(lessonEvents).orderBy(asc(lessonEvents.seq))
+      return found.map((row) => ({ lessonId: row.lessonId, at: row.at.toISOString(), by: row.by, kind: row.kind as StoredLessonEvent["kind"], text: row.text }))
+    },
+    async appendLessonEvents(events) {
+      if (!events.length) return
+      await db.insert(lessonEvents).values(events.map((event) => ({ ...event, at: new Date(event.at) })))
+    },
     async reset() {
       const names = ENGINE_TABLES.map((table) => `"${getTableName(table)}"`).join(", ")
       await db.execute(sql.raw(`TRUNCATE ${names} RESTART IDENTITY`))
+    },
+    async readMistakes() {
+      const found = await db.select().from(mistakes).orderBy(asc(mistakes.seq))
+      return found.map(({ seq: _seq, at, recordedAt, ...row }) => ({
+        ...row, at: at.toISOString(), recordedAt: recordedAt.toISOString(),
+        agent: row.agent as Mistake["agent"], kind: row.kind as Mistake["kind"], status: row.status as Mistake["status"],
+        input: row.input ?? null, agentOutput: row.agentOutput ?? null, editDiff: row.editDiff ?? null, caseFile: (row.caseFile ?? null) as Mistake["caseFile"],
+      }))
+    },
+    async appendMistakes(added) {
+      if (!added.length) return
+      await db.insert(mistakes).values(added.map((mistake) => ({
+        ...mistake, at: new Date(mistake.at), recordedAt: new Date(mistake.recordedAt),
+        caseFile: (mistake.caseFile ?? null) as Record<string, unknown> | null,
+      }))).onConflictDoNothing({ target: mistakes.id })
+    },
+    async settleMistake(id, restated) {
+      await db.update(mistakes).set(restated).where(and(eq(mistakes.id, id), eq(mistakes.status, "pending")))
+    },
+    async readDistilRuns() {
+      const found = await db.select().from(distilRuns).orderBy(asc(distilRuns.seq))
+      return found.map(({ seq: _seq, groupKey, startedAt, finishedAt, ...row }) => ({
+        ...row, group: groupKey, startedAt: startedAt.toISOString(), finishedAt: finishedAt?.toISOString() ?? null, outcome: row.outcome as DistilRun["outcome"], gate: row.gate ?? null,
+      }))
+    },
+    async startDistilRun({ group, startedAt, finishedAt, ...run }) {
+      await db.insert(distilRuns).values({ ...run, groupKey: group, startedAt: new Date(startedAt), finishedAt: finishedAt ? new Date(finishedAt) : null })
+        .onConflictDoNothing({ target: distilRuns.id })
+    },
+    async finishDistilRun(id, { finishedAt, ...end }) {
+      await db.update(distilRuns).set({ ...end, finishedAt: finishedAt ? new Date(finishedAt) : null }).where(eq(distilRuns.id, id))
     },
   }
 }

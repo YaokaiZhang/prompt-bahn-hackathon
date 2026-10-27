@@ -1,9 +1,11 @@
 // The control room's own tables. ADR 0002: none of them has a foreign key into the
 // starter's tables, so reseeding keeps working, and the snapshot is never edited.
-// Every table is prefixed `cr_` and listed in ENGINE_TABLES (state, which reset truncates)
-// or CACHE_TABLES (content-keyed caches, which reset keeps).
+// Every table is prefixed `cr_` and listed in ENGINE_TABLES (state, which reset truncates),
+// CACHE_TABLES (content-keyed caches, which reset keeps) or LEARNING_TABLES (what the
+// agents learn from, which reset keeps).
 
-import { bigserial, boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core"
+import type { GateTrace } from "./distil"
+import { bigserial, boolean, doublePrecision, index, integer, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core"
 
 /** One row (id "current") once the demo clock has moved; no row means the clock is at its start. */
 export const demoClock = pgTable("cr_demo_clock", {
@@ -152,3 +154,85 @@ export const ENGINE_TABLES = [demoClock, briefingItems, proposalEvents, effectEv
  * current, proposals, calls) in ENGINE_TABLES, not here.
  */
 export const CACHE_TABLES = [reviewResults, digestProse, travelPlans, inboxSuggestions]
+
+/**
+ * Mistakes (spec .scratch/self-improving-agents, lib/engine/mistakes.ts): an operator's
+ * override of an agent (a dismissal with a reason, an edited script) or a validator's
+ * rejection. Appended once per id; only the restatement fields are written later, once.
+ */
+export const mistakes = pgTable("cr_mistakes", {
+  seq: bigserial("seq", { mode: "number" }).primaryKey(),
+  id: text("id").notNull().unique(),
+  agent: text("agent").notNull(),
+  orderId: text("order_id"),
+  at: timestamp("at", { withTimezone: true }).notNull(),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull(),
+  operator: text("operator"),
+  promptVersion: text("prompt_version").notNull(),
+  model: text("model"),
+  kind: text("kind").notNull(),
+  tags: jsonb("tags").$type<string[]>().notNull(),
+  input: jsonb("input").$type<unknown>(),
+  agentOutput: jsonb("agent_output").$type<unknown>(),
+  operatorNote: text("operator_note"),
+  editDiff: jsonb("edit_diff").$type<{ before: string; after: string }>(),
+  validatorReason: text("validator_reason"),
+  restatement: text("restatement"),
+  status: text("status").notNull(),
+  unusableReason: text("unusable_reason"),
+  caseFile: jsonb("case_file").$type<Record<string, unknown>>(),
+}, (table) => [index("cr_mistakes_agent_idx").on(table.agent)])
+
+/**
+ * Lessons (spec .scratch/self-improving-agents, lib/engine/lessons.ts): one row per
+ * candidate the distiller wrote, never updated. `text` is the only part a prompt gets;
+ * `applies_to` holds rule ids (reviewer) or card kinds (plain-words), empty for every call.
+ */
+export const lessons = pgTable("cr_lessons", {
+  id: text("id").primaryKey(),
+  agent: text("agent").notNull(),
+  text: text("text").notNull(),
+  explanation: text("explanation").notNull(),
+  appliesTo: jsonb("applies_to").$type<string[]>().notNull(),
+  sourceMistakeIds: jsonb("source_mistake_ids").$type<string[]>().notNull(),
+  evalBefore: doublePrecision("eval_before"),
+  evalAfter: doublePrecision("eval_after"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  by: text("by").notNull(),
+})
+
+/** The operator's decisions on lessons, append-only: approved, rejected, retired. A lesson's status is folded from these. */
+export const lessonEvents = pgTable("cr_lesson_events", {
+  seq: bigserial("seq", { mode: "number" }).primaryKey(),
+  lessonId: text("lesson_id").notNull(),
+  at: timestamp("at", { withTimezone: true }).notNull(),
+  by: text("by").notNull(),
+  kind: text("kind").notNull(),
+  text: text("text").notNull(),
+}, (table) => [index("cr_lesson_events_lesson_idx").on(table.lessonId)])
+
+/**
+ * Lessons runs (lib/engine/learning.ts): one row per distil, written when it starts and
+ * finished once. Its cost is what the daily spend cap sums; its start what the cooldown
+ * and "new since the last candidate" count from.
+ */
+export const distilRuns = pgTable("cr_distil_runs", {
+  seq: bigserial("seq", { mode: "number" }).primaryKey(),
+  id: text("id").notNull().unique(),
+  groupKey: text("group_key").notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+  outcome: text("outcome").notNull(),
+  lessonId: text("lesson_id"),
+  mistakeIds: jsonb("mistake_ids").$type<string[]>().notNull(),
+  cost: doublePrecision("cost").notNull(),
+  detail: text("detail").notNull(),
+  /** The gate's trace, for engineers (/dev/learning); null when the gate did not run. */
+  gate: jsonb("gate").$type<GateTrace>(),
+}, (table) => [index("cr_distil_runs_started_idx").on(table.startedAt)])
+
+/**
+ * What the agents learn from (mistakes) and what they learned (lessons). Reset keeps these on purpose: learning is
+ * neither demo state nor a content cache, and a new demo take should not wipe it.
+ */
+export const LEARNING_TABLES = [mistakes, lessons, lessonEvents, distilRuns]

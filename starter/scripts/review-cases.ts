@@ -1,7 +1,8 @@
 // The reviewer eval: runs the real model on the 7 cases from the spec, prints a score
 // against the expected findings (lib/reviewer/score.ts) and records each order's
 // replies as fixtures in lib/reviewer/fixtures/cases/, which tests replay offline.
-// The score is a report, not a gate.
+// The score is a report, not a gate (the lessons gate runs the same cases through
+// lib/reviewer/eval.ts).
 //
 //   npm run review:eval              real model; needs ANTHROPIC_API_KEY
 //   npm run review:eval -- --replay  score the committed fixtures offline
@@ -16,7 +17,8 @@ import { join } from "node:path"
 import { CASE_FIXTURE_DIR, loadFixtures, writeFixture } from "../lib/reviewer/fixtures"
 import { anthropicFromEnv } from "../lib/reviewer/anthropic"
 import { formatReview, formatScore } from "../lib/reviewer/report"
-import { createReviewer, type ReviewResult } from "../lib/reviewer/reviewer"
+import { reviewExpected } from "../lib/reviewer/eval"
+import { createReviewer } from "../lib/reviewer/reviewer"
 import { createRecordingGateway, createScriptedGateway } from "../lib/reviewer/scripted"
 import { EXPECTED_CASES, scoreRun } from "../lib/reviewer/score"
 import { reviewSourceFromFiles } from "../lib/reviewer/source"
@@ -29,9 +31,7 @@ async function main(): Promise<void> {
 
   if (replay) {
     const fixtures = await loadFixtures()
-    const reviewer = createReviewer({ gateway: createScriptedGateway(fixtures), source })
-    const results: ReviewResult[] = []
-    for (const item of EXPECTED_CASES) results.push(await reviewer.review(item.reference, { now }))
+    const results = await reviewExpected(createReviewer({ gateway: createScriptedGateway(fixtures), source }), now)
     const origins = [...new Set(fixtures.map((fixture) => fixture.origin))].join(", ")
     console.log(`Replaying committed fixtures (${origins}); costs are as recorded.\n`)
     console.log(formatScore(scoreRun(results)))
@@ -45,11 +45,8 @@ async function main(): Promise<void> {
     process.exit(2)
   }
   const gateway = createRecordingGateway(real)
-  const reviewer = createReviewer({ gateway, source })
-  const results: ReviewResult[] = []
-  for (const item of EXPECTED_CASES) {
-    const result = await reviewer.review(item.reference, { now })
-    results.push(result)
+  const results = await reviewExpected(createReviewer({ gateway, source }), now, { onResult: async (result) => {
+    const item = EXPECTED_CASES.find((row) => row.reference === result.reference)!
     console.log(formatReview(result))
     console.log("")
     const turns = gateway.turns(item.reference)
@@ -67,7 +64,7 @@ async function main(): Promise<void> {
     } else if (!dry) {
       console.log(`  ${item.reference}: not recorded (${result.status === "not_reviewed" ? result.reason : "no turns"}); the old fixture stays\n`)
     }
-  }
+  } })
   const run = scoreRun(results)
   console.log(formatScore(run))
   if (!dry) {

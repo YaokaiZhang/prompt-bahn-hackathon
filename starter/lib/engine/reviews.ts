@@ -12,13 +12,16 @@
 // - Results live in the review cache (cr_review_results in the app), keyed by the
 //   case file's hash. Reading never calls the model; without a gateway, or when the
 //   model fails, orders read "not reviewed yet".
+// - Approved reviewer lessons (lib/reviewer/lessons.ts) are part of the key; when the
+//   approved set changes, what the layer remembers of earlier reads is dropped.
 
 import type { Bundle } from "@/lib/present/bundle"
 import { createMemoryReviewCache, type ReviewCache } from "@/lib/reviewer/cache"
-import type { PriorState, RuleResult as ReviewerRuleResult } from "@/lib/reviewer/case-file"
+import type { CaseFile, PriorState, RuleResult as ReviewerRuleResult } from "@/lib/reviewer/case-file"
 import type { ModelGateway } from "@/lib/reviewer/gateway"
 import type { CaseRecord } from "@/lib/reviewer/records"
 import { createReviewer, NOT_REVIEWED_YET, type Finding, type Reviewed, type ReviewResult } from "@/lib/reviewer/reviewer"
+import { lessonsHash, type LessonFeed } from "@/lib/reviewer/lessons"
 import type { ReviewSource } from "@/lib/reviewer/source"
 import { createHash } from "node:crypto"
 import type { RuleResult } from "./checks"
@@ -93,6 +96,8 @@ export type ReviewOptions = {
   /** A run stops starting new reviews after this many model failures in a row. Default 3. */
   maxConsecutiveFailures?: number
   model?: string
+  /** The approved reviewer lessons (lib/engine/lessons.ts); absent: none. */
+  lessons?: LessonFeed
 }
 
 /**
@@ -119,6 +124,8 @@ export type ReviewLayer = {
    * applied) and the time it is read as of (its last effect event). Forgets its review.
    */
   replace(bundle: Bundle, reviewAt: string): void
+  /** The order's case file as its review reads it now (a mistake keeps it, to become an eval case). */
+  caseFile(orderId: string, inputs: ReviewInputs): CaseFile
 }
 
 const OPEN_ALERT = (status: string) => status !== "RESOLVED"
@@ -208,9 +215,9 @@ export function createReviewLayer(bundles: Bundle[], snapshotAt: string, options
   // The layer's own list: `replace` swaps in an order's overlaid bundle (tools read other orders from it too).
   const current = [...bundles]
   const source: ReviewSource = { snapshot: { snapshotAt, bundles: current }, inboxMessages: options.inboxMessages ?? [] }
-  const reviewer = createReviewer({ gateway, source, cache, model: options.model })
+  const reviewer = createReviewer({ gateway, source, cache, model: options.model, lessons: options.lessons })
   // Reads never call the model: the same cache, no gateway.
-  const reader = createReviewer({ gateway: null, source, cache, model: options.model })
+  const reader = createReviewer({ gateway: null, source, cache, model: options.model, lessons: options.lessons })
   const concurrency = Math.max(1, options.concurrency ?? 4)
   const maxFailures = Math.max(1, options.maxConsecutiveFailures ?? 3)
   const byId = new Map(bundles.map((bundle) => [bundle.order.id, bundle]))
@@ -222,6 +229,17 @@ export function createReviewLayer(bundles: Bundle[], snapshotAt: string, options
   /** Why the last run could not review an order (model failure, skipped). */
   const failures = new Map<string, string>()
   const caseRecords = new Map<string, Map<string, CaseRecord>>()
+  let lessonsSeen = ""
+
+  /** A lesson approved or retired since the last read: every remembered review may be stale. */
+  async function checkLessons(): Promise<void> {
+    if (!options.lessons) return
+    const now = lessonsHash(await options.lessons())
+    if (now === lessonsSeen) return
+    lessonsSeen = now
+    hits.clear()
+    misses.clear()
+  }
 
   function reviewAt(bundle: Bundle): string {
     return readAt.get(bundle.order.id) ?? snapshotAt
@@ -291,6 +309,7 @@ export function createReviewLayer(bundles: Bundle[], snapshotAt: string, options
 
   async function read(inputs: ReviewInputs): Promise<Map<string, OrderReview>> {
     const out = new Map<string, OrderReview>()
+    await checkLessons()
     await Promise.all(current.map(async (bundle) => {
       out.set(bundle.order.id, toOrderReview(bundle, await lookup(bundle, inputs), inputs))
     }))
@@ -299,6 +318,7 @@ export function createReviewLayer(bundles: Bundle[], snapshotAt: string, options
 
   async function run(inputs: ReviewInputs, orderIds?: string[]): Promise<void> {
     const chosen = orderIds ? orderIds.map((id) => byId.get(id)).filter((bundle): bundle is Bundle => Boolean(bundle)) : current
+    await checkLessons()
     misses.clear()
     const pending: Bundle[] = []
     for (const bundle of chosen) if (!("status" in await lookup(bundle, inputs))) pending.push(bundle)
@@ -352,7 +372,13 @@ export function createReviewLayer(bundles: Bundle[], snapshotAt: string, options
     forget(id)
   }
 
-  return { canReview: gateway !== null, read, run, forget, replace }
+  function caseFile(orderId: string, inputs: ReviewInputs): CaseFile {
+    const bundle = byId.get(orderId)
+    if (!bundle) throw new Error(`Unknown order ${orderId}`)
+    return reader.caseFile(orderId, inputFor(bundle, inputs))
+  }
+
+  return { canReview: gateway !== null, read, run, forget, replace, caseFile }
 }
 
 export function reviewTotals(canReview: boolean, reviews: OrderReview[]): ReviewTotals {

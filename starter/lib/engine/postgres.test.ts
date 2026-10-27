@@ -4,12 +4,14 @@
 import assert from "node:assert/strict"
 import { spawnSync } from "node:child_process"
 import { test } from "node:test"
-import { sql } from "drizzle-orm"
+import { getTableName, sql } from "drizzle-orm"
 import type { Bundle } from "@/lib/present/bundle"
 import { createEngine } from "./engine"
+import { addLessonCandidate, decideLesson, readLessons } from "./lessons"
 import { createPostgresStore } from "./postgres"
+import { CACHE_TABLES, ENGINE_TABLES, LEARNING_TABLES } from "./schema"
 import { snapshotFromDatabase } from "./snapshot"
-import { testDatabase, testSnapshot } from "./testing"
+import { clearLearning, testDatabase, testSnapshot } from "./testing"
 
 const skip = process.env.TEST_DATABASE_URL ? false : "set TEST_DATABASE_URL"
 
@@ -75,4 +77,26 @@ test("the seed never sweeps orders with the model unless asked with --review, ev
   assert.equal(seed.status, 0, seed.stderr)
   assert.doesNotMatch(seed.stdout, /reviewing \d+ order/i)
   assert.match(seed.stdout, /--review/, "it says how to opt in")
+})
+
+test("lessons and the operator's decisions on them survive reset: they are learning, not engine state", { skip }, async () => {
+  const names = (tables: typeof ENGINE_TABLES | typeof CACHE_TABLES | typeof LEARNING_TABLES) => tables.map((table) => getTableName(table))
+  for (const name of names(LEARNING_TABLES)) assert.ok(![...names(ENGINE_TABLES), ...names(CACHE_TABLES)].includes(name), name)
+
+  const db = testDatabase()!
+  await clearLearning(db)
+  const store = createPostgresStore(db)
+  const lesson = await addLessonCandidate(store, {
+    agent: "plain-words", text: "Name the person to call before the reason.", explanation: "Seeded by hand.",
+    appliesTo: ["decide"], sourceMistakeIds: ["m-9"], evalBefore: null, evalAfter: 0.5, by: "operator",
+  }, { now: "2026-10-21T09:00:00.000Z" })
+  await decideLesson(store, { lessonId: lesson.id, decision: "approved" })
+  assert.equal((await store.readBriefing()).filter((item) => item.kind === "lesson").length, 1)
+  await store.reset()
+  assert.equal((await store.readBriefing()).length, 0)
+  const [kept] = await readLessons(store)
+  assert.deepEqual({ ...kept, history: kept.history.map((event) => event.kind) }, { ...lesson, status: "approved", history: ["approved"] })
+  assert.deepEqual(kept.appliesTo, ["decide"])
+  assert.equal(kept.evalBefore, null)
+  await clearLearning(db)
 })

@@ -6,9 +6,12 @@
 // `postgres.ts` (with a `cr_` table in `schema.ts`). Times cross the port as ISO strings.
 
 import type { BriefingItem } from "./briefing"
+import type { DistilRun } from "./distil"
 import type { EffectEvent } from "./effects"
 import type { StoredCallEvent } from "./calls"
 import type { InboxEvent } from "./inbox"
+import type { Mistake, Restated } from "./mistakes"
+import type { StoredLesson, StoredLessonEvent } from "./lessons"
 import type { StoredProposalEvent } from "./proposals"
 import type { StoredPublicationEvent } from "./publishing"
 
@@ -45,6 +48,27 @@ export interface EngineStore {
   readInboxEvents(): Promise<InboxEvent[]>
   /** Appends inbox events in one go. */
   appendInboxEvents(events: InboxEvent[]): Promise<void>
-  /** Empties every engine table. The snapshot is never touched. */
+  /** Every lesson candidate ever added (lessons.ts), in no particular order. Reset keeps them. */
+  readLessons(): Promise<StoredLesson[]>
+  /** Stores a lesson unless one with its id exists; true when it was added. */
+  addLesson(lesson: StoredLesson): Promise<boolean>
+  /** The operator's decisions on lessons, in the order they were appended. Reset keeps them. */
+  readLessonEvents(): Promise<StoredLessonEvent[]>
+  appendLessonEvents(events: StoredLessonEvent[]): Promise<void>
+  /** Empties every engine table. The snapshot and what the agents learned are never touched. */
   reset(): Promise<void>
+  /** Every mistake (mistakes.ts), in the order they were recorded. Kept across reset. */
+  readMistakes(): Promise<Mistake[]>
+  /** Stores mistakes; one whose id exists already is skipped. */
+  appendMistakes(mistakes: Mistake[]): Promise<void>
+  /** Writes a pending mistake's restatement and status, once (a settled mistake is left as it is). */
+  settleMistake(id: string, restated: Restated): Promise<void>
+  /** Every lessons run (learning.ts), oldest first. Kept across reset. */
+  readDistilRuns(): Promise<DistilRun[]>
+  /** Stores a run as it starts; one whose id exists already is skipped. */
+  startDistilRun(run: DistilRun): Promise<void>
+  /** Writes a run's end: outcome, lesson, mistakes read, cost and detail. */
+  finishDistilRun(id: string, end: DistilRunEnd): Promise<void>
 }
+
+export type DistilRunEnd = Pick<DistilRun, "finishedAt" | "outcome" | "lessonId" | "mistakeIds" | "cost" | "detail" | "gate">

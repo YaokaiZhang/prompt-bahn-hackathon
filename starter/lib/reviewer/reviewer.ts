@@ -2,14 +2,19 @@
 // system prompt and the prepared case file, lets the model use read-only tools at
 // most `maxToolCalls` times, takes its answer through submit_findings, checks the
 // evidence (one repair attempt, then drop), and caches the result by case-file hash.
+// Approved lessons whose rule tags match the order's failing rules follow the system
+// prompt as their own block (the cached prefix stays), and their hash joins the key.
 //
 //   const reviewer = createReviewer({ gateway, source, cache })
 //   const result = await reviewer.review("CD-420516", { now, rules, prior })
+//   const again = await reviewer.reviewFile(mistake.caseFile)   // a kept case file, as read then
 //
 // With no gateway (no ANTHROPIC_API_KEY) a cached result is still served; anything
 // else comes back as "not reviewed yet" instead of failing.
 
 import { createHash } from "node:crypto"
+import type { Bundle } from "@/lib/present/bundle"
+import { lessonsFor, lessonsHash, renderLessons, type InjectedLesson, type LessonFeed } from "./lessons"
 import { buildCaseFile, caseFileHash, renderCaseFile, type CaseFile, type CaseInput } from "./case-file"
 import { createMemoryReviewCache, type ReviewCache } from "./cache"
 import { addUsage, NO_USAGE, type ChatMessage, type Effort, type ModelGateway, type ToolCall, type Usage } from "./gateway"
@@ -22,6 +27,8 @@ export type { Finding } from "./validate"
 
 /** Anthropic model id for reasoning jobs (spec: ModelGateway table). Override with REVIEWER_MODEL. */
 export const DEFAULT_REVIEWER_MODEL = "claude-haiku-5-5"
+/** The lesson writer (lib/engine/distil.ts): a stronger model with medium thinking. Override with LESSONS_MODEL. */
+export const DEFAULT_LESSONS_MODEL = "claude-opus-5-5"
 export const DEFAULT_MAX_TOOL_CALLS = 8
 export const NOT_REVIEWED_YET = "not reviewed yet"
 
@@ -75,18 +82,31 @@ export type ReviewerOptions = {
   maxToolCalls?: number
   /** Real time, for `reviewedAt`. */
   clock?: () => Date
+  /** The approved reviewer lessons; absent: none. */
+  lessons?: LessonFeed
 }
 
 export type Reviewer = {
   /** The case file the reviewer would send, e.g. to show "Reviewer read N records". */
   caseFile(orderIdOrReference: string, input: CaseInput): CaseFile
   review(orderIdOrReference: string, input: CaseInput): Promise<ReviewResult>
+  /** Reviews a case file kept from earlier (a mistake's), exactly as it was read then. */
+  reviewFile(file: CaseFile): Promise<ReviewResult>
 }
 
 const MAX_TOKENS = 8000
 
-function systemMessage(): ChatMessage {
-  return { role: "system", content: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }] }
+function systemMessage(lessons: InjectedLesson[]): ChatMessage {
+  const block = renderLessons(lessons)
+  return {
+    role: "system",
+    content: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }, ...(block ? [{ type: "text" as const, text: block }] : [])],
+  }
+}
+
+/** The approved lessons for an order: tagged with one of its failing rules, or untagged. */
+export function reviewerLessons(lessons: InjectedLesson[], input: CaseInput): InjectedLesson[] {
+  return lessonsFor(lessons, (input.rules ?? []).filter((rule) => rule.status === "failed").map((rule) => rule.rule))
 }
 
 function parseArguments(call: ToolCall): { args: Record<string, unknown>; error: string | null } {
@@ -148,23 +168,30 @@ export function createReviewer(options: ReviewerOptions): Reviewer {
     return buildCaseFile(bundleFor(key), source, input)
   }
 
-  function cacheKey(hash: string): string {
-    return createHash("sha256").update(`${PROMPT_VERSION}\n${model}\n${hash}`).digest("hex")
+  /** No lessons: the key as before lessons existed, so cached reviews still hit. */
+  function cacheKey(hash: string, lessons: string): string {
+    return createHash("sha256").update(`${PROMPT_VERSION}\n${model}\n${hash}${lessons ? `\n${lessons}` : ""}`).digest("hex")
   }
 
-  async function review(key: string, input: CaseInput): Promise<ReviewResult> {
+  function review(key: string, input: CaseInput): Promise<ReviewResult> {
     const bundle = bundleFor(key)
-    const file = buildCaseFile(bundle, source, input)
+    return run(bundle, buildCaseFile(bundle, source, input))
+  }
+
+  async function run(bundle: Bundle, file: CaseFile): Promise<ReviewResult> {
+    const input: CaseInput = { now: file.now, rules: file.rules }
     const hash = caseFileHash(file)
     const base = { orderId: file.orderId, reference: file.reference, hash, recordsRead: file.records.length }
 
-    const hit = await cache.get(cacheKey(hash))
+    const lessons = reviewerLessons(options.lessons ? await options.lessons() : [], input)
+    const resultKey = cacheKey(hash, lessonsHash(lessons))
+    const hit = await cache.get(resultKey)
     if (hit) return { ...hit, cached: true, cost: 0 }
     if (!gateway) return { status: "not_reviewed", ...base, cost: 0, reason: `${NOT_REVIEWED_YET}: ANTHROPIC_API_KEY is not set` }
 
     const index: RecordIndex = new Map(file.records.map((record) => [record.id, record]))
     const ctx = { index, customerId: file.customer.id }
-    const messages: ChatMessage[] = [systemMessage(), { role: "user", content: renderCaseFile(file) }]
+    const messages: ChatMessage[] = [systemMessage(lessons), { role: "user", content: renderCaseFile(file) }]
     let usage = NO_USAGE
     let usedTools = 0
     let refusedTools = 0
@@ -271,9 +298,9 @@ export function createReviewer(options: ReviewerOptions): Reviewer {
       toolCalls: usedTools, refusedToolCalls: refusedTools, turns,
       cost: usage.cost, usage, model: answeredModel, reviewedAt: clock().toISOString(), cached: false,
     }
-    await cache.put(cacheKey(hash), result)
+    await cache.put(resultKey, result)
     return result
   }
 
-  return { caseFile, review }
+  return { caseFile, review, reviewFile: (file) => run(bundleFor(file.orderId), file) }
 }
