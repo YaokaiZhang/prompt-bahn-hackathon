@@ -71,15 +71,21 @@ const RECORD_ID = /\b[a-z]{1,8}-[a-z]*\d[\w-]*|\bR\d+\b/i
 const MARKUP = /[\n\r*#`{}<>[\]|_~@\\]/
 
 /**
+ * A restatement only feeds the distiller, so it may run longer than a lesson (300, the
+ * text injected into prompts): the restater lands near 300 and one over would lose the mistake.
+ */
+export const RESTATEMENT_MAX_LENGTH = 400
+
+/**
  * Checks a restatement against everything it may draw on (`known`: the note, what the
  * agent proposed, the order's records); throws RestatementRejected. Strict on purpose:
  * no ids of any kind, every number and every capitalised name inside a sentence must
- * appear in `known`.
+ * appear in `known`. A lesson is checked the same way, at the default `maxLength`.
  */
-export function checkRestatement(raw: string | null, known: string): string {
+export function checkRestatement(raw: string | null, known: string, maxLength = 300): string {
   const text = (raw ?? "").trim().replace(/^["']|["']$/g, "").trim()
   if (text.length < 20) throw new RestatementRejected("no restatement")
-  if (text.length > 300) throw new RestatementRejected("too long")
+  if (text.length > maxLength) throw new RestatementRejected("too long")
   if ((text.match(/[.!?](?=\s|$)/g) ?? []).length > 2) throw new RestatementRejected("more than two sentences")
   if (MARKUP.test(text)) throw new RestatementRejected("markup or line breaks")
   if (URL.test(text)) throw new RestatementRejected("a URL")
@@ -138,7 +144,7 @@ export async function restate(gateway: ModelGateway, model: string, mistake: Mis
         { role: "user", content: JSON.stringify({ operator_note: mistake.operatorNote, agent_proposed: proposed(mistake.agentOutput) }) },
       ],
     })
-    return { restatement: checkRestatement(response.message.content, knownText(mistake)), status: "usable", unusableReason: null }
+    return { restatement: checkRestatement(response.message.content, knownText(mistake), RESTATEMENT_MAX_LENGTH), status: "usable", unusableReason: null }
   } catch (error) {
     const reason = error instanceof RestatementRejected ? `restatement rejected: ${error.message}` : `restatement failed: ${error instanceof Error ? error.message : String(error)}`
     return { restatement: null, status: "unusable", unusableReason: reason }

@@ -9,7 +9,7 @@ import { test } from "node:test"
 import type { Situation } from "@/lib/present/situation"
 import type { Engine, OrderState } from "./engine"
 import { createMemoryStore } from "./memory"
-import { checkRestatement, createMistakeLog, type Mistake } from "./mistakes"
+import { checkRestatement, createMistakeLog, RESTATEMENT_MAX_LENGTH, type Mistake } from "./mistakes"
 import { createMemoryPlainCache, createPlainWords, type PlainItem } from "./plain-words"
 import { createPostgresStore } from "./postgres"
 import type { EngineStore } from "./store"
@@ -38,6 +38,14 @@ test("a neutral restatement passes; ids, instructions, links, markup, pronouns a
     ["Too short.", /no restatement/],
   ]
   for (const [text, expected] of rejects) assert.throws(() => checkRestatement(text, KNOWN), expected, text)
+})
+
+test("a restatement may run longer than a lesson: up to 400 characters, not 300", () => {
+  const long = `The agent asked the site who may sign for the car, but the operator had already settled it with Calverona Auto by phone at 10:30, ${"so the question was not needed and the site was asked again for nothing, ".repeat(3)}which wasted a call.`
+  assert.ok(long.length > 300 && long.length <= 400, `${long.length}`)
+  assert.throws(() => checkRestatement(long, KNOWN), /too long/)
+  assert.equal(checkRestatement(long, KNOWN, RESTATEMENT_MAX_LENGTH), long)
+  assert.throws(() => checkRestatement(`${long} ${"Nothing else was open. ".repeat(3)}`, KNOWN, RESTATEMENT_MAX_LENGTH), /too long/)
 })
 
 function mistake(overrides: Partial<Mistake> = {}): Mistake {
