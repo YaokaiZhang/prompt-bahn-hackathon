@@ -71,3 +71,6 @@ A feedback loop. Nothing changes model weights; the agents learn through approve
 ## Out of scope
 
 Fine-tuning, automatic promotion without the operator, lessons for the call agent.
+Distilling lessons for plain-words and the inbox agent: plain-words rejections are
+recorded as mistakes and approved plain-words lessons are injected, but only reviewer
+groups are distilled and gated.
