@@ -143,7 +143,11 @@ One or two plain sentences an agent reads in its prompt, written by the distille
 _Avoid_: Rule (a rule check is code), memory, training
 
 **Learned case**:
-An eval case made from a lesson's source mistake: the order's case file as the agent read it, and what the operator's correction makes checkable. Learned cases are added beside the spec's cases and never replace one.
+An eval case made from a lesson's source mistake: the order's case file as the agent read it, and the correction (the restatement, the edit or the validator's reason). The reviewer reviews the case file again, and the judge says whether the new review repeats the mistake. Learned cases are added beside the spec's cases and never replace one.
+
+**Judge**:
+A small model call in the lessons gate that reads a correction and a new review and answers `repeats`, `fixed` or `unclear`. It does not know whether a lesson was in the prompt. Its verdicts are for the gate and engineers, never shown to the operator.
+_Avoid_: Grader, critic
 
 **Effect event**:
 The append-only record of something committed on an order, layered over the snapshot. A change to the order (a contact confirmed or changed, a window moved, a cost approved) is written only after an operator's yes; the operator's own answers are committed when given. A call result and a reported ETA are written by the agent at once, without a yes, because they are attributed statements (what the person said on the call), not changes to the order. Proposal text is never a fact; an effect event is.

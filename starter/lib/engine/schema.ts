@@ -4,6 +4,7 @@
 // CACHE_TABLES (content-keyed caches, which reset keeps) or LEARNING_TABLES (what the
 // agents learn from, which reset keeps).
 
+import type { GateTrace } from "./distil"
 import { bigserial, boolean, doublePrecision, index, integer, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core"
 
 /** One row (id "current") once the demo clock has moved; no row means the clock is at its start. */
@@ -226,6 +227,8 @@ export const distilRuns = pgTable("cr_distil_runs", {
   mistakeIds: jsonb("mistake_ids").$type<string[]>().notNull(),
   cost: doublePrecision("cost").notNull(),
   detail: text("detail").notNull(),
+  /** The gate's trace, for engineers (/dev/learning); null when the gate did not run. */
+  gate: jsonb("gate").$type<GateTrace>(),
 }, (table) => [index("cr_distil_runs_started_idx").on(table.startedAt)])
 
 /**

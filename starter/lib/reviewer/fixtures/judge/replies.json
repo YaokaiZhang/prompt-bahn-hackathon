@@ -1,0 +1,15 @@
+{
+  "model": "claude-haiku-5-5",
+  "recordedAt": "2026-10-27T14:55:22.705Z",
+  "promptHash": "ba8e0e9aa7e85c74",
+  "replies": {
+    "wrong-person-still-customer": "{\"verdict\": \"repeats\", \"reason\": \"The new review again raises the authorised-receiver question and sends it to the paying customer, the same party the operator said was wrong, when the decision belongs to the receiving site.\"}",
+    "wrong-person-now-site": "{\"verdict\": \"fixed\", \"reason\": \"The correction objected to asking the customer support desk about who may sign for the car, and the new review instead asks the receiving site's front desk, the party the operator said owns that decision, so the mistake is not repeated.\"}",
+    "wrong-person-silent": "{\"verdict\": \"unclear\", \"reason\": \"The new review has no findings, so the question was dropped entirely rather than re-asked of the receiving site, and the correction says the conflict still needed raising with the site, so it is unclear whether dropping it counts as repeating the mistake or as a fix.\"}",
+    "settled-silent": "{\"verdict\": \"fixed\", \"reason\": \"The correction objects only to asking the customer about a point already settled by phone, and the new review has no findings, so the mistake of re-asking the settled question is not repeated.\"}",
+    "settled-asked-again": "{\"verdict\": \"repeats\", \"reason\": \"The new review again asks the paying customer, Calverona Auto, who may sign for the car, which is the same question the operator already settled with them by phone.\"}",
+    "settled-other-issue": "{\"verdict\": \"fixed\", \"reason\": \"The new review no longer asks the customer who may sign, which was the mistake the operator corrected, and its only finding asks the driver about ETA, a different conflict.\"}",
+    "edit-carried": "{\"verdict\": \"fixed\", \"reason\": \"The new review keeps the same conflict and the same recipient (Auvelloria Lahti) but uses the operator's corrected question, which asks for readiness with both keys at the branch by 10:30, so the old wording mistake is not repeated.\"}",
+    "edit-dropped": "{\"verdict\": \"repeats\", \"reason\": \"The new finding asks the same party (Auvelloria Lahti) the same vague question, \\\"Is the car ready for pickup?\\\", that the operator had changed to the more specific \\\"ready with both keys at the Lahti branch by 10:30\\\", so the corrected wording was not applied.\"}"
+  }
+}

@@ -168,7 +168,7 @@ export function createPostgresStore(db: Database): EngineStore {
     async readDistilRuns() {
       const found = await db.select().from(distilRuns).orderBy(asc(distilRuns.seq))
       return found.map(({ seq: _seq, groupKey, startedAt, finishedAt, ...row }) => ({
-        ...row, group: groupKey, startedAt: startedAt.toISOString(), finishedAt: finishedAt?.toISOString() ?? null, outcome: row.outcome as DistilRun["outcome"],
+        ...row, group: groupKey, startedAt: startedAt.toISOString(), finishedAt: finishedAt?.toISOString() ?? null, outcome: row.outcome as DistilRun["outcome"], gate: row.gate ?? null,
       }))
     },
     async startDistilRun({ group, startedAt, finishedAt, ...run }) {

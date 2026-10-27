@@ -20,7 +20,7 @@ import { DEFAULT_LESSONS_MODEL, DEFAULT_REVIEWER_MODEL } from "@/lib/reviewer/re
 import type { ReviewSource } from "@/lib/reviewer/source"
 import {
   distil, DistilRejected, groupHistory, groupKeys, groupMistakes, learnedCases, qualifies, runGate, toCandidate,
-  type Distilled, type DistilOutcome, type DistilRun, type GateResult, type MistakeGroup,
+  type Distilled, type DistilOutcome, type DistilRun, type GateResult, type GateScores, type MistakeGroup,
 } from "./distil"
 import { addLessonCandidate, LessonRefused, lessonId, readLessons } from "./lessons"
 import { restatePending, type Mistake } from "./mistakes"
@@ -87,6 +87,9 @@ export function rulesAtSnapshot(source: ReviewSource): (reference: string) => Ru
   }
 }
 
+/** The spec-case score of one side of the gate, as the candidate keeps it (never shown to the operator). */
+const fraction = (scores: GateScores) => scores.existingMax ? scores.existingPoints / scores.existingMax : null
+
 /** Today's spend (UTC day of `now`) over the stored runs. */
 export function spentOn(runs: DistilRun[], now: Date): number {
   const day = now.toISOString().slice(0, 10)
@@ -139,7 +142,7 @@ export function createLearning(options: LearningOptions): Learning {
   async function runGroup(group: MistakeGroup, all: Mistake[], meter: ReturnType<typeof metered>, dry: boolean): Promise<DistilReport> {
     const id = `dst-${randomUUID()}`
     const startCost = meter.spent()
-    const run: DistilRun = { id, group: group.key, startedAt: clock().toISOString(), finishedAt: null, outcome: "running", lessonId: null, mistakeIds: [], cost: 0, detail: "" }
+    const run: DistilRun = { id, group: group.key, startedAt: clock().toISOString(), finishedAt: null, outcome: "running", lessonId: null, mistakeIds: [], cost: 0, detail: "", gate: null }
     if (!dry) await store.startDistilRun(run)
     let report: DistilReport
     let mistakeIds: string[] = []
@@ -157,7 +160,7 @@ export function createLearning(options: LearningOptions): Learning {
           if (meter.refused()) throw new CapReached(capMessage)
           if (!gate.keep) report = { group: group.key, outcome: "dropped", detail: gate.reason, cost: 0, distilled, gate }
           else {
-            const stored = await addLessonCandidate(store, toCandidate(distilled, { before: gate.before.overall, after: gate.after.overall }), { now: await options.now() })
+            const stored = await addLessonCandidate(store, toCandidate(distilled, { before: fraction(gate.before), after: fraction(gate.after) }), { now: await options.now() })
             report = { group: group.key, outcome: "candidate", detail: gate.reason, cost: 0, distilled, gate, lessonId: stored.id }
           }
         }
@@ -171,6 +174,7 @@ export function createLearning(options: LearningOptions): Learning {
     if (!dry) {
       await store.finishDistilRun(id, {
         finishedAt: clock().toISOString(), outcome: report.outcome as DistilOutcome, lessonId: report.lessonId ?? null, mistakeIds, cost: report.cost, detail: report.detail,
+        gate: report.gate?.trace ?? null,
       })
     }
     log(`${group.key}: ${report.outcome} (${report.detail}); $${report.cost.toFixed(4)}`)
@@ -193,7 +197,7 @@ export function createLearning(options: LearningOptions): Learning {
         const cost = meter.spent()
         await store.startDistilRun({
           id: `dst-${randomUUID()}`, group: "restate", startedAt: clock().toISOString(), finishedAt: clock().toISOString(), outcome: "restated",
-          lessonId: null, mistakeIds: restated.map((mistake) => mistake.id), cost, detail: `${restated.length} pending mistake(s) restated`,
+          lessonId: null, mistakeIds: restated.map((mistake) => mistake.id), cost, detail: `${restated.length} pending mistake(s) restated`, gate: null,
         })
       }
     }

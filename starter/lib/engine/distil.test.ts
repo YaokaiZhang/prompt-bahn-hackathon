@@ -5,12 +5,12 @@
 import assert from "node:assert/strict"
 import { before, test } from "node:test"
 import type { CaseFile, RuleResult } from "@/lib/reviewer/case-file"
-import { editAdditions, scoreLearned } from "@/lib/reviewer/eval"
 import { NO_USAGE, type ChatRequest, type ChatResponse, type TextPart } from "@/lib/reviewer/gateway"
+import { parseVerdict } from "@/lib/reviewer/judge"
 import { createReviewer, type Reviewed } from "@/lib/reviewer/reviewer"
 import { testReviewSource } from "@/lib/reviewer/testing"
 import {
-  checkDistilled, distil, distillerInput, DistilRejected, gateDecision, groupHistory, groupKeys, groupMistakes, learnedCases, qualifies, runGate,
+  checkDistilled, correctionOf, distil, distillerInput, DistilRejected, gateDecision, NO_HARM_TOLERANCE, groupHistory, groupKeys, groupMistakes, learnedCases, qualifies, runGate,
   type DistillerInput, type DistilRun, type MistakeGroup,
 } from "./distil"
 import { createLearning, spentOn, type LearningOptions } from "./learning"
@@ -78,6 +78,7 @@ const respond = (content: string, cost: number): ChatResponse => ({ model: "scri
  * The whole loop's model: restatements, the distiller (`distilReply`) and the reviewer
  * (the scripted scenarios). With the lesson injected, the learned case (its own `now`)
  * gets "nothing to ask"; `lessonBreaks` also empties the spec's cases when it is injected.
+ * The judge calls a review with no findings "fixed" and any other "repeats".
  */
 async function loopGateway(options: { distilReply?: (input: DistillerInput) => string; distilCost?: number; delayMs?: number; lessonBreaks?: boolean } = {}): Promise<Scripted> {
   const reviewer = await testGateway()
@@ -92,6 +93,11 @@ async function loopGateway(options: { distilReply?: (input: DistillerInput) => s
       if (options.delayMs) await new Promise((resolve) => setTimeout(resolve, options.delayMs))
       const input = JSON.parse(request.messages[1].content as string) as DistillerInput
       return respond((options.distilReply ?? reply)(input), options.distilCost ?? 0.1)
+    }
+    if (request.job === "judge") {
+      const input = JSON.parse(request.messages[1].content as string) as { new_review: { findings: unknown[] } }
+      const verdict = input.new_review.findings.length ? "repeats" : "fixed"
+      return respond(JSON.stringify({ verdict, reason: `${verdict}, scripted` }), 0.0003)
     }
     const system = request.messages[0].content as TextPart[]
     const injected = system.length > 1
@@ -156,7 +162,7 @@ test("a group qualifies with 3 usable mistakes on 2 orders across 2 days, and 2 
 })
 
 test("a group's history counts from its last distilled candidate; failed runs and other groups don't count", () => {
-  const run = (over: Partial<DistilRun>): DistilRun => ({ id: "r", group: KEY, startedAt: "2026-10-27T10:00:00.000Z", finishedAt: null, outcome: "dropped", lessonId: null, mistakeIds: [], cost: 0, detail: "", ...over })
+  const run = (over: Partial<DistilRun>): DistilRun => ({ id: "r", group: KEY, startedAt: "2026-10-27T10:00:00.000Z", finishedAt: null, outcome: "dropped", lessonId: null, mistakeIds: [], cost: 0, detail: "", gate: null, ...over })
   const runs = [run({ startedAt: "2026-10-27T09:00:00.000Z", outcome: "candidate", lessonId: "lsn-a" }), run({ startedAt: "2026-10-27T11:00:00.000Z", outcome: "failed" }), run({ group: "other", startedAt: "2026-10-27T12:00:00.000Z" })]
   assert.deepEqual(groupHistory(KEY, runs, [{ id: "lsn-a", status: "rejected" }]), { lastAttemptAt: "2026-10-27T09:00:00.000Z", lastRejected: true })
   assert.deepEqual(groupHistory(KEY, runs, [{ id: "lsn-a", status: "candidate" }]), { lastAttemptAt: "2026-10-27T09:00:00.000Z", lastRejected: false })
@@ -217,52 +223,60 @@ test("the distiller's reply is checked: ids, group, thresholds, rule, readabilit
 
 // -- Learned cases and the gate ---------------------------------------------------
 
-test("learned cases: a dismissal must not be raised again, an edit keeps its contact and carries what the edit added", async () => {
+test("a learned case is the kept case file and its correction: the restatement, the edit or the validator's reason", async () => {
   const [dismissed, , edited] = await qualifying()
-  const cases = learnedCases([dismissed, { ...edited, caseFile: await learnedFile() }, mistake({ caseFile: null })])
-  assert.deepEqual(cases.map((row) => row.expect.kind), ["not-raised", "same-contact"])
-  assert.deepEqual(cases[0].expect, { kind: "not-raised", title: TITLE, conflictIds: ["msg-x47456eacbe1e0e07", "msg-x0049fe6fc2fd0b0e"] })
-  assert.deepEqual(cases[1].expect, { kind: "same-contact", role: "customer", contactRecordId: "conv-x0eed829e1b54984f", added: ["18", "00", "Calverona", "Auto"] })
-  assert.deepEqual(editAdditions("Is the car ready?", "Is the car ready at Calverona Auto by 10:30?"), ["10", "30", "Calverona", "Auto"])
-
-  const finding = { title: "Someone else", conflict: [{ recordId: "msg-x47456eacbe1e0e07", field: "body", quote: "q" }], ask: { role: "customer", contactType: "paying_customer", contactRecordId: "conv-x0eed829e1b54984f", contactQuote: "q", name: "n" }, whoPays: "", policyRow: "customer-side", question: "Who at Calverona Auto signs before 18:00?", why: "", repaired: false } as const
-  const result = (findings: unknown[]): Reviewed => ({ status: "reviewed", findings, cost: 0.01 } as unknown as Reviewed)
-  assert.equal(scoreLearned(cases[0], result([])).points, 1)
-  assert.equal(scoreLearned(cases[0], result([finding])).points, 0, "half the dismissed conflict records cited again: raised again")
-  assert.equal(scoreLearned(cases[0], result([{ ...finding, title: TITLE.toUpperCase(), conflict: [] }])).points, 0, "the same title: raised again")
-  assert.deepEqual([scoreLearned(cases[1], result([finding])).points, scoreLearned(cases[1], result([finding])).max], [2, 2])
-  assert.equal(scoreLearned(cases[1], result([{ ...finding, question: "Who signs?" }])).points, 1)
-  assert.equal(scoreLearned(cases[1], result([])).points, 0)
+  const cases = learnedCases([dismissed, { ...edited, caseFile: await learnedFile() }, mistake({ caseFile: null }), mistake({ restatement: null, caseFile: await learnedFile() })])
+  assert.deepEqual(cases.map((row) => row.mistakeId), [dismissed.id, edited.id], "no case file or no correction: no case")
+  assert.equal(cases[0].correction, RESTATED)
+  assert.deepEqual(cases[0].agentSaid, { title: TITLE, question: "Is Celia Hollowmere authorised to sign?", asked: "Paying customer: Calverona Auto" })
+  assert.equal(cases[1].correction, 'The operator kept the proposal but changed the question from "Who may sign?" to "Who at Calverona Auto may sign before 18:00?".')
+  assert.equal(correctionOf(mistake({ restatement: null, validatorReason: "a gendered pronoun" })), "a gendered pronoun")
 })
 
-test("the gate drops a lesson that lowers the existing score and keeps one that raises the overall score", () => {
-  const s = (existing: number, learned: number | null, overall: number) => ({ existing, learned, overall })
-  assert.deepEqual(gateDecision(s(1, 0, 0.9), s(0.95, 1, 0.96)).keep, false)
-  assert.match(gateDecision(s(1, 0, 0.9), s(0.95, 1, 0.96)).reason, /lowers the existing score/)
-  assert.equal(gateDecision(s(1, 0, 0.9), s(1, 1, 1)).keep, true)
-  assert.equal(gateDecision(s(0.9, null, 0.9), s(0.95, null, 0.95)).keep, true, "no learned cases: the existing score must rise")
-  assert.match(gateDecision(s(1, 1, 1), s(1, 1, 1)).reason, /no improvement/)
+test("the judge's reply is parsed strictly; anything else is unclear", () => {
+  assert.deepEqual(parseVerdict('{"verdict": "fixed", "reason": "It now asks the site."}'), { verdict: "fixed", reason: "It now asks the site." })
+  assert.deepEqual(parseVerdict('Sure: {"verdict": "repeats", "reason": "Still asks\\nthe customer."}'), { verdict: "repeats", reason: "Still asks the customer." })
+  for (const raw of ['{"verdict": "maybe", "reason": "x"}', '{"verdict": "fixed"}', "fixed", "", null]) assert.equal(parseVerdict(raw).verdict, "unclear", String(raw))
 })
 
-test("the gate runs the eval twice without and twice with the lesson; learned cases decide, existing cases can veto", async () => {
+test("the gate keeps a lesson that does no harm and fixes more of its mistakes; one lost check is noise", () => {
+  const s = (existingPoints: number, fixed: number, judged = 6) => ({ existingPoints, existingMax: 38, fixed, judged })
+  assert.equal(NO_HARM_TOLERANCE, 1)
+  assert.equal(gateDecision(s(38, 1), s(38, 5)).keep, true)
+  assert.match(gateDecision(s(38, 1), s(38, 5)).reason, /fixes more of its mistakes \(spec checks 38\/38 -> 38\/38, fixed 1\/6 -> 5\/6\)/)
+  assert.equal(gateDecision(s(38, 1), s(37, 5)).keep, true, "one lost check is noise")
+  assert.match(gateDecision(s(38, 1), s(36, 5)).reason, /harms the spec's cases/)
+  assert.match(gateDecision(s(38, 3), s(38, 3)).reason, /fixes no more of its mistakes/)
+  assert.match(gateDecision(s(38, 0, 0), s(38, 0, 0)).reason, /no learned case to check/)
+})
+
+test("the gate runs the eval twice without and twice with the lesson; the judge decides, the spec's cases can veto", async () => {
   const source = await testReviewSource()
   const mistakes = await qualifying()
   const learned = learnedCases(mistakes)
   const lesson = { id: "lsn-x", text: LESSON, appliesTo: ["R7"] }
   const kept = await runGate({ gateway: await loopGateway(), source, model: "haiku", lesson, learned, rulesFor: () => RULES })
   assert.equal(kept.keep, true, kept.reason)
-  assert.equal(kept.after.existing, kept.before.existing)
-  assert.equal(kept.before.learned, 0)
-  assert.equal(kept.after.learned, 1)
+  assert.equal(kept.after.existingPoints, kept.before.existingPoints)
+  assert.deepEqual([kept.before.fixed, kept.after.fixed, kept.after.judged], [0, 4, 4])
+  assert.deepEqual(kept.trace.runs.map((run) => run.withLesson), [false, false, true, true])
+  assert.equal(kept.trace.lesson, LESSON)
+  assert.deepEqual(kept.trace.runs[2].learned.map((row) => [row.mistakeId, row.verdict]), learned.map((row) => [row.mistakeId, "fixed"]))
+  assert.ok(Math.abs(kept.cost - kept.trace.runs.reduce((sum, run) => sum + run.cost, 0)) < 1e-9)
   const gateway = await loopGateway({ lessonBreaks: true })
   const dropped = await runGate({ gateway, source, model: "haiku", lesson, learned, rulesFor: () => RULES })
   assert.equal(dropped.keep, false)
-  assert.match(dropped.reason, /lowers the existing score/)
+  assert.match(dropped.reason, /harms the spec's cases/)
+  assert.ok(dropped.trace.runs[2].existing.failed.length > 0, "the failed spec checks are in the trace")
   const subjects = gateway.calls.filter((call) => call.job === "reviewer" && call.messages.filter((m) => m.role === "assistant").length === 0)
   // Both learned cases read the same kept case file: the second is a cache hit within a run.
   assert.equal(learned.length, 2)
   assert.equal(subjects.length, 4 * (7 + 1), "four runs of every case, each asking the model afresh")
-  assert.ok(gateway.calls.every((call) => call.job !== "reviewer" || call.model === "haiku"))
+  assert.equal(gateway.calls.filter((call) => call.job === "judge").length, 4 * 2, "every learned case judged in every run")
+  assert.ok(gateway.calls.every((call) => (call.job !== "reviewer" && call.job !== "judge") || call.model === "haiku"))
+  const judged = JSON.stringify(gateway.calls.filter((call) => call.job === "judge").map((call) => call.messages))
+  assert.ok(!judged.includes(LESSON), "the judge never sees the lesson")
+  assert.ok(!judged.includes("xyzzy-raw-note"), "nor the operator's note as typed")
 })
 
 // -- The trigger -------------------------------------------------------------------
@@ -284,12 +298,14 @@ test("a qualifying group is distilled, gated and stored as a candidate with its 
   assert.equal(lesson.text, LESSON)
   assert.deepEqual(lesson.appliesTo, ["R7"])
   assert.deepEqual(lesson.sourceMistakeIds, mistakes.map((row) => row.id))
-  assert.ok(lesson.evalAfter! > lesson.evalBefore!)
+  assert.equal(lesson.evalAfter, lesson.evalBefore, "the spec-case scores, kept for engineers")
   assert.equal(lesson.by, "distiller")
   assert.ok((await store.readBriefing()).some((item) => item.kind === "lesson"))
   const [run] = await store.readDistilRuns()
   assert.equal(run.outcome, "candidate")
   assert.equal(run.lessonId, lesson.id)
+  assert.equal(run.gate?.keep, true)
+  assert.equal(run.gate?.runs.length, 4)
   assert.ok(Math.abs(run.cost - gateway.spent()) < 1e-9, `${run.cost} vs ${gateway.spent()}`)
 })
 
@@ -440,15 +456,20 @@ test("the engine hands a dismissal's mistake to the trigger once its restatement
   assert.equal(seen[0].restatement, RESTATED)
 })
 
+const TRACE = {
+  lesson: LESSON, keep: true, reason: "fixes more", before: { existingPoints: 38, existingMax: 38, fixed: 0, judged: 2 }, after: { existingPoints: 38, existingMax: 38, fixed: 2, judged: 2 },
+  runs: [{ withLesson: true, existing: { points: 19, max: 19, failed: [] }, learned: [{ mistakeId: "m-1", reference: "CD-420437", verdict: "fixed" as const, reason: "It asks the site." }], cost: 0.01 }],
+}
+
 test("lessons runs are stored, finished once and kept across reset [postgres]", { skip: process.env.TEST_DATABASE_URL ? false : "set TEST_DATABASE_URL" }, async () => {
   const db = testDatabase()!
   await clearLearning(db)
   const store = createPostgresStore(db)
-  const run: DistilRun = { id: "dst-1", group: KEY, startedAt: "2026-10-27T12:00:00.000Z", finishedAt: null, outcome: "running", lessonId: null, mistakeIds: [], cost: 0, detail: "" }
+  const run: DistilRun = { id: "dst-1", group: KEY, startedAt: "2026-10-27T12:00:00.000Z", finishedAt: null, outcome: "running", lessonId: null, mistakeIds: [], cost: 0, detail: "", gate: null }
   await store.startDistilRun(run)
   await store.startDistilRun({ ...run, detail: "again" })
-  await store.finishDistilRun("dst-1", { finishedAt: "2026-10-27T12:05:00.000Z", outcome: "candidate", lessonId: "lsn-a", mistakeIds: ["m-1", "m-2"], cost: 0.42, detail: "kept" })
+  await store.finishDistilRun("dst-1", { finishedAt: "2026-10-27T12:05:00.000Z", outcome: "candidate", lessonId: "lsn-a", mistakeIds: ["m-1", "m-2"], cost: 0.42, detail: "kept", gate: TRACE })
   await store.reset()
-  assert.deepEqual(await store.readDistilRuns(), [{ ...run, finishedAt: "2026-10-27T12:05:00.000Z", outcome: "candidate", lessonId: "lsn-a", mistakeIds: ["m-1", "m-2"], cost: 0.42, detail: "kept" }])
+  assert.deepEqual(await store.readDistilRuns(), [{ ...run, finishedAt: "2026-10-27T12:05:00.000Z", outcome: "candidate", lessonId: "lsn-a", mistakeIds: ["m-1", "m-2"], cost: 0.42, detail: "kept", gate: TRACE }])
   await clearLearning(db)
 })

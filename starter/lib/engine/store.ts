@@ -71,4 +71,4 @@ export interface EngineStore {
   finishDistilRun(id: string, end: DistilRunEnd): Promise<void>
 }
 
-export type DistilRunEnd = Pick<DistilRun, "finishedAt" | "outcome" | "lessonId" | "mistakeIds" | "cost" | "detail">
+export type DistilRunEnd = Pick<DistilRun, "finishedAt" | "outcome" | "lessonId" | "mistakeIds" | "cost" | "detail" | "gate">

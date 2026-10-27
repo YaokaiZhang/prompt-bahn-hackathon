@@ -17,15 +17,17 @@
 //   thresholds themselves; applies_to is the group's rule; the lesson passes the
 //   restatement checks (plain, short, no ids, no names or numbers from outside the
 //   input, no steering words). addLessonCandidate checks again.
-// - The gate runs the reviewer eval twice without and twice with the candidate, the
-//   spec's cases plus a learned case per source mistake with a case file (eval.ts).
-//   Lower existing score: dropped. Higher overall score (or equal while the learned
-//   cases improve): kept. Otherwise dropped.
+// - The gate runs the reviewer eval twice without and twice with the candidate: the
+//   spec's cases (no harm: at most NO_HARM_TOLERANCE checks lost over the runs) and a
+//   learned case per source mistake with a case file, judged (eval.ts, judge.ts). Kept
+//   only when it does no harm and more learned cases are fixed with it than without.
+//   Each run's trace is kept with the distil run, for engineers.
 
-import { editAdditions, runEval, type EvalRun, type LearnedCase } from "@/lib/reviewer/eval"
+import { runEval, type EvalRun, type LearnedCase } from "@/lib/reviewer/eval"
+import type { AgentSaid, Verdict } from "@/lib/reviewer/judge"
 import type { RuleResult } from "@/lib/reviewer/case-file"
 import type { ModelGateway, Usage } from "@/lib/reviewer/gateway"
-import { CONTACT_TYPE_LABEL, type AskRole, type ContactType } from "@/lib/reviewer/policy"
+import { CONTACT_TYPE_LABEL, type ContactType } from "@/lib/reviewer/policy"
 import type { ReviewSource } from "@/lib/reviewer/source"
 import type { InjectedLesson } from "@/lib/reviewer/lessons"
 import { checkCandidate, type Lesson, type LessonCandidate } from "./lessons"
@@ -90,6 +92,8 @@ export type DistilRun = {
   /** Model spend in USD, summed from the gateway's responses. */
   cost: number
   detail: string
+  /** What the gate saw, run by run; null when it did not run. For engineers only. */
+  gate: GateTrace | null
 }
 
 /** Outcomes where the distiller wrote (or declined) a candidate: what "new since the last candidate" counts from. */
@@ -253,7 +257,7 @@ export async function distil(gateway: ModelGateway, model: string, group: Mistak
   return { distilled: checkDistilled(response.message.content, group, all, input), input, usage: response.usage }
 }
 
-/** The candidate as addLessonCandidate takes it; checkCandidate runs here too, before any eval money is spent. */
+/** The candidate as addLessonCandidate takes it; checkCandidate runs here too, before any eval money is spent. Scores: the spec's cases, kept for engineers. */
 export function toCandidate(distilled: Distilled, scores: { before: number | null; after: number | null }): LessonCandidate {
   return checkCandidate({
     agent: "reviewer", text: distilled.lesson, explanation: distilled.explanation, appliesTo: distilled.appliesTo,
@@ -263,51 +267,48 @@ export function toCandidate(distilled: Distilled, scores: { before: number | nul
 
 // -- The gate --------------------------------------------------------------------
 
-type Cited = { recordId: string; role: string }
-type FindingSaid = { title?: string; cited?: Cited[]; ask?: { role?: AskRole; contactRecordId?: string } }
-type ProposalSaid = { title?: string; evidence?: Cited[]; contact?: { role?: AskRole; recordId?: string | null } }
+type ProposalSaid = { title?: string; script?: string; contact?: { typeLabel?: string; type?: string; name?: string } }
 
-/** Each source mistake with a case file as an eval case (eval.ts). A validator's rejection has none. */
+/** What was wrong, as the judge reads it: the restatement, the edit, or the validator's reason. */
+export function correctionOf(mistake: Mistake): string | null {
+  if (mistake.restatement) return mistake.restatement
+  if (mistake.editDiff) return `The operator kept the proposal but changed the question from "${mistake.editDiff.before}" to "${mistake.editDiff.after}".`
+  return mistake.validatorReason
+}
+
+/** Each source mistake with a case file and a correction as an eval case (eval.ts). A validator's rejection has no case file. */
 export function learnedCases(mistakes: Mistake[]): LearnedCase[] {
   return mistakes.flatMap((mistake): LearnedCase[] => {
-    if (!mistake.caseFile || mistake.agent !== "reviewer") return []
-    const said = (mistake.agentOutput ?? {}) as { proposal?: ProposalSaid; finding?: FindingSaid | null }
-    const finding = said.finding ?? null
-    const proposal = said.proposal ?? {}
-    if (mistake.kind === "dismissed") {
-      const conflictIds = (finding?.cited ?? proposal.evidence ?? []).filter((item) => item.role === "conflict").map((item) => item.recordId)
-      const title = finding?.title ?? proposal.title
-      return title ? [{ mistakeId: mistake.id, file: mistake.caseFile, expect: { kind: "not-raised", title, conflictIds } }] : []
+    const correction = correctionOf(mistake)
+    if (!mistake.caseFile || mistake.agent !== "reviewer" || !correction) return []
+    const proposal = ((mistake.agentOutput ?? {}) as { proposal?: ProposalSaid }).proposal ?? {}
+    const contact = proposal.contact
+    const agentSaid: AgentSaid = {
+      title: proposal.title ?? null, question: proposal.script ?? null,
+      asked: contact ? `${contact.typeLabel ?? contact.type ?? "someone"}: ${contact.name ?? "unnamed"}` : null,
     }
-    if (mistake.kind === "edited" && mistake.editDiff) {
-      const role = finding?.ask?.role ?? proposal.contact?.role
-      if (!role) return []
-      const contactRecordId = finding?.ask?.contactRecordId ?? proposal.contact?.recordId ?? null
-      return [{ mistakeId: mistake.id, file: mistake.caseFile, expect: { kind: "same-contact", role, contactRecordId, added: editAdditions(mistake.editDiff.before, mistake.editDiff.after) } }]
-    }
-    return []
+    return [{ mistakeId: mistake.id, file: mistake.caseFile, correction, agentSaid }]
   })
 }
 
-export type GateScores = { existing: number; learned: number | null; overall: number }
+/** Totals over a side's runs: spec-case checks passed of their maximum, learned cases fixed of those judged. */
+export type GateScores = { existingPoints: number; existingMax: number; fixed: number; judged: number }
 
-export function meanScores(runs: EvalRun[]): GateScores {
-  const mean = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length)
-  const learned = runs.map((run) => run.learnedFraction).filter((value): value is number => value !== null)
-  return { existing: mean(runs.map((run) => run.existingFraction)), learned: learned.length ? mean(learned) : null, overall: mean(runs.map((run) => run.overallFraction)) }
+export function totalScores(runs: EvalRun[]): GateScores {
+  const sum = (pick: (run: EvalRun) => number) => runs.reduce((total, run) => total + pick(run), 0)
+  return { existingPoints: sum((run) => run.existing.points), existingMax: sum((run) => run.existing.max), fixed: sum((run) => run.fixed), judged: sum((run) => run.learned.length) }
 }
 
-const EPSILON = 1e-9
+/** Spec-case checks a candidate may lose over the runs before it counts as harm: one is noise. */
+export const NO_HARM_TOLERANCE = 1
 
-/** The gate's rule: a lower existing score drops it; a higher overall score (or an equal one while the learned cases improve) keeps it. */
+/** The gate's rule: no harm on the spec's cases, and more learned cases fixed with the lesson than without. */
 export function gateDecision(before: GateScores, after: GateScores): { keep: boolean; reason: string } {
-  const pct = (value: number | null) => value === null ? "-" : `${Math.round(value * 100)}%`
-  const scores = `existing ${pct(before.existing)} -> ${pct(after.existing)}, learned ${pct(before.learned)} -> ${pct(after.learned)}, overall ${pct(before.overall)} -> ${pct(after.overall)}`
-  if (after.existing < before.existing - EPSILON) return { keep: false, reason: `lowers the existing score (${scores})` }
-  if (after.overall > before.overall + EPSILON) return { keep: true, reason: `improves the score (${scores})` }
-  const learnedUp = before.learned !== null && after.learned !== null && after.learned > before.learned + EPSILON
-  if (Math.abs(after.overall - before.overall) <= EPSILON && learnedUp) return { keep: true, reason: `holds the score and fixes learned cases (${scores})` }
-  return { keep: false, reason: `no improvement (${scores})` }
+  const scores = `spec checks ${before.existingPoints}/${before.existingMax} -> ${after.existingPoints}/${after.existingMax}, fixed ${before.fixed}/${before.judged} -> ${after.fixed}/${after.judged}`
+  if (!after.judged) return { keep: false, reason: `no learned case to check (${scores})` }
+  if (after.existingPoints < before.existingPoints - NO_HARM_TOLERANCE) return { keep: false, reason: `harms the spec's cases (${scores})` }
+  if (after.fixed > before.fixed) return { keep: true, reason: `fixes more of its mistakes (${scores})` }
+  return { keep: false, reason: `fixes no more of its mistakes (${scores})` }
 }
 
 export const GATE_RUNS = 2
@@ -315,14 +316,36 @@ export const GATE_RUNS = 2
 export type GateOptions = {
   gateway: ModelGateway
   source: ReviewSource
-  /** The agents' own model. */
+  /** The agents' own model; the judge uses it too. */
   model?: string
   lesson: InjectedLesson
   learned: LearnedCase[]
   rulesFor?: (reference: string) => RuleResult[]
 }
 
-export type GateResult = { before: GateScores; after: GateScores; keep: boolean; reason: string; cost: number }
+/** One eval run as the trace keeps it. */
+export type GateTraceRun = {
+  withLesson: boolean
+  existing: { points: number; max: number; failed: { reference: string; check: string; detail: string }[] }
+  learned: { mistakeId: string; reference: string; verdict: Verdict; reason: string }[]
+  cost: number
+}
+
+export type GateTrace = { lesson: string; before: GateScores; after: GateScores; keep: boolean; reason: string; runs: GateTraceRun[] }
+
+export type GateResult = { before: GateScores; after: GateScores; keep: boolean; reason: string; cost: number; trace: GateTrace }
+
+function traceRun(run: EvalRun, withLesson: boolean): GateTraceRun {
+  return {
+    withLesson,
+    existing: {
+      points: run.existing.points, max: run.existing.max,
+      failed: run.existing.cases.flatMap((row) => row.checks.filter((check) => !check.pass).map((check) => ({ reference: row.reference, check: check.name, detail: check.detail }))),
+    },
+    learned: run.learned.map(({ mistakeId, reference, verdict, reason }) => ({ mistakeId, reference, verdict, reason })),
+    cost: run.cost,
+  }
+}
 
 /** Runs the eval GATE_RUNS times without and GATE_RUNS times with the lesson, and decides. */
 export async function runGate(options: GateOptions): Promise<GateResult> {
@@ -331,7 +354,9 @@ export async function runGate(options: GateOptions): Promise<GateResult> {
   const withLesson: EvalRun[] = []
   for (let run = 0; run < GATE_RUNS; run += 1) without.push(await runEval(common))
   for (let run = 0; run < GATE_RUNS; run += 1) withLesson.push(await runEval({ ...common, lessons: [lesson] }))
-  const before = meanScores(without)
-  const after = meanScores(withLesson)
-  return { before, after, ...gateDecision(before, after), cost: [...without, ...withLesson].reduce((sum, run) => sum + run.cost, 0) }
+  const before = totalScores(without)
+  const after = totalScores(withLesson)
+  const decision = gateDecision(before, after)
+  const runs = [...without.map((run) => traceRun(run, false)), ...withLesson.map((run) => traceRun(run, true))]
+  return { before, after, ...decision, cost: [...without, ...withLesson].reduce((sum, run) => sum + run.cost, 0), trace: { lesson: lesson.text, before, after, ...decision, runs } }
 }

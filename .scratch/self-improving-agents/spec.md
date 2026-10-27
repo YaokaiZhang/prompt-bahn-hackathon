@@ -31,14 +31,24 @@ A feedback loop. Nothing changes model weights; the agents learn through approve
    into prompts), an explanation for the operator, the tags it applies to, and the
    mistake ids it is based on. Code verifies the ids exist, belong to the group and meet
    the thresholds, and runs the readability and instruction-word checks.
-4. **Gate.** The reviewer eval runs twice without and twice with the candidate (Haiku,
-   the agents' own model), including learned cases built from the source mistakes. A
-   candidate that lowers the existing score is dropped; one that raises it, or holds it
-   while fixing its learned cases, becomes a candidate for the operator.
+4. **Gate.** Two questions, each answered twice without and twice with the candidate
+   (Haiku, the agents' own model):
+   - *No harm*: the spec's reviewer eval cases. A candidate that loses more than one
+     check over the runs is dropped (one is noise: a real run lost one of 38 by chance).
+   - *Fixes its mistakes*: one **learned case** per source mistake with a case file: the
+     reviewer reviews that kept case file again, and a **judge** (Haiku, no reasoning, no
+     tools) reads the correction (the restatement, the edit, or the validator's reason),
+     what the agent said then, and the new review's findings, and answers whether the
+     new review repeats the mistake: `repeats`, `fixed` or `unclear`, with one sentence.
+     It does not know whether the lesson was in the prompt. Only `fixed` counts.
+   A candidate is kept only when it does no harm and more of its learned cases are fixed
+   with it than without. Without any learned case it is dropped (nothing shows it helps).
+   Every run's trace (scores, each verdict and its reason, cost) is stored with the
+   distil run, for engineers; none of it reaches the operator.
 5. **Operator approves.** A Briefing item ("A new lesson needs your yes") links to a
    Lessons section on the Rules page: the lesson, the explanation, each source mistake
-   with the operator's original note and order link, and the eval scores before and
-   after. Approve, reject, retire; each an event with time and actor.
+   with the operator's original note and order link. No eval scores or verdicts: the
+   gate decided those. Approve, reject, retire; each an event with time and actor.
 6. **Inject what applies.** Approved lessons are tagged (e.g. failing rule ids for the
    reviewer, card kind for plain-words); a call gets only matching lessons. Hard cap of
    10 approved lessons per agent. The cache keys include a hash of the injected lessons.
@@ -48,7 +58,13 @@ A feedback loop. Nothing changes model weights; the agents learn through approve
 - Mistakes and lessons survive a demo reset (learning is not wiped); they are neither
   engine state nor content caches.
 - Lessons never edit or delete existing eval cases; they may only add learned cases.
-- Every model output in the loop is checked by code before it is used.
+- Every model output in the loop is checked by code before it is used. The judge's
+  reply is parsed strictly; anything else counts as `unclear`.
+- The judge is itself tested: hand-written corrections with known verdicts, replayed
+  offline from recorded replies (`npm run lessons:judge-eval`).
+- Engineers see the whole loop on `/dev/learning` (mistakes, restatements, distil runs,
+  gate traces, lessons and their events). It is not linked from the operator's UI and is
+  off in production unless `DEV_PAGES=1`.
 - No per-operator identity exists yet (one "operator" persona): thresholds count
   distinct orders and days; an `operator` column is kept for when logins exist.
 
